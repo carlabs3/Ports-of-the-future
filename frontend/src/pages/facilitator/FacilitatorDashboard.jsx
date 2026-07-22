@@ -230,34 +230,6 @@ export default function FacilitatorDashboard() {
                   )
                 })()}
 
-                {/* Team URLs — visible for waiting/active sessions with groups */}
-                {session.status !== 'closed' && session.groups?.length > 0 && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#bbb', marginBottom: '0.5rem' }}>
-                      Pantallas de equipo
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                      {session.groups.map(group => {
-                        const url = `${window.location.origin}/team/${session.code}/${encodeURIComponent(group)}`
-                        return (
-                          <div key={group} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#555', minWidth: 60, flexShrink: 0 }}>{group}</span>
-                            <code style={{ flex: 1, fontSize: '0.62rem', color: '#aaa', background: '#f5f5f5', padding: '2px 6px', borderRadius: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-                              /team/{session.code}/{group}
-                            </code>
-                            <button
-                              onClick={() => navigator.clipboard.writeText(url)}
-                              style={{ fontSize: '0.65rem', color: '#0a0a0a', background: 'transparent', border: '1px solid #e5e5e5', borderRadius: '6px', padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}
-                            >
-                              Copiar
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 <div style={s.cardActions}>
                   {session.status === 'draft' ? (
                     <button

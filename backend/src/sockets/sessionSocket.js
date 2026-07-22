@@ -83,55 +83,6 @@ export function registerSocketHandlers(io) {
       }
     })
 
-    socket.on('team:join', async ({ code, group }) => {
-      try {
-        socket.join(code)
-        socket.data.teamGroup = group
-        socket.data.isTeamScreen = true
-
-        const [session, results] = await Promise.all([
-          Session.findOne({ code }, 'status currentStep resultsRevealed step3Revealed winnersRevealed'),
-          FootprintResult.find({ sessionCode: code }),
-        ])
-
-        console.log(`[team:join] code=${code} urlGroup="${group}" | DB groups:`, results.map(r => r.group))
-
-        if (session?.currentStep >= 2) socket.emit('step:change', { step: session.currentStep })
-        if (session?.resultsRevealed)  socket.emit('results:revealed')
-        if (session?.status === 'closed') socket.emit('session:closed')
-
-        // Send confirmed actions for this team (handles late joiners)
-        const teamTA = await TeamActions.findOne({ sessionCode: code, group })
-        if (teamTA?.confirmed) {
-          socket.emit('team:actionsConfirmed', {
-            group: teamTA.group,
-            actions: teamTA.actions,
-            totalReduction: teamTA.totalReduction,
-            newCarbonTons: teamTA.newCarbonTons,
-            showValues: session?.step3Revealed || false,
-          })
-        }
-        if (session?.step3Revealed) {
-          const allTA = await TeamActions.find({ sessionCode: code })
-          socket.emit('step3:revealed', { allActions: allTA.map(ta => ta.toObject()) })
-        }
-
-        if (results.length > 0) {
-          const individual = results.map(r => ({
-            name:     participantNames.get(r.participantId?.toString()) || 'Anónimo',
-            group:    r.group,
-            tons:     r.carbonTons,
-            category: r.category,
-            areas:    r.areas || {},
-            answers:  r.answers || {},
-          }))
-          socket.emit('ranking:update', { individual })
-        }
-      } catch {
-        socket.emit('error', { message: 'Error al unirse como equipo' })
-      }
-    })
-
     socket.on('step:change', async ({ sessionCode, step }) => {
       try {
         await Session.findOneAndUpdate({ code: sessionCode }, { currentStep: step })
@@ -213,7 +164,7 @@ export function registerSocketHandlers(io) {
           { upsert: true, new: true }
         )
         const confirmedCount = await TeamActions.countDocuments({ sessionCode, confirmed: true })
-        // Broadcast to room — TeamScreen filters by group
+        // Broadcast to room — listeners filter by group
         io.to(sessionCode).emit('team:actionsConfirmed', {
           group,
           actions: actions || [],
