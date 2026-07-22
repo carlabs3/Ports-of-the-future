@@ -199,7 +199,7 @@ export default function JoinSession() {
       joinedAt: new Date().toISOString(),
     }))
     joinSession(code, 'Anónimo', group, age, gender)
-    navigate(`/session/${code}/calculator`)
+    navigate(`/session/${code}/par`)
   }
 
   return (

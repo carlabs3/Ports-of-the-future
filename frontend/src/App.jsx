@@ -9,8 +9,8 @@ import Step2Rankings from './pages/facilitator/Step2Rankings.jsx'
 import SessionStats from './pages/facilitator/SessionStats.jsx'
 import JoinSession from './pages/participant/JoinSession.jsx'
 import WaitingRoom from './pages/participant/WaitingRoom.jsx'
-import Step2Calculator from './pages/participant/Step2Calculator.jsx'
-import Step2Results from './pages/participant/Step2Results.jsx'
+import PariCalculator from './pages/participant/PariCalculator.jsx'
+import PariResult from './pages/participant/PariResult.jsx'
 import SessionEnd from './pages/participant/SessionEnd.jsx'
 
 export default function App() {
@@ -22,8 +22,8 @@ export default function App() {
         <Route path="/login" element={<FacilitatorLogin />} />
         <Route path="/join" element={<JoinSession />} />
         <Route path="/session/:code/waiting" element={<WaitingRoom />} />
-        <Route path="/session/:code/calculator" element={<Step2Calculator />} />
-        <Route path="/session/:code/results" element={<Step2Results />} />
+        <Route path="/session/:code/par" element={<PariCalculator />} />
+        <Route path="/session/:code/par-result" element={<PariResult />} />
         <Route path="/session/:code/end" element={<SessionEnd />} />
 
         <Route element={<PrivateRoute />}>

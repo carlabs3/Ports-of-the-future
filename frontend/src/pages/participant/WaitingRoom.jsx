@@ -31,10 +31,10 @@ export default function WaitingRoom() {
   useEffect(() => {
     function onStepChange({ step }) {
       console.log('[WaitingRoom] step:change received', step)
-      if (step >= 2) navigate(`/session/${code}/calculator`, { replace: true })
+      if (step >= 2) navigate(`/session/${code}/par`, { replace: true })
     }
     function onResultsRevealed() {
-      navigate(`/session/${code}/results`, { replace: true })
+      navigate(`/session/${code}/par-result`, { replace: true })
     }
     function onSessionClosed() {
       navigate(`/session/${code}/end`, { replace: true })
@@ -50,9 +50,9 @@ export default function WaitingRoom() {
         const res = await api.get(`/api/sessions/${code}/info`)
         const { currentStep, resultsRevealed, status } = res.data
         if (resultsRevealed) {
-          navigate(`/session/${code}/results`, { replace: true })
+          navigate(`/session/${code}/par-result`, { replace: true })
         } else if (currentStep >= 2) {
-          navigate(`/session/${code}/calculator`, { replace: true })
+          navigate(`/session/${code}/par`, { replace: true })
         } else if (status === 'closed') {
           navigate('/', { replace: true })
         }

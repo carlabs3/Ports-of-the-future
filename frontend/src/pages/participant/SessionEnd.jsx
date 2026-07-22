@@ -32,7 +32,7 @@ export default function SessionEnd() {
         </p>
 
         <button
-          onClick={() => navigate(`/session/${code}/results`)}
+          onClick={() => navigate(`/session/${code}/par-result`)}
           style={{
             background: '#0a0a0a', color: '#fff', border: 'none',
             padding: '0.9rem 2rem', borderRadius: '999px',
