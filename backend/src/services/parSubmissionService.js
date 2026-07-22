@@ -1,5 +1,5 @@
 import ParIndexResult from '../models/ParIndexResult.js'
-import { computeParIndex } from './scoringService.js'
+import { computeParIndex, getBand } from './scoringService.js'
 
 // Persistence layer for PAR Index submissions. Depends only on models/ and
 // scoringService — never on routes/ — so both the HTTP router and the socket
@@ -38,18 +38,32 @@ export async function persistParSubmission({ submissionId, sessionCode, group, p
   return result
 }
 
-// Build the 'par:update' payload: every result in the session, scores/bands
-// only — no answers, no demographics, no raw data.
+// Per-group aggregate: count, average score, and the band of that average.
+// The band is derived with getBand — the SINGLE source of truth for band
+// boundaries — so no threshold logic ever lives outside scoringService.
+export function computeParGroups(individual) {
+  const byGroup = new Map()
+  for (const r of individual) {
+    if (!byGroup.has(r.group)) byGroup.set(r.group, [])
+    byGroup.get(r.group).push(r.score)
+  }
+  return [...byGroup.entries()].map(([group, scores]) => {
+    const avgScore = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
+    return { group, count: scores.length, avgScore, band: getBand(avgScore) }
+  })
+}
+
+// Build the 'par:update' payload: every result in the session (scores/bands/
+// areas, no raw data) plus per-group aggregates with a server-computed band.
 export async function buildParRanking(sessionCode) {
   const all = await ParIndexResult.find({ sessionCode })
     .select('group score band areas -_id')
     .sort({ score: -1 })
-  return {
-    individual: all.map(r => ({
-      group: r.group,
-      score: r.score,
-      band:  r.band,
-      areas: r.areas,
-    })),
-  }
+  const individual = all.map(r => ({
+    group: r.group,
+    score: r.score,
+    band:  r.band,
+    areas: r.areas,
+  }))
+  return { individual, groups: computeParGroups(individual) }
 }

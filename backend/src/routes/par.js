@@ -1,7 +1,9 @@
 import { Router } from 'express'
 import { Resend } from 'resend'
+import { authMiddleware } from '../middleware/authMiddleware.js'
+import ParIndexResult from '../models/ParIndexResult.js'
 import { getPublicQuestionnaire } from '../services/questionnaireService.js'
-import { persistParSubmission, buildParRanking } from '../services/parSubmissionService.js'
+import { persistParSubmission, buildParRanking, computeParGroups } from '../services/parSubmissionService.js'
 
 const BAND_LABELS = {
   reactive:   'Reactive',
@@ -16,6 +18,30 @@ export default function parRouter(io) {
   // Public: questionnaire structure WITHOUT any option scores.
   router.get('/questionnaire', (_req, res) => {
     res.json(getPublicQuestionnaire())
+  })
+
+  // List all PAR results for a session — same shape as the 'par:update' event
+  // (individual), plus aligned demographics, so the facilitator control centre
+  // can populate on load and after a reconnect. Read-only; all aggregation
+  // happens client-side. Single query so individual[i] and demographics[i]
+  // refer to the same submission (needed to average score by port size).
+  // Facilitator-only (JWT) — participant endpoints below stay public.
+  router.get('/:code/results', authMiddleware, async (req, res) => {
+    try {
+      const docs = await ParIndexResult.find({ sessionCode: req.params.code })
+        .select('group score band areas portSize worldZone -_id')
+        .sort({ score: -1 })
+      const individual = docs.map(d => ({
+        group: d.group, score: d.score, band: d.band, areas: d.areas,
+      }))
+      const demographics = docs.map(d => ({
+        group: d.group, portSize: d.portSize || '', worldZone: d.worldZone || '',
+      }))
+      res.json({ individual, demographics, groups: computeParGroups(individual) })
+    } catch (err) {
+      console.error('PAR results error:', err.message)
+      res.status(500).json({ error: 'Error al obtener resultados PAR' })
+    }
   })
 
   // Public: submit answers, compute the PAR Index server-side.

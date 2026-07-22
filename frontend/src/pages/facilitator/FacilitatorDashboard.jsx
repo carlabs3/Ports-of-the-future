@@ -252,6 +252,13 @@ export default function FacilitatorDashboard() {
                     Eliminar
                   </button>
                 </div>
+                {session.status !== 'draft' && (
+                  <Link to={`/session/${session.code}/control`} style={{ display: 'block', marginTop: '0.5rem' }}>
+                    <button style={{ ...s.btnOpen, width: '100%', background: 'transparent', color: '#0a0a0a', border: '1px solid #0a0a0a' }}>
+                      Centro de control (PAR) →
+                    </button>
+                  </Link>
+                )}
               </div>
             ))}
           </div>
