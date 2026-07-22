@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../../utils/api.js'
 
@@ -38,6 +38,16 @@ const s = {
     transition: 'color 0.15s',
   },
   hint: { fontSize: '0.72rem', color: '#999', marginTop: '0.4rem' },
+  groupRow: {
+    display: 'flex', alignItems: 'center', gap: '0.5rem',
+    border: '1px solid #e5e5e5', borderRadius: '12px',
+    padding: '0.5rem 0.75rem', marginBottom: '0.5rem',
+  },
+  groupName: { flex: '0 0 auto', fontSize: '0.9rem', fontWeight: 600, color: '#0a0a0a', minWidth: 90 },
+  portSelect: {
+    flex: 1, border: '1px solid #e5e5e5', borderRadius: '8px',
+    padding: '0.4rem 0.5rem', fontSize: '0.85rem', background: '#fff', color: '#0a0a0a', outline: 'none',
+  },
   btn: {
     width: '100%', background: '#0a0a0a', color: '#fff',
     padding: '1rem', fontSize: '0.9rem', letterSpacing: '0.1em',
@@ -53,9 +63,22 @@ export default function SessionCreate() {
   const [sessionName, setSessionName] = useState('')
   const [groups, setGroups]     = useState(['Equipo A', 'Equipo B', 'Equipo C'])
   const [newGroup, setNewGroup] = useState('')
+  const [ports, setPorts]       = useState([])   // [{ id, name, meta }]
+  const [portByGroup, setPortByGroup] = useState({}) // group -> portId
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const navigate = useNavigate()
+
+  useEffect(() => {
+    api.get('/api/par/ports')
+      .then(res => setPorts(res.data || []))
+      .catch(() => setError('No se pudo cargar el catálogo de puertos'))
+  }, [])
+
+  function setPort(group, portId) {
+    setPortByGroup(prev => ({ ...prev, [group]: portId ? Number(portId) : undefined }))
+    setError('')
+  }
 
   function addGroup(e) {
     e?.preventDefault()
@@ -71,6 +94,11 @@ export default function SessionCreate() {
   function removeGroup(name) {
     if (groups.length <= MIN_GROUPS) { setError(`Mínimo ${MIN_GROUPS} grupos`); return }
     setGroups(prev => prev.filter(g => g !== name))
+    setPortByGroup(prev => {
+      const next = { ...prev }
+      delete next[name]
+      return next
+    })
     setError('')
   }
 
@@ -80,10 +108,19 @@ export default function SessionCreate() {
       setError(`Añade al menos ${MIN_GROUPS} grupos`)
       return
     }
+    // Every group needs a distinct port.
+    const missing = groups.find(g => !portByGroup[g])
+    if (missing) { setError(`Asigna un puerto al grupo "${missing}"`); return }
+    const chosen = groups.map(g => portByGroup[g])
+    if (new Set(chosen).size !== chosen.length) {
+      setError('Cada grupo debe tener un puerto distinto'); return
+    }
+    const portAssignments = groups.map(g => ({ group: g, portId: portByGroup[g] }))
+
     setLoading(true)
     setError('')
     try {
-      const { data } = await api.post('/api/sessions', { name: sessionName, groups })
+      const { data } = await api.post('/api/sessions', { name: sessionName, groups, portAssignments })
       navigate(`/session/${data.code}/rankings`)
     } catch (err) {
       setError(err.response?.data?.error || 'Error al crear la sesión')
@@ -138,11 +175,26 @@ export default function SessionCreate() {
                 </button>
               </div>
 
-              {/* Chips */}
-              <div style={s.chipsRow}>
-                {groups.map(g => (
-                  <div key={g} style={s.chip}>
-                    {g}
+              {/* One row per group: name + port selector */}
+              {groups.map(g => {
+                const takenByOthers = new Set(
+                  groups.filter(other => other !== g).map(other => portByGroup[other]).filter(Boolean)
+                )
+                return (
+                  <div key={g} style={s.groupRow}>
+                    <span style={s.groupName}>{g}</span>
+                    <select
+                      style={s.portSelect}
+                      value={portByGroup[g] || ''}
+                      onChange={e => setPort(g, e.target.value)}
+                    >
+                      <option value="">— Elige puerto —</option>
+                      {ports.map(p => (
+                        <option key={p.id} value={p.id} disabled={takenByOthers.has(p.id)}>
+                          {p.name}{p.meta?.zone ? ` · ${p.meta.zone}` : ''}{takenByOthers.has(p.id) ? ' (ocupado)' : ''}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       style={s.chipX}
@@ -152,11 +204,11 @@ export default function SessionCreate() {
                       ×
                     </button>
                   </div>
-                ))}
-              </div>
+                )
+              })}
 
               <p style={s.hint}>
-                {groups.length} equipo{groups.length !== 1 ? 's' : ''} · mín. {MIN_GROUPS}, máx. {MAX_GROUPS}
+                {groups.length} equipo{groups.length !== 1 ? 's' : ''} · mín. {MIN_GROUPS}, máx. {MAX_GROUPS} · un puerto distinto por equipo
               </p>
             </div>
 

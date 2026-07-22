@@ -4,8 +4,10 @@ import Session from '../models/Session.js'
 import FootprintResult from '../models/FootprintResult.js'
 import Participant from '../models/Participant.js'
 import TeamActions from '../models/TeamActions.js'
+import TeamStrategy from '../models/TeamStrategy.js'
 import { ACTIONS } from '../utils/actions.js'
 import { generateCode } from '../utils/generateCode.js'
+import { validatePortAssignments } from '../services/portAssignmentService.js'
 
 const STEP_MAP = { waiting: 1, active: 2, closed: 3 }
 
@@ -15,13 +17,14 @@ export default function sessionsRouter(io) {
   // Public: info needed by join/waiting screens (groups, name, status, resultsRevealed)
   router.get('/:code/info', async (req, res) => {
     try {
-      const session = await Session.findOne({ code: req.params.code }, 'code name groups status currentStep resultsRevealed step3Revealed winnersRevealed')
+      const session = await Session.findOne({ code: req.params.code }, 'code name groups portAssignments status currentStep resultsRevealed step3Revealed winnersRevealed')
       // Note: 'draft' and 'closed' statuses are intentionally included
       if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
       res.json({
         code:            session.code,
         name:            session.name,
         groups:          session.groups,
+        portAssignments: session.portAssignments || [],
         status:          session.status,
         currentStep:     session.currentStep,
         resultsRevealed: session.resultsRevealed,
@@ -99,14 +102,27 @@ export default function sessionsRouter(io) {
 
   router.post('/', async (req, res) => {
     try {
-      const { groups, name } = req.body
+      const { groups, name, portAssignments } = req.body
+      const groupList = groups || []
+
+      // Phase 6: validate port assignments (one distinct existing port per group).
+      const check = validatePortAssignments(groupList, portAssignments || [])
+      if (!check.ok) return res.status(400).json({ error: check.error })
+
       const code = await generateCode()
       const session = await Session.create({
         code,
         facilitatorId: req.user.id,
         name: name || '',
-        groups: groups || [],
+        groups: groupList,
+        portAssignments,
       })
+
+      // Create one TeamStrategy per group (measures empty, cultureBand null now).
+      await TeamStrategy.insertMany(
+        portAssignments.map(pa => ({ sessionCode: code, group: pa.group, portId: pa.portId }))
+      )
+
       res.status(201).json(session)
     } catch {
       res.status(500).json({ error: 'Error al crear sesión' })

@@ -1,0 +1,19 @@
+import { Schema, model } from 'mongoose'
+
+// Per-table strategy record for the "Ports of the Future" phase-2 dynamic.
+// SEPARATE from the legacy TeamActions (footprint pipeline) — do not conflate.
+// In phase 6 it is created with portId (and cultureBand computed from PARI);
+// measures / coinsSpent are filled in phase 7.
+const teamStrategySchema = new Schema({
+  sessionCode: { type: String, required: true },
+  group:       { type: String, required: true },
+  portId:      { type: Number, required: true },
+  // Base culture band derived from the table's mean PARI (see cultureService).
+  cultureBand: { type: String, enum: ['reactive', 'aware', 'developing', 'proactive', null], default: null },
+  measures:    { type: [Number], default: [] }, // phase 7
+  coinsSpent:  { type: Number, default: 0 },     // phase 7
+}, { timestamps: true })
+
+teamStrategySchema.index({ sessionCode: 1, group: 1 }, { unique: true })
+
+export default model('TeamStrategy', teamStrategySchema)

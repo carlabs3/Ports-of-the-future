@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { Resend } from 'resend'
 import { authMiddleware } from '../middleware/authMiddleware.js'
 import ParIndexResult from '../models/ParIndexResult.js'
+import { PORTS } from '../config/ports/index.js'
 import { getPublicQuestionnaire } from '../services/questionnaireService.js'
 import { persistParSubmission, buildParRanking, computeParGroups } from '../services/parSubmissionService.js'
 
@@ -18,6 +19,17 @@ export default function parRouter(io) {
   // Public: questionnaire structure WITHOUT any option scores.
   router.get('/questionnaire', (_req, res) => {
     res.json(getPublicQuestionnaire())
+  })
+
+  // Facilitator-only: port catalogue for session creation. PUBLIC fields only
+  // (id, name, meta) — exposureWeights and other secrets are never exposed.
+  // Explicit field copy, NOT a spread of the port object.
+  router.get('/ports', authMiddleware, (_req, res) => {
+    res.json(PORTS.map(p => ({
+      id:   p.id,
+      name: p.name,
+      meta: { zone: p.meta?.zone, size: p.meta?.size, description: p.meta?.description },
+    })))
   })
 
   // List all PAR results for a session — same shape as the 'par:update' event

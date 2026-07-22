@@ -49,7 +49,11 @@ export function computeParGroups(individual) {
   }
   return [...byGroup.entries()].map(([group, scores]) => {
     const avgScore = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
-    return { group, count: scores.length, avgScore, band: getBand(avgScore) }
+    const band = getBand(avgScore)
+    // `band` = band of the mean PARI (phase-4 display). `cultureBand` = the
+    // phase-2 base culture band; identical now, but phase 7 will bump it +1 if
+    // the table buys measure 19/20, so it is exposed as its own field.
+    return { group, count: scores.length, avgScore, band, cultureBand: band }
   })
 }
 

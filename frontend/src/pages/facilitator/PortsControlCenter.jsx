@@ -51,7 +51,9 @@ export default function PortsControlCenter() {
   const [individual, setIndividual] = useState([]) // [{ group, score, band, areas }]
   const [rows, setRows]             = useState([])  // aligned w/ demographics: + portSize, worldZone
   const [groups, setGroups]         = useState([])  // declared session groups
-  const [groupAgg, setGroupAgg]     = useState([])  // backend per-group: { group, count, avgScore, band }
+  const [groupAgg, setGroupAgg]     = useState([])  // backend per-group: { group, count, avgScore, band, cultureBand }
+  const [portAssignments, setPortAssignments] = useState([]) // [{ group, portId }]
+  const [portNameById, setPortNameById]        = useState({}) // portId -> name
 
   const joinUrl = `${window.location.origin}/?code=${code}`
 
@@ -72,11 +74,17 @@ export default function PortsControlCenter() {
       .catch(() => {})
   }, [code])
 
-  // Initial populate + session groups (repopulates on reload/reconnect).
+  // Initial populate + session groups + port catalogue (repopulates on reload).
   useEffect(() => {
     fetchResults()
     api.get(`/api/sessions/${code}/info`)
-      .then(res => setGroups(res.data.groups || []))
+      .then(res => {
+        setGroups(res.data.groups || [])
+        setPortAssignments(res.data.portAssignments || [])
+      })
+      .catch(() => {})
+    api.get('/api/par/ports')
+      .then(res => setPortNameById(Object.fromEntries((res.data || []).map(p => [p.id, p.name]))))
       .catch(() => {})
   }, [code, fetchResults])
 
@@ -138,15 +146,25 @@ export default function PortsControlCenter() {
   // frontend only chooses the traffic-light status from the count.
   const groupStats = useMemo(() => {
     const aggByGroup = new Map(groupAgg.map(a => [a.group, a]))
+    const portByGroup = new Map(portAssignments.map(pa => [pa.group, pa.portId]))
     // Union of declared session groups and any group present in the data.
     const list = [...new Set([...groups, ...groupAgg.map(a => a.group)])]
     return list.map(g => {
       const agg = aggByGroup.get(g)
       const count = agg?.count ?? 0
       const status = count === 0 ? 'empty' : count === 1 ? 'receiving' : 'ready'
-      return { group: g, count, avg: agg?.avgScore ?? null, band: agg?.band ?? null, status }
+      const portId = portByGroup.get(g)
+      return {
+        group: g,
+        count,
+        avg: agg?.avgScore ?? null,
+        // cultureBand comes from the backend — never derived here.
+        cultureBand: agg?.cultureBand ?? null,
+        portName: portId != null ? (portNameById[portId] || `Puerto ${portId}`) : null,
+        status,
+      }
     })
-  }, [groups, groupAgg])
+  }, [groups, groupAgg, portAssignments, portNameById])
 
   // Port size breakdown (Q0) — only if there is portSize data.
   const portSizeStats = useMemo(() => {
@@ -204,10 +222,13 @@ export default function PortsControlCenter() {
               const st = STATUS_STYLE[gs.status]
               return (
                 <div key={gs.group} style={{ border: '1px solid #e5e5e5', borderRadius: 10, padding: '0.85rem 1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <span style={{ width: 9, height: 9, borderRadius: '50%', background: st.dot, flexShrink: 0 }} />
                     <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#0a0a0a' }}>{gs.group}</span>
                     <span style={{ fontSize: 11, fontWeight: 600, color: st.color }}>{st.label}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
+                    🏙 {gs.portName || '— sin puerto —'}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                     <span style={{ fontSize: 22, fontWeight: 900, color: '#0a0a0a' }}>{gs.avg != null ? gs.avg : '—'}</span>
@@ -215,7 +236,7 @@ export default function PortsControlCenter() {
                   </div>
                   <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
                     {gs.count} PAR{gs.count !== 1 ? 's' : ''}
-                    {gs.band && <> · <span style={{ color: BAND_CONFIG[gs.band].color, fontWeight: 700 }}>{BAND_CONFIG[gs.band].label}</span></>}
+                    {gs.cultureBand && <> · Cultura: <span style={{ color: BAND_CONFIG[gs.cultureBand].color, fontWeight: 700 }}>{BAND_CONFIG[gs.cultureBand].label}</span></>}
                   </div>
                 </div>
               )
