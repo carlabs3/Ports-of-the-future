@@ -4,7 +4,7 @@ export default {
   name: 'Atlantis',
   meta: { zone: 'Atlantic', size: 'large', description: 'Exposed Atlantic port' },
   // PUBLIC
-  contextSheet: 'Exposed Atlantic port where wind storms and storm surge dominate, with lighter rainfall, heat and drought exposure.',
+  contextSheet: 'Atlantis is a large port on a fully exposed ocean coast, facing the open Atlantic with nothing to break the weather. Relentless ocean gales drive across the terminals, and the same storms push the sea high against the breakwaters and quays.',
   // SECRET — sum = 10
   exposureWeights: { SS: 3, RF: 1, HW: 1, WS: 4, DR: 1, WF: 0, SI: 0 },
 }

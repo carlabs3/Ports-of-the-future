@@ -10,7 +10,7 @@ export default {
   name: 'Nord-Maris',
   meta: { zone: 'North Sea coast', size: 'large', description: 'Northern coastal port' },
   // PUBLIC — context sheet shown to teams (hints at exposure, no weights).
-  contextSheet: 'Northern coastal hub exposed above all to storm surge and wind storms. Secondary concerns include occasional heavy rainfall, low-water/drought spells and winter ice.',
+  contextSheet: 'Nord-Maris is a large deep-water port on an open, low-lying stretch of the northern coast, fully exposed to the sea with little natural shelter. Winter brings powerful gales sweeping in off the water, and the highest tides drive seawater up over the quays and hinterland.',
   // SECRET — roulette exposure weights (sum = 10). Never serve to clients.
   exposureWeights: { SS: 4, RF: 1, HW: 0, WS: 3, DR: 1, WF: 0, SI: 1 },
 }

@@ -2,9 +2,9 @@
 export default {
   id: 6,
   name: 'Insularis',
-  meta: { zone: 'Island', size: 'medium', description: 'Island port' },
+  meta: { zone: 'Island', size: 'small', description: 'Island port' },
   // PUBLIC
-  contextSheet: 'Island port led by heatwaves, with balanced storm surge and wind storm exposure and lighter rainfall, drought and wildfire risk.',
+  contextSheet: 'Insularis is a small island port ringed by open sea and exposed to the full strength of the summer sun. Prolonged heat stresses operations, while its unsheltered shoreline takes the brunt of coastal high water driven in from the surrounding waters.',
   // SECRET — sum = 10
   exposureWeights: { SS: 2, RF: 1, HW: 3, WS: 2, DR: 1, WF: 1, SI: 0 },
 }

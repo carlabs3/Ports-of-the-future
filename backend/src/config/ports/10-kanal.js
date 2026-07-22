@@ -2,9 +2,9 @@
 export default {
   id: 10,
   name: 'Kanal',
-  meta: { zone: 'Lowland canal', size: 'medium', description: 'Canal / lowland port' },
+  meta: { zone: 'Lowland canal', size: 'small-medium', description: 'Canal / lowland port' },
   // PUBLIC
-  contextSheet: 'Canal / lowland port where river flooding dominates, with drought/low water and wind storms as secondary threats, plus a touch of heat and ice.',
+  contextSheet: 'Kanal is a small-to-medium port on a low-lying network of canals and channels linked to a river system. Prolonged rain swells those waterways until they spill over the flat terminals, while dry periods drop water levels enough to hamper barge movements.',
   // SECRET — sum = 10
   exposureWeights: { SS: 0, RF: 4, HW: 1, WS: 2, DR: 2, WF: 0, SI: 1 },
 }
