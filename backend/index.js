@@ -12,9 +12,14 @@ import resultRoutes from './src/routes/results.js'
 import parRouter from './src/routes/par.js'
 import { registerSocketHandlers } from './src/sockets/sessionSocket.js'
 import { registerParSocketHandlers } from './src/sockets/parSocket.js'
+import { validateConfig } from './src/config/validateConfig.js'
 import User from './src/models/User.js'
 
 dotenv.config()
+
+// Fail-fast: refuse to start if the domain catalogues are invalid.
+const configSummary = validateConfig()
+console.log(`Config OK — events: ${configSummary.events}, measures: ${configSummary.measures}, ports: ${configSummary.ports}`)
 
 const allowedOrigins = [
   'http://localhost:5173',
