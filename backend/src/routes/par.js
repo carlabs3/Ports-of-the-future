@@ -2,9 +2,12 @@ import { Router } from 'express'
 import { Resend } from 'resend'
 import { authMiddleware } from '../middleware/authMiddleware.js'
 import ParIndexResult from '../models/ParIndexResult.js'
+import TeamStrategy from '../models/TeamStrategy.js'
 import { PORTS } from '../config/ports/index.js'
 import { getPublicQuestionnaire } from '../services/questionnaireService.js'
 import { persistParSubmission, buildParRanking, computeParGroups } from '../services/parSubmissionService.js'
+import { validateMeasureSelection, getPublicMeasures, MEASURE_BUDGET } from '../services/measuresService.js'
+import { computeEffectiveCultureBand } from '../services/cultureService.js'
 
 const BAND_LABELS = {
   reactive:   'Reactive',
@@ -30,6 +33,73 @@ export default function parRouter(io) {
       name: p.name,
       meta: { zone: p.meta?.zone, size: p.meta?.size, description: p.meta?.description },
     })))
+  })
+
+  // Facilitator-only: measure catalogue for the strategy-entry panel. PUBLIC
+  // fields only (id, name, cost) — protection scores are secret until scoring.
+  router.get('/measures', authMiddleware, (_req, res) => {
+    res.json(getPublicMeasures())
+  })
+
+  // Facilitator-only: per-group strategy state for the control centre. The
+  // effective culture band is recomputed live (current PARI base + measure
+  // bonus) so it never goes stale as new PARs arrive.
+  router.get('/:code/strategies', authMiddleware, async (req, res) => {
+    try {
+      const strategies = await TeamStrategy.find({ sessionCode: req.params.code })
+        .select('group portId measures coinsSpent -_id')
+      const out = await Promise.all(strategies.map(async s => ({
+        group:       s.group,
+        portId:      s.portId,
+        measures:    s.measures || [],
+        coinsSpent:  s.coinsSpent || 0,
+        coinsRemaining: MEASURE_BUDGET - (s.coinsSpent || 0),
+        cultureBand: await computeEffectiveCultureBand(req.params.code, s.group, s.measures || []),
+      })))
+      res.json({ budget: MEASURE_BUDGET, strategies: out })
+    } catch (err) {
+      console.error('PAR strategies error:', err.message)
+      res.status(500).json({ error: 'Error al obtener estrategias' })
+    }
+  })
+
+  // Facilitator-only: save a table's bought measures (budget = 6 coins).
+  router.put('/:code/strategy/:group', authMiddleware, async (req, res) => {
+    try {
+      const { code, group } = req.params
+      const { measures } = req.body
+
+      const check = validateMeasureSelection(measures || [])
+      if (!check.ok) return res.status(400).json({ error: check.error, budget: MEASURE_BUDGET })
+
+      const cultureBand = await computeEffectiveCultureBand(code, group, measures || [])
+
+      // Strategies are pre-created at session creation (they carry the required
+      // portId), so update the existing doc rather than upsert.
+      const updated = await TeamStrategy.findOneAndUpdate(
+        { sessionCode: code, group },
+        { measures: measures || [], coinsSpent: check.cost, cultureBand },
+        { new: true }
+      )
+      if (!updated) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+
+      const payload = {
+        group:          updated.group,
+        portId:         updated.portId,
+        measures:       updated.measures,
+        coinsSpent:     updated.coinsSpent,
+        coinsRemaining: MEASURE_BUDGET - updated.coinsSpent,
+        cultureBand:    updated.cultureBand,
+      }
+
+      // Live tablero update, same style as par:update.
+      io.to(code).emit('strategy:update', payload)
+
+      res.json({ ok: true, strategy: payload })
+    } catch (err) {
+      console.error('PAR strategy save error:', err.message)
+      res.status(500).json({ error: 'Error al guardar estrategia' })
+    }
   })
 
   // List all PAR results for a session — same shape as the 'par:update' event

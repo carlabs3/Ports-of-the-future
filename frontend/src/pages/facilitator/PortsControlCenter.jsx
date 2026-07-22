@@ -55,6 +55,15 @@ export default function PortsControlCenter() {
   const [portAssignments, setPortAssignments] = useState([]) // [{ group, portId }]
   const [portNameById, setPortNameById]        = useState({}) // portId -> name
 
+  // Phase 7 — measures / strategy entry (facilitator)
+  const [measuresCatalog, setMeasuresCatalog] = useState([]) // [{ id, name, cost }]
+  const [budget, setBudget]                   = useState(6)
+  const [strategyByGroup, setStrategyByGroup] = useState({})  // group -> { measures, coinsSpent, cultureBand, portId }
+  const [editingGroup, setEditingGroup]       = useState(null)
+  const [draftMeasures, setDraftMeasures]     = useState([])  // ids being edited
+  const [saving, setSaving]                   = useState(false)
+  const [saveError, setSaveError]             = useState('')
+
   const joinUrl = `${window.location.origin}/?code=${code}`
 
   // Fetch the full listing (aligned individual + demographics) and rebuild rows.
@@ -74,9 +83,20 @@ export default function PortsControlCenter() {
       .catch(() => {})
   }, [code])
 
+  // Fetch per-group strategy state (measures, coins, effective culture band).
+  const fetchStrategies = useCallback(() => {
+    api.get(`/api/par/${code}/strategies`)
+      .then(res => {
+        setBudget(res.data.budget ?? 6)
+        setStrategyByGroup(Object.fromEntries((res.data.strategies || []).map(s => [s.group, s])))
+      })
+      .catch(() => {})
+  }, [code])
+
   // Initial populate + session groups + port catalogue (repopulates on reload).
   useEffect(() => {
     fetchResults()
+    fetchStrategies()
     api.get(`/api/sessions/${code}/info`)
       .then(res => {
         setGroups(res.data.groups || [])
@@ -86,7 +106,10 @@ export default function PortsControlCenter() {
     api.get('/api/par/ports')
       .then(res => setPortNameById(Object.fromEntries((res.data || []).map(p => [p.id, p.name]))))
       .catch(() => {})
-  }, [code, fetchResults])
+    api.get('/api/par/measures')
+      .then(res => setMeasuresCatalog(res.data || []))
+      .catch(() => {})
+  }, [code, fetchResults, fetchStrategies])
 
   // Live updates: join the room and listen for 'par:update'.
   useEffect(() => {
@@ -101,14 +124,21 @@ export default function PortsControlCenter() {
       if (grp) setGroupAgg(grp)
       // Refresh rows/demographics too (payload has no portSize).
       fetchResults()
+      // New PARs can change the base band → refresh effective culture bands.
+      fetchStrategies()
+    }
+    function onStrategyUpdate(payload) {
+      if (payload?.group) setStrategyByGroup(prev => ({ ...prev, [payload.group]: payload }))
     }
     socket.on('par:update', onParUpdate)
+    socket.on('strategy:update', onStrategyUpdate)
 
     return () => {
       socket.off('connect', joinRoom)
       socket.off('par:update', onParUpdate)
+      socket.off('strategy:update', onStrategyUpdate)
     }
-  }, [code, fetchResults])
+  }, [code, fetchResults, fetchStrategies])
 
   // ── Aggregates (all client-side) ───────────────────────────────────────────
   const submitted = individual.length
@@ -151,6 +181,7 @@ export default function PortsControlCenter() {
     const list = [...new Set([...groups, ...groupAgg.map(a => a.group)])]
     return list.map(g => {
       const agg = aggByGroup.get(g)
+      const strat = strategyByGroup[g]
       const count = agg?.count ?? 0
       const status = count === 0 ? 'empty' : count === 1 ? 'receiving' : 'ready'
       const portId = portByGroup.get(g)
@@ -158,13 +189,43 @@ export default function PortsControlCenter() {
         group: g,
         count,
         avg: agg?.avgScore ?? null,
-        // cultureBand comes from the backend — never derived here.
-        cultureBand: agg?.cultureBand ?? null,
+        // Effective culture band (base + measure bonus) comes from the backend
+        // strategies endpoint — never derived here.
+        cultureBand: strat?.cultureBand ?? null,
+        coinsSpent: strat?.coinsSpent ?? 0,
+        measuresCount: strat?.measures?.length ?? 0,
         portName: portId != null ? (portNameById[portId] || `Puerto ${portId}`) : null,
         status,
       }
     })
-  }, [groups, groupAgg, portAssignments, portNameById])
+  }, [groups, groupAgg, portAssignments, portNameById, strategyByGroup])
+
+  // ── Measure-entry helpers ───────────────────────────────────────────────────
+  function openEditor(group) {
+    setSaveError('')
+    setDraftMeasures(strategyByGroup[group]?.measures || [])
+    setEditingGroup(group)
+  }
+  function toggleDraftMeasure(id) {
+    setDraftMeasures(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  const draftCost = useMemo(
+    () => draftMeasures.reduce((s, id) => s + (measuresCatalog.find(m => m.id === id)?.cost || 0), 0),
+    [draftMeasures, measuresCatalog]
+  )
+  async function saveMeasures(group) {
+    setSaving(true)
+    setSaveError('')
+    try {
+      const res = await api.put(`/api/par/${code}/strategy/${encodeURIComponent(group)}`, { measures: draftMeasures })
+      setStrategyByGroup(prev => ({ ...prev, [group]: res.data.strategy }))
+      setEditingGroup(null)
+    } catch (err) {
+      setSaveError(err.response?.data?.error || 'Error al guardar')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // Port size breakdown (Q0) — only if there is portSize data.
   const portSizeStats = useMemo(() => {
@@ -238,10 +299,62 @@ export default function PortsControlCenter() {
                     {gs.count} PAR{gs.count !== 1 ? 's' : ''}
                     {gs.cultureBand && <> · Cultura: <span style={{ color: BAND_CONFIG[gs.cultureBand].color, fontWeight: 700 }}>{BAND_CONFIG[gs.cultureBand].label}</span></>}
                   </div>
+                  <div style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>🪙 {gs.coinsSpent}/{budget} · {gs.measuresCount} medida{gs.measuresCount !== 1 ? 's' : ''}</span>
+                    <button
+                      onClick={() => openEditor(gs.group)}
+                      style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#0a0a0a', background: 'transparent', border: '1px solid #0a0a0a', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
+                    >
+                      Editar medidas
+                    </button>
+                  </div>
                 </div>
               )
             })}
           </div>
+
+          {/* Measure-entry editor (facilitator) */}
+          {editingGroup && (
+            <div style={{ marginTop: '1rem', border: '1px solid #0a0a0a', borderRadius: 12, padding: '1rem 1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0a0a0a' }}>Medidas · {editingGroup}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: draftCost > budget ? '#cc4444' : '#16a34a' }}>
+                  🪙 {draftCost}/{budget}
+                </span>
+                <button onClick={() => setEditingGroup(null)} style={{ fontSize: 12, color: '#999', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕ Cerrar</button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 6, maxHeight: 340, overflowY: 'auto' }}>
+                {measuresCatalog.map(m => {
+                  const sel = draftMeasures.includes(m.id)
+                  return (
+                    <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, border: `1px solid ${sel ? '#0a0a0a' : '#e5e5e5'}`, background: sel ? '#f5f5f5' : '#fff', cursor: 'pointer', fontSize: 13 }}>
+                      <input type="checkbox" checked={sel} onChange={() => toggleDraftMeasure(m.id)} />
+                      <span style={{ flex: 1, color: '#0a0a0a' }}>{m.id}. {m.name}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#666' }}>🪙{m.cost}</span>
+                    </label>
+                  )
+                })}
+              </div>
+
+              {draftCost > budget && (
+                <p style={{ fontSize: 12, color: '#cc4444', margin: '10px 0 0' }}>
+                  Te pasas del presupuesto ({draftCost} &gt; {budget}). Quita alguna medida.
+                </p>
+              )}
+              {saveError && <p style={{ fontSize: 12, color: '#cc4444', margin: '10px 0 0' }}>{saveError}</p>}
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button
+                  onClick={() => saveMeasures(editingGroup)}
+                  disabled={saving || draftCost > budget}
+                  style={{ background: (saving || draftCost > budget) ? '#e5e5e5' : '#0a0a0a', color: (saving || draftCost > budget) ? '#bbb' : '#fff', border: 'none', borderRadius: 999, padding: '0.5rem 1.25rem', fontSize: 13, fontWeight: 600, cursor: (saving || draftCost > budget) ? 'default' : 'pointer' }}
+                >
+                  {saving ? 'Guardando...' : 'Guardar medidas'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 3 · RESULTADOS PARI (agregado) */}
