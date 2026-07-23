@@ -6,6 +6,7 @@ import TeamStrategy from '../models/TeamStrategy.js'
 import ParIndexResult from '../models/ParIndexResult.js'
 import { generateCode } from '../utils/generateCode.js'
 import { validatePortAssignments } from '../services/portAssignmentService.js'
+import { buildSessionSummary } from '../services/parSubmissionService.js'
 
 const STEP_MAP = { waiting: 1, active: 2, closed: 3 }
 
@@ -130,19 +131,22 @@ export default function sessionsRouter(io) {
     }
   })
 
-  // Close session (keep data, notify participants)
+  // Close session (keep data, notify participants). Computes and stores the
+  // aggregate PARI summary at close.
   router.patch('/:code/close', async (req, res) => {
     try {
       const { code } = req.params
+      const summary = await buildSessionSummary(code)
       const session = await Session.findOneAndUpdate(
         { code, facilitatorId: req.user.id },
-        { status: 'closed' },
+        { status: 'closed', ...(summary && { summary }) },
         { new: true }
       )
       if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
       io.to(code).emit('session:closed')
-      res.json({ ok: true })
-    } catch {
+      res.json({ ok: true, summary: session.summary || null })
+    } catch (err) {
+      console.error('Close session error:', err.message)
       res.status(500).json({ error: 'Error al cerrar sesión' })
     }
   })

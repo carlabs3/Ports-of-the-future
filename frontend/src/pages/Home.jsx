@@ -29,23 +29,19 @@ export default function Home() {
     setError('')
   }
 
+  // Unchanged behaviour: validate the code and navigate to the join screen.
   function handleJoin(e) {
     e.preventDefault()
     const formatted = code.trim()
     if (!formatted) {
-      setError('Introduce el código de sesión')
+      setError('Enter the session code')
       return
     }
     if (formatted.length < 9) {
-      setError('El código debe tener el formato DROP-0000')
+      setError('The code must be in the format DROP-0000')
       return
     }
     navigate(`/join?code=${formatted}`)
-  }
-
-  function scrollToHow(e) {
-    e.preventDefault()
-    document.getElementById('como-funciona')?.scrollIntoView({ behavior: 'smooth' })
   }
 
   return (
@@ -58,7 +54,7 @@ export default function Home() {
 
             {/* Left */}
             <div>
-              <p className="hero-tag" style={{ color: 'rgba(0,0,0,0.4)' }}>· TALLER DE HUELLA DE CARBONO</p>
+              <p className="hero-tag" style={{ color: 'rgba(0,0,0,0.4)' }}>· CLIMATE ADAPTATION WORKSHOP FOR PORTS</p>
               <h1 style={{
                 color: '#0a0a0a',
                 fontWeight: 900,
@@ -68,23 +64,22 @@ export default function Home() {
                 lineHeight: 1.05,
                 marginBottom: 24,
               }}>
-                tu estilo de vida<br />
-                tiene un{' '}
+                Ports of the{' '}
                 <span style={{
                   fontStyle: 'italic',
                   textDecoration: 'underline',
                   textDecorationThickness: '3px',
                   textUnderlineOffset: '4px',
                 }}>
-                  coste.
+                  Future.
                 </span>
               </h1>
               <p className="hero-sub">
-                Transporte, alimentación, energía en casa… todo suma. En 5 minutos sabrás exactamente cuánto CO₂ genera tu vida — y cómo te comparas con tu equipo.
+                A hands-on workshop where teams assess how ready their port is for climate change — then put that readiness to the test against extreme weather.
               </p>
             </div>
 
-            {/* Right — join box */}
+            {/* Right — join box (functional; behaviour unchanged) */}
             <div className="join-box" style={{ background: '#0a0a0a', borderRadius: 16, border: 'none' }}>
               <div style={{ marginBottom: 18 }}>
                 <span style={{
@@ -94,15 +89,15 @@ export default function Home() {
                   padding: '4px 10px', letterSpacing: '0.08em', textTransform: 'uppercase',
                 }}>
                   <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
-                  Sesión activa
+                  Active session
                 </span>
               </div>
 
               <h3 style={{ fontSize: 20, fontWeight: 700, color: '#fff', marginBottom: 8, letterSpacing: '-0.01em' }}>
-                Únete al taller
+                Join the workshop
               </h3>
               <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55, marginBottom: 20 }}>
-                Introduce el código que te ha dado tu facilitador para calcular tu huella.
+                Enter the code your facilitator gave you to join.
               </p>
 
               <form onSubmit={handleJoin}>
@@ -111,7 +106,7 @@ export default function Home() {
                   textTransform: 'uppercase', letterSpacing: '0.1em',
                   color: '#fff', marginBottom: 8,
                 }}>
-                  Código de sesión
+                  Session code
                 </label>
                 <div className="join-box-inner">
                   <input
@@ -126,7 +121,7 @@ export default function Home() {
                     spellCheck={false}
                   />
                   <button className="join-btn" type="submit">
-                    UNIRME AL TALLER →
+                    JOIN THE WORKSHOP →
                   </button>
                 </div>
                 {error && (
@@ -141,9 +136,9 @@ export default function Home() {
                 borderTop: '1px solid rgba(255,255,255,0.1)',
               }}>
                 {[
-                  { dot: '#38bdf8', text: 'Sin registro ni instalación' },
-                  { dot: '#f59e0b', text: '5 minutos para completarlo' },
-                  { dot: '#4ade80', text: 'Resultados en tiempo real' },
+                  { dot: '#38bdf8', text: 'No signup or install' },
+                  { dot: '#f59e0b', text: 'Answer from your phone' },
+                  { dot: '#4ade80', text: 'Live results for the room' },
                 ].map(({ dot, text }) => (
                   <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />
@@ -157,46 +152,28 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ── STATS ────────────────────────────────────────────── */}
-      <div className="stats">
-        {[
-          { bg: '#fff',    numColor: '#0a0a0a', textColor: '#555', big: '4.7 t', text: 'Media de CO₂ por persona al año en España' },
-          { bg: '#0a0a0a', numColor: '#fff',    textColor: 'rgba(255,255,255,0.6)', big: '2×', text: 'El doble de lo que el planeta puede absorber' },
-          { bg: '#fff',    numColor: '#0a0a0a', textColor: '#555', big: "5'", text: 'Minutos para calcular tu huella y empezar a cambiar' },
-        ].map(({ bg, numColor, textColor, big, text }, i) => (
-          <div key={big} className="stat" style={{ background: bg, borderRight: i < 2 ? '1px solid #e5e5e5' : 'none' }}>
-            <div style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 900, color: numColor, lineHeight: 1, marginBottom: 12 }}>
-              {big}
-            </div>
-            <p style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: textColor, lineHeight: 1.55, margin: 0 }}>
-              {text}
-            </p>
-          </div>
-        ))}
-      </div>
-
       {/* ── HOW IT WORKS ─────────────────────────────────────── */}
-      <section id="como-funciona" style={{ background: '#fff', padding: '64px 0 72px' }}>
+      <section id="how-it-works" style={{ background: '#fff', padding: '64px 0 72px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px' }}>
           <p style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#aaa', marginBottom: 40 }}>
-            ¿Cómo funciona el taller?
+            How the workshop works
           </p>
           <div className="how-steps">
             {[
               {
                 n: '1',
-                title: 'Entra con tu código',
-                text:  'El facilitador comparte un código. Entra desde tu móvil sin registro ni instalación.',
+                title: "Assess your port's readiness",
+                text:  'Answer the PAR Index on your phone — a short questionnaire on governance, organisation, budget, implemented measures and preparedness.',
               },
               {
                 n: '2',
-                title: 'Calcula tu huella',
-                text:  'Responde preguntas sobre transporte, energía, alimentación y más.',
+                title: 'Build your strategy',
+                text:  "As a team, weigh your port's exposure and invest a limited budget in the adaptation measures that fit it best.",
               },
               {
                 n: '3',
-                title: 'Ve los resultados',
-                text:  'Compara con tu equipo y la media de España en tiempo real.',
+                title: 'Face the events',
+                text:  'Extreme-weather events hit your port — see how well your choices hold up, and compare with the other tables.',
               },
             ].map(({ n, title, text }) => (
               <div key={n}>

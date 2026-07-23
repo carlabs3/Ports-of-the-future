@@ -31,7 +31,7 @@ export function SessionProvider({ children }) {
     socket.on('connect', onConnect)
 
     // Try to restore participant session from localStorage
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('co2sprint_participant_'))
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('ports_participant_'))
     if (keys.length > 0) {
       const key = keys[keys.length - 1]
       try {
@@ -82,13 +82,12 @@ export function SessionProvider({ children }) {
   }
 
   function clearSession() {
-    // Clear participant and progress keys from localStorage
+    // Wipe ALL participant-flow keys so a reused device never leaks the previous
+    // participant's progress or result. Prefix-based so new ports_* keys are
+    // covered automatically (participant, par pending/progress/result).
+    const PREFIXES = ['ports_participant_', 'ports_par_']
     Object.keys(localStorage)
-      .filter(k =>
-        k.startsWith('co2sprint_participant_') ||
-        k.startsWith('co2sprint_progress_') ||
-        k.startsWith('co2sprint_results_')
-      )
+      .filter(k => PREFIXES.some(p => k.startsWith(p)))
       .forEach(k => localStorage.removeItem(k))
     setSessionCode(null)
     setParticipantName('')

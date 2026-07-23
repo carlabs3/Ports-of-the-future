@@ -15,9 +15,10 @@ const styles = {
   },
   logo: {
     fontWeight: 700,
-    fontSize: '1.5rem',
+    fontSize: '1.1rem',
     letterSpacing: '-0.02em',
     color: '#ffffff',
+    textDecoration: 'none',
   },
   links: {
     display: 'flex',
@@ -65,16 +66,16 @@ export default function Navbar() {
   return (
     <nav style={styles.nav}>
       <Link to="/" style={styles.logo}>
-        Drop.
+        Ports of the Future
       </Link>
       <div style={styles.links}>
         {user ? (
           <>
-            <Link to="/dashboard" style={styles.link}>Sesiones</Link>
+            <Link to="/dashboard" style={styles.link}>Sessions</Link>
             <Link to="/session/create">
-              <button style={styles.btnPill}>Nueva sesión</button>
+              <button style={styles.btnPill}>New session</button>
             </Link>
-            <button style={styles.btnSalir} onClick={handleLogout}>Salir</button>
+            <button style={styles.btnSalir} onClick={handleLogout}>Log out</button>
           </>
         ) : null}
       </div>

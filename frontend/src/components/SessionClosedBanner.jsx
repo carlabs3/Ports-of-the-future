@@ -17,7 +17,7 @@ export default function SessionClosedBanner({ onViewPartial }) {
     }}>
       <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
       <span style={{ fontSize: '0.82rem', color: '#666', flex: 1, lineHeight: 1.5 }}>
-        El facilitador ha cerrado esta sesión. Tus resultados han sido guardados.
+        The facilitator has closed this session. Your results have been saved.
       </span>
       {onViewPartial && (
         <button
@@ -36,7 +36,7 @@ export default function SessionClosedBanner({ onViewPartial }) {
             whiteSpace: 'nowrap',
           }}
         >
-          Ver mis resultados parciales
+          View my partial results
         </button>
       )}
     </div>

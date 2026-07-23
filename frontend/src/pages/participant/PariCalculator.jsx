@@ -91,6 +91,13 @@ export default function PariCalculator() {
 
   const [submitting, setSubmitting] = useState(false)
 
+  // Guard: require an active participant for this session on this device.
+  // Prevents a reused device from resuming a previous participant's questionnaire.
+  const hasParticipant = !!localStorage.getItem(`ports_participant_${code}`)
+  useEffect(() => {
+    if (!hasParticipant) navigate('/join', { replace: true })
+  }, [hasParticipant, navigate])
+
   // ── Fetch questionnaire (loader + retry on network error) ──────────────────
   useEffect(() => {
     let cancelled = false
@@ -141,15 +148,17 @@ export default function PariCalculator() {
   }, [phase, stepIndex, portSize, worldZone, answers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Loading / error states ─────────────────────────────────────────────────
+  if (!hasParticipant) return null
+
   if (loadError) return (
     <div style={{ minHeight: 'calc(100dvh - 52px)', background: '#f5f5f5', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
       <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📡</div>
       <p style={{ fontSize: 15, color: '#444', maxWidth: 320, lineHeight: 1.6, marginBottom: '1.5rem' }}>
-        No hemos podido cargar el cuestionario. Comprueba tu conexión.
+        We couldn't load the questionnaire. Please check your connection.
       </p>
       <button onClick={() => setReloadTick(t => t + 1)}
         style={{ background: '#0a0a0a', color: '#f5f5f5', border: 'none', borderRadius: 999, padding: '12px 28px', fontSize: 15, fontWeight: 500, cursor: 'pointer' }}>
-        Reintentar
+        Retry
       </button>
     </div>
   )
@@ -219,15 +228,15 @@ export default function PariCalculator() {
       <div style={{ minHeight: 'calc(100dvh - 52px)', background: '#f5f5f5', display: 'flex', flexDirection: 'column', fontFamily: "'Instrument Sans', sans-serif" }}>
         <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '28px 18px 120px', flex: 1 }}>
           <p style={{ fontSize: 12, color: '#999', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 8px' }}>
-            Antes de empezar
+            Before you start
           </p>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: '#0a0a0a', margin: '0 0 24px' }}>
-            Cuéntanos sobre tu puerto
+            Tell us about your port
           </h1>
 
           <div style={{ marginBottom: 28 }}>
             <p style={{ fontSize: 17, fontWeight: 700, color: '#0a0a0a', margin: '0 0 12px', lineHeight: 1.4 }}>
-              {demo.portSize?.text || 'Tamaño del puerto'}
+              {demo.portSize?.text || 'Port size'}
             </p>
             <OptionList
               options={demo.portSize?.options || []}
@@ -240,7 +249,7 @@ export default function PariCalculator() {
           {hasWorldZone && (
             <div style={{ marginBottom: 28 }}>
               <p style={{ fontSize: 17, fontWeight: 700, color: '#0a0a0a', margin: '0 0 12px', lineHeight: 1.4 }}>
-                {demo.worldZone?.text || 'Zona del mundo'}
+                {demo.worldZone?.text || 'World zone'}
               </p>
               <OptionList
                 options={demo.worldZone.options}
@@ -255,7 +264,7 @@ export default function PariCalculator() {
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '10px 16px 24px', display: 'flex', background: '#f5f5f5', borderTop: `1px solid ${BORDER}`, zIndex: 10 }}>
           <button onClick={() => { setPhase('questions'); setStepIndex(0) }} disabled={!canContinue}
             style={{ flex: 1, maxWidth: 560, margin: '0 auto', height: 48, borderRadius: 999, border: 'none', background: canContinue ? '#0a0a0a' : '#e5e5e5', color: canContinue ? '#f5f5f5' : '#bbb', fontSize: 16, fontWeight: 500, cursor: canContinue ? 'pointer' : 'default' }}>
-            Empezar el cuestionario →
+            Start the questionnaire →
           </button>
         </div>
       </div>
@@ -305,7 +314,7 @@ export default function PariCalculator() {
       {/* Progress */}
       <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '18px 18px 0', flexShrink: 0 }}>
         <p style={{ fontSize: 12, color: '#999', marginBottom: 6, letterSpacing: '0.01em' }}>
-          {current.areaLabel} · Pregunta {qWithinArea + 1} de {areaQuestions.length}
+          {current.areaLabel} · Question {qWithinArea + 1} of {areaQuestions.length}
         </p>
         <div style={{ display: 'flex', gap: 4 }}>
           {areaQuestions.map((q, qi) => (
@@ -338,7 +347,7 @@ export default function PariCalculator() {
             style={{ width: 48, height: 48, borderRadius: 999, border: `1px solid ${BORDER}`, background: '#fff', color: '#0a0a0a', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
           <button onClick={handleNext} disabled={!canNext || submitting}
             style={{ flex: 1, height: 48, borderRadius: 999, border: 'none', background: (canNext && !submitting) ? '#0a0a0a' : '#e5e5e5', color: (canNext && !submitting) ? '#f5f5f5' : '#bbb', fontSize: 18, fontWeight: 500, cursor: (canNext && !submitting) ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {isLast ? (submitting ? 'Enviando...' : '✓ Finalizar') : '→'}
+            {isLast ? (submitting ? 'Submitting...' : '✓ Finish') : '→'}
           </button>
         </div>
       </div>

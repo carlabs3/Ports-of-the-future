@@ -82,7 +82,7 @@ export default function WaitingRoom() {
         fontWeight: 900, fontSize: '1rem', letterSpacing: '0.1em',
         textTransform: 'uppercase', color: '#0a0a0a', marginBottom: '2.5rem',
       }}>
-        CO2 SPRINT *
+        PORTS OF THE FUTURE
       </div>
 
       <div style={{
@@ -96,14 +96,14 @@ export default function WaitingRoom() {
           fontWeight: 900, fontSize: '1.35rem', textTransform: 'uppercase',
           marginBottom: '0.75rem', color: '#0a0a0a', letterSpacing: '0.02em',
         }}>
-          Esperando al facilitador...
+          Waiting for the facilitator...
         </h1>
 
         <p style={{
           fontSize: '0.88rem', color: '#666',
           maxWidth: 320, lineHeight: 1.65, marginBottom: '2rem', margin: '0 0 2rem',
         }}>
-          El taller comenzará en breve. Mantén esta pantalla abierta.
+          The workshop will begin shortly. Keep this screen open.
         </p>
 
         {participantGroup && (
@@ -112,7 +112,7 @@ export default function WaitingRoom() {
             padding: '0.45rem 1.25rem', fontSize: '0.8rem', fontWeight: 700,
             color: '#0a0a0a', letterSpacing: '0.04em', marginBottom: '2.5rem',
           }}>
-            Estás en el {participantGroup}
+            You are in {participantGroup}
           </div>
         )}
 

@@ -1,4 +1,4 @@
-export default function WaitingForFacilitator({ message = 'Espera al facilitador para continuar...' }) {
+export default function WaitingForFacilitator({ message = 'Wait for the facilitator to continue...' }) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
@@ -11,7 +11,7 @@ export default function WaitingForFacilitator({ message = 'Espera al facilitador
         {message}
       </p>
       <p style={{ fontSize: '13px', color: '#999', marginBottom: '28px' }}>
-        El facilitador está preparando la siguiente fase
+        The facilitator is preparing the next phase
       </p>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         {[0, 1, 2].map(i => (

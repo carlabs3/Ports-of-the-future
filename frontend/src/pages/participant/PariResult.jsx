@@ -7,18 +7,18 @@ import { socket } from '../../utils/socket.js'
 // Band presentation. Spanish labels (display only) — the band value itself
 // comes from the backend and is the source of truth.
 const BAND_CONFIG = {
-  reactive:   { label: 'Reactivo',      color: '#f472b6', bg: '#fce8f0', msg: 'Punto de partida: la adaptación climática aún no está en la agenda.' },
-  aware:      { label: 'Consciente',    color: '#f59e0b', bg: '#fff8e0', msg: 'Hay conciencia del reto; toca pasar a la acción estructurada.' },
-  developing: { label: 'En desarrollo', color: '#38bdf8', bg: '#e8f2fd', msg: 'Buen avance: la adaptación se está consolidando.' },
-  proactive:  { label: 'Proactivo',     color: '#4ade80', bg: '#eaf7ee', msg: 'Referente: la adaptación está integrada y gestionada.' },
+  reactive:   { label: 'Reactive',   color: '#f472b6', bg: '#fce8f0', msg: 'Starting point: climate adaptation is not yet on the agenda.' },
+  aware:      { label: 'Aware',      color: '#f59e0b', bg: '#fff8e0', msg: 'There is awareness of the challenge; time to move to structured action.' },
+  developing: { label: 'Developing', color: '#38bdf8', bg: '#e8f2fd', msg: 'Good progress: adaptation is taking hold.' },
+  proactive:  { label: 'Proactive',  color: '#4ade80', bg: '#eaf7ee', msg: 'A benchmark: adaptation is embedded and actively managed.' },
 }
 
 const AREA_LABELS = {
-  governance:   'Gobernanza y estrategia',
-  organisation: 'Organización y personas',
-  budget:       'Presupuesto y finanzas',
-  measures:     'Medidas implementadas',
-  preparedness: 'Preparación y monitorización',
+  governance:   'Governance & Strategy',
+  organisation: 'Organisation & People',
+  budget:       'Budget & Finance',
+  measures:     'Implemented Measures',
+  preparedness: 'Preparedness & Monitoring',
 }
 const AREA_ORDER = ['governance', 'organisation', 'budget', 'measures', 'preparedness']
 
@@ -29,13 +29,24 @@ export default function PariResult() {
 
   const RESULT_KEY = `ports_par_result_${code}`
 
+  // Guard: only the participant who joined THIS session on THIS device may see a
+  // result. Prevents a reused device (previous participant left on this screen)
+  // from showing someone else's PARI to whoever lands here next.
+  const hasParticipant = !!localStorage.getItem(`ports_participant_${code}`)
+
+  useEffect(() => {
+    if (!hasParticipant) navigate('/join', { replace: true })
+  }, [hasParticipant, navigate])
+
   // Result may arrive via (1) navigation state, (2) localStorage, (3) socket.
   const savedRaw = localStorage.getItem(RESULT_KEY)
   const saved = savedRaw ? (() => { try { return JSON.parse(savedRaw) } catch { return null } })() : null
 
+  // Never trust the saved result unless this device has an active participant
+  // for this session. Navigation state (just completed) still counts.
   const initial = (location.state && location.state.score != null)
     ? location.state
-    : (saved && saved.score != null)
+    : (hasParticipant && saved && saved.score != null)
       ? saved
       : null
 
@@ -85,12 +96,15 @@ export default function PariResult() {
     }
   }
 
+  // No active participant for this session on this device → redirecting to join.
+  if (!hasParticipant) return null
+
   // ── Waiting for the result to arrive ──────────────────────────────────────
   if (!result || result.score == null) return (
     <div style={{ minHeight: 'calc(100vh - 52px)', background: '#f5f5f5', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
       <div style={{ fontSize: '3rem', marginBottom: '1.25rem' }}>⏳</div>
       <p style={{ fontSize: '0.9rem', color: '#888', maxWidth: 300, lineHeight: 1.65 }}>
-        Calculando tu PAR Index...
+        Calculating your PAR Index...
       </p>
     </div>
   )
@@ -108,7 +122,7 @@ export default function PariResult() {
       <div style={{ background: '#0a0a0a', color: '#fff' }}>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '1.5rem 1.5rem 0' }}>
           <p style={{ margin: '0 0 0.75rem', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: 'rgba(255,255,255,0.55)' }}>
-            Tu PAR Index
+            Your PAR Index
           </p>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 900, fontSize: 'clamp(3.2rem, 11vw, 4.8rem)', lineHeight: 1 }}>{result.score}</span>
@@ -132,10 +146,10 @@ export default function PariResult() {
       {/* ═══ CONTENT ═══ */}
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '1.25rem 1.25rem 2.5rem' }}>
 
-        {/* Radar por áreas */}
+        {/* Area radar */}
         <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #e5e5e5', padding: '1.25rem 1.5rem', marginBottom: '1rem' }}>
           <div style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#999', marginBottom: '0.5rem' }}>
-            Perfil por áreas (0–20)
+            Profile by area (0–20)
           </div>
           <div style={{ width: '100%', height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -164,33 +178,33 @@ export default function PariResult() {
         {/* Email */}
         <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #e5e5e5', padding: '1.25rem 1.5rem' }}>
           <div style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#999', marginBottom: '1rem' }}>
-            Recibe tu resultado
+            Get your result by email
           </div>
           {emailStatus === 'success' ? (
             <p style={{ fontSize: '0.85rem', color: '#16a34a', fontWeight: 700, textAlign: 'center', padding: '1rem 0', margin: 0 }}>
-              ✓ Revisa tu bandeja de entrada
+              ✓ Check your inbox
             </p>
           ) : emailStatus === 'unavailable' ? (
             <p style={{ fontSize: '0.85rem', color: '#888', textAlign: 'center', padding: '1rem 0', margin: 0, lineHeight: 1.6 }}>
-              El envío por email no está disponible ahora mismo. Puedes anotar tu resultado: <strong>{result.score}/100 · {cfg.label}</strong>.
+              Email delivery is not available right now. You can note your result: <strong>{result.score}/100 · {cfg.label}</strong>.
             </p>
           ) : (
             <form onSubmit={handleSendEmail}>
               <input
                 type="email"
-                placeholder="tu@email.com"
+                placeholder="you@email.com"
                 value={emailInput}
                 onChange={e => { setEmailInput(e.target.value); setEmailStatus('idle') }}
                 style={{ width: '100%', border: '1.5px solid #e5e5e5', borderRadius: 6, padding: '0.7rem 0.85rem', fontSize: '0.9rem', outline: 'none', marginBottom: '0.6rem', boxSizing: 'border-box', background: '#fff', color: '#0a0a0a' }}
               />
               {(emailStatus === 'invalid' || emailStatus === 'error') && (
                 <p style={{ fontSize: '0.72rem', color: '#cc4444', margin: '-0.2rem 0 0.6rem' }}>
-                  {emailStatus === 'invalid' ? 'Introduce un email válido' : 'Algo ha fallado, inténtalo de nuevo'}
+                  {emailStatus === 'invalid' ? 'Enter a valid email' : 'Something went wrong, try again'}
                 </p>
               )}
               <button type="submit" disabled={emailStatus === 'sending'}
                 style={{ width: '100%', background: emailStatus === 'sending' ? '#aaa' : '#0a0a0a', color: '#fff', padding: '0.85rem', fontSize: '0.73rem', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, borderRadius: 999, cursor: emailStatus === 'sending' ? 'default' : 'pointer', border: 'none' }}>
-                {emailStatus === 'sending' ? 'Enviando...' : 'Enviarme mi resultado'}
+                {emailStatus === 'sending' ? 'Sending...' : 'Email me my result'}
               </button>
             </form>
           )}

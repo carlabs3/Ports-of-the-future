@@ -99,7 +99,7 @@ export default function FacilitatorLogin() {
       login(data.token, email)
       navigate('/dashboard')
     } catch (err) {
-      setError(err.response?.data?.error || 'Email o contraseña incorrectos')
+      setError(err.response?.data?.error || 'Incorrect email or password')
     } finally {
       setLoading(false)
     }
@@ -108,8 +108,8 @@ export default function FacilitatorLogin() {
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <h1 style={s.title}>Acceso</h1>
-        <p style={s.subtitle}>Panel de Facilitador</p>
+        <h1 style={s.title}>Sign in</h1>
+        <p style={s.subtitle}>Facilitator panel</p>
         {error && <div style={s.error}>{error}</div>}
         <form onSubmit={handleSubmit}>
           <fieldset style={s.fieldset}>
@@ -120,12 +120,12 @@ export default function FacilitatorLogin() {
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="facilitador@ejemplo.com"
+              placeholder="facilitator@example.com"
               required
             />
           </fieldset>
           <fieldset style={s.fieldset}>
-            <label style={s.label} htmlFor="password">Contraseña</label>
+            <label style={s.label} htmlFor="password">Password</label>
             <input
               id="password"
               style={s.input}
@@ -137,7 +137,7 @@ export default function FacilitatorLogin() {
             />
           </fieldset>
           <button style={s.btn} type="submit" disabled={loading}>
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
       </div>

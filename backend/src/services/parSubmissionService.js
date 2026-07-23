@@ -71,3 +71,47 @@ export async function buildParRanking(sessionCode) {
   }))
   return { individual, groups: computeParGroups(individual) }
 }
+
+const SUMMARY_AREA_KEYS = ['governance', 'organisation', 'budget', 'measures', 'preparedness']
+const SUMMARY_BANDS = ['reactive', 'aware', 'developing', 'proactive']
+
+// Pure, testable: build the aggregate PARI summary from the session's results.
+// Returns null when there are no results. Bands are derived with getBand
+// (single source of truth) — no thresholds duplicated here.
+export function computeSessionSummary(individual) {
+  if (!Array.isArray(individual) || individual.length === 0) return null
+
+  const scores = individual.map(r => r.score).sort((a, b) => a - b)
+  const mean = arr => arr.reduce((s, v) => s + v, 0) / arr.length
+  const round1 = x => Math.round(x * 10) / 10
+
+  const byArea = {}
+  for (const key of SUMMARY_AREA_KEYS) {
+    byArea[key] = round1(mean(individual.map(r => r.areas?.[key] ?? 0)))
+  }
+
+  const bandDistribution = Object.fromEntries(SUMMARY_BANDS.map(b => [b, 0]))
+  for (const r of individual) bandDistribution[getBand(r.score)] += 1
+
+  const byGroup = computeParGroups(individual).map(g => ({
+    group: g.group, avgScore: g.avgScore, cultureBand: g.cultureBand,
+  }))
+
+  return {
+    totalParticipants: individual.length,
+    averageScore: round1(mean(scores)),
+    medianScore:  scores[Math.floor(scores.length / 2)],
+    minScore:     scores[0],
+    maxScore:     scores[scores.length - 1],
+    byArea,
+    bandDistribution,
+    byGroup,
+    calculatedAt: new Date(),
+  }
+}
+
+// Thin DB wrapper: read the session's results and build the summary.
+export async function buildSessionSummary(sessionCode) {
+  const all = await ParIndexResult.find({ sessionCode }).select('group score areas -_id')
+  return computeSessionSummary(all.map(r => ({ group: r.group, score: r.score, areas: r.areas })))
+}

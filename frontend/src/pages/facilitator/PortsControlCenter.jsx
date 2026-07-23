@@ -13,22 +13,22 @@ import { socket } from '../../utils/socket.js'
 
 const AREA_ORDER = ['governance', 'organisation', 'budget', 'measures', 'preparedness']
 const AREA_LABELS = {
-  governance:   'Gobernanza',
-  organisation: 'Organización',
-  budget:       'Presupuesto',
-  measures:     'Medidas',
-  preparedness: 'Preparación',
+  governance:   'Governance',
+  organisation: 'Organisation',
+  budget:       'Budget',
+  measures:     'Measures',
+  preparedness: 'Preparedness',
 }
 
 const BAND_ORDER = ['reactive', 'aware', 'developing', 'proactive']
 const BAND_CONFIG = {
-  reactive:   { label: 'Reactivo',      color: '#f472b6' },
-  aware:      { label: 'Consciente',    color: '#f59e0b' },
-  developing: { label: 'En desarrollo', color: '#38bdf8' },
-  proactive:  { label: 'Proactivo',     color: '#4ade80' },
+  reactive:   { label: 'Reactive',   color: '#f472b6' },
+  aware:      { label: 'Aware',      color: '#f59e0b' },
+  developing: { label: 'Developing', color: '#38bdf8' },
+  proactive:  { label: 'Proactive',  color: '#4ade80' },
 }
 
-const PORT_SIZE_LABELS = { small: 'Pequeño', medium: 'Mediano', large: 'Grande' }
+const PORT_SIZE_LABELS = { small: 'Small', medium: 'Medium', large: 'Large' }
 const PORT_SIZE_ORDER = ['small', 'medium', 'large']
 
 // NOTE: band boundaries live ONLY in the backend (scoringService.getBand).
@@ -67,6 +67,10 @@ export default function PortsControlCenter() {
   // Phase 8 — roulette outcomes
   const [outcomes, setOutcomes] = useState([]) // sorted desc by lossesAvoidedPct
   const [spinning, setSpinning] = useState(null) // group being spun (cosmetic)
+
+  // Phase 9 — session close
+  const [closed, setClosed]   = useState(false)
+  const [closing, setClosing] = useState(false)
 
   const joinUrl = `${window.location.origin}/?code=${code}`
 
@@ -113,6 +117,7 @@ export default function PortsControlCenter() {
       .then(res => {
         setGroups(res.data.groups || [])
         setPortAssignments(res.data.portAssignments || [])
+        setClosed(res.data.status === 'closed')
       })
       .catch(() => {})
     api.get('/api/par/ports')
@@ -209,7 +214,7 @@ export default function PortsControlCenter() {
         cultureBand: strat?.cultureBand ?? null,
         coinsSpent: strat?.coinsSpent ?? 0,
         measuresCount: strat?.measures?.length ?? 0,
-        portName: portId != null ? (portNameById[portId] || `Puerto ${portId}`) : null,
+        portName: portId != null ? (portNameById[portId] || `Port ${portId}`) : null,
         status,
       }
     })
@@ -236,9 +241,24 @@ export default function PortsControlCenter() {
       setStrategyByGroup(prev => ({ ...prev, [group]: res.data.strategy }))
       setEditingGroup(null)
     } catch (err) {
-      setSaveError(err.response?.data?.error || 'Error al guardar')
+      setSaveError(err.response?.data?.error || 'Error saving')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Close the session: persists the aggregate PARI summary and notifies participants.
+  async function closeSession() {
+    if (closing || closed) return
+    if (!window.confirm('Close this session? Participants will be notified and the PARI summary will be saved. Results stay visible here.')) return
+    setClosing(true)
+    try {
+      await api.patch(`/api/sessions/${code}/close`)
+      setClosed(true)
+    } catch {
+      window.alert('Could not close the session. Try again.')
+    } finally {
+      setClosing(false)
     }
   }
 
@@ -271,14 +291,28 @@ export default function PortsControlCenter() {
   }, [rows])
 
   const STATUS_STYLE = {
-    empty:     { dot: '#d4d4d4', label: 'Sin datos',  color: '#999' },
-    receiving: { dot: '#f59e0b', label: 'Recibiendo', color: '#b07a30' },
-    ready:     { dot: '#4ade80', label: 'Con datos',  color: '#16a34a' },
+    empty:     { dot: '#d4d4d4', label: 'No data',   color: '#999' },
+    receiving: { dot: '#f59e0b', label: 'Receiving', color: '#b07a30' },
+    ready:     { dot: '#4ade80', label: 'Ready',     color: '#16a34a' },
   }
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: 'calc(100vh - 52px)', padding: '2rem 1.5rem', fontFamily: "'Instrument Sans', sans-serif" }}>
       <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+        {/* Session close bar */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          {closed ? (
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a', background: '#eaf7ee', border: '1px solid rgba(74,222,128,0.4)', borderRadius: 999, padding: '6px 14px' }}>
+              ✓ Session closed · results are final
+            </span>
+          ) : (
+            <button onClick={closeSession} disabled={closing}
+              style={{ fontSize: 13, fontWeight: 600, color: closing ? '#bbb' : '#0a0a0a', background: 'transparent', border: '1px solid #0a0a0a', borderRadius: 999, padding: '6px 16px', cursor: closing ? 'default' : 'pointer' }}>
+              {closing ? 'Closing...' : 'Close session'}
+            </button>
+          )}
+        </div>
 
         {/* 1 · HEADER */}
         <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center' }}>
@@ -287,17 +321,17 @@ export default function PortsControlCenter() {
           </div>
           <div style={{ flex: '1 1 220px', minWidth: 0 }}>
             <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#999', margin: '0 0 4px' }}>
-              Centro de control · PAR Index
+              Control centre · PAR Index
             </p>
             <div style={{ fontWeight: 900, fontSize: '2rem', letterSpacing: '0.05em', color: '#0a0a0a', lineHeight: 1 }}>{code}</div>
             <p style={{ fontSize: '0.8rem', color: '#666', margin: '6px 0 0' }}>{joinUrl}</p>
           </div>
           <div style={{ textAlign: 'center', padding: '0 1rem' }}>
             <div style={{ fontWeight: 900, fontSize: '2.4rem', color: '#0a0a0a', lineHeight: 1 }}>{submitted}</div>
-            <div style={{ fontSize: '0.72rem', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>PAR enviados</div>
+            <div style={{ fontSize: '0.72rem', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>PAR submitted</div>
           </div>
           <div style={{ flex: '1 1 160px', minWidth: 0 }}>
-            <div style={{ fontSize: '0.72rem', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Grupos</div>
+            <div style={{ fontSize: '0.72rem', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Groups</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {(groups.length ? groups : ['—']).map(g => (
                 <span key={g} style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 999, background: '#f5f5f5', color: '#0a0a0a', border: '1px solid #e5e5e5' }}>{g}</span>
@@ -306,9 +340,9 @@ export default function PortsControlCenter() {
           </div>
         </div>
 
-        {/* 2 · ESTADO DE GRUPOS */}
+        {/* 2 · GROUP STATUS */}
         <div style={card}>
-          <div style={cardTitle}>Estado de grupos</div>
+          <div style={cardTitle}>Group status</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
             {groupStats.map(gs => {
               const st = STATUS_STYLE[gs.status]
@@ -320,23 +354,23 @@ export default function PortsControlCenter() {
                     <span style={{ fontSize: 11, fontWeight: 600, color: st.color }}>{st.label}</span>
                   </div>
                   <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
-                    🏙 {gs.portName || '— sin puerto —'}
+                    🏙 {gs.portName || '— no port —'}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                     <span style={{ fontSize: 22, fontWeight: 900, color: '#0a0a0a' }}>{gs.avg != null ? gs.avg : '—'}</span>
-                    {gs.avg != null && <span style={{ fontSize: 12, color: '#999' }}>/100 medio</span>}
+                    {gs.avg != null && <span style={{ fontSize: 12, color: '#999' }}>/100 avg</span>}
                   </div>
                   <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
                     {gs.count} PAR{gs.count !== 1 ? 's' : ''}
-                    {gs.cultureBand && <> · Cultura: <span style={{ color: BAND_CONFIG[gs.cultureBand].color, fontWeight: 700 }}>{BAND_CONFIG[gs.cultureBand].label}</span></>}
+                    {gs.cultureBand && <> · Culture: <span style={{ color: BAND_CONFIG[gs.cultureBand].color, fontWeight: 700 }}>{BAND_CONFIG[gs.cultureBand].label}</span></>}
                   </div>
                   <div style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>🪙 {gs.coinsSpent}/{budget} · {gs.measuresCount} medida{gs.measuresCount !== 1 ? 's' : ''}</span>
+                    <span>🪙 {gs.coinsSpent}/{budget} · {gs.measuresCount} measure{gs.measuresCount !== 1 ? 's' : ''}</span>
                     <button
                       onClick={() => openEditor(gs.group)}
                       style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#0a0a0a', background: 'transparent', border: '1px solid #0a0a0a', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
                     >
-                      Editar medidas
+                      Edit measures
                     </button>
                   </div>
                 </div>
@@ -348,11 +382,11 @@ export default function PortsControlCenter() {
           {editingGroup && (
             <div style={{ marginTop: '1rem', border: '1px solid #0a0a0a', borderRadius: 12, padding: '1rem 1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#0a0a0a' }}>Medidas · {editingGroup}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0a0a0a' }}>Measures · {editingGroup}</span>
                 <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: draftCost > budget ? '#cc4444' : '#16a34a' }}>
                   🪙 {draftCost}/{budget}
                 </span>
-                <button onClick={() => setEditingGroup(null)} style={{ fontSize: 12, color: '#999', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕ Cerrar</button>
+                <button onClick={() => setEditingGroup(null)} style={{ fontSize: 12, color: '#999', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕ Close</button>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 6, maxHeight: 340, overflowY: 'auto' }}>
@@ -370,7 +404,7 @@ export default function PortsControlCenter() {
 
               {draftCost > budget && (
                 <p style={{ fontSize: 12, color: '#cc4444', margin: '10px 0 0' }}>
-                  Te pasas del presupuesto ({draftCost} &gt; {budget}). Quita alguna medida.
+                  Over budget ({draftCost} &gt; {budget}). Remove a measure.
                 </p>
               )}
               {saveError && <p style={{ fontSize: 12, color: '#cc4444', margin: '10px 0 0' }}>{saveError}</p>}
@@ -381,7 +415,7 @@ export default function PortsControlCenter() {
                   disabled={saving || draftCost > budget}
                   style={{ background: (saving || draftCost > budget) ? '#e5e5e5' : '#0a0a0a', color: (saving || draftCost > budget) ? '#bbb' : '#fff', border: 'none', borderRadius: 999, padding: '0.5rem 1.25rem', fontSize: 13, fontWeight: 600, cursor: (saving || draftCost > budget) ? 'default' : 'pointer' }}
                 >
-                  {saving ? 'Guardando...' : 'Guardar medidas'}
+                  {saving ? 'Saving...' : 'Save measures'}
                 </button>
               </div>
             </div>
@@ -390,20 +424,20 @@ export default function PortsControlCenter() {
 
         {/* 2.5 · RULETA DE EVENTOS + RANKING */}
         <div style={card}>
-          <div style={cardTitle}>Ruleta de eventos y ranking</div>
+          <div style={cardTitle}>Event roulette &amp; ranking</div>
           {outcomes.length === 0 ? (
-            <p style={{ fontSize: 14, color: '#999', margin: 0 }}>Sin mesas todavía.</p>
+            <p style={{ fontSize: 14, color: '#999', margin: 0 }}>No tables yet.</p>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: '#999', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     <th style={{ padding: '6px 8px' }}>#</th>
-                    <th style={{ padding: '6px 8px' }}>Mesa</th>
-                    <th style={{ padding: '6px 8px' }}>Puerto</th>
-                    <th style={{ padding: '6px 8px' }}>Evento sorteado</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Preparación</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>% evitado</th>
+                    <th style={{ padding: '6px 8px' }}>Table</th>
+                    <th style={{ padding: '6px 8px' }}>Port</th>
+                    <th style={{ padding: '6px 8px' }}>Drawn event</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Preparedness</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>% avoided</th>
                     <th style={{ padding: '6px 8px' }}></th>
                   </tr>
                 </thead>
@@ -417,7 +451,7 @@ export default function PortsControlCenter() {
                         <td style={{ padding: '8px', fontWeight: 700, color: '#0a0a0a' }}>{o.group}{isTop ? ' 🏅' : ''}</td>
                         <td style={{ padding: '8px', color: '#666' }}>{o.portName || '—'}</td>
                         <td style={{ padding: '8px', color: '#0a0a0a' }}>
-                          {isSpin ? <span style={{ color: '#999' }}>Girando…</span> : (o.drawnEvent || '—')}
+                          {isSpin ? <span style={{ color: '#999' }}>Spinning…</span> : (o.drawnEvent || '—')}
                         </td>
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#0a0a0a' }}>{o.preparedness != null ? o.preparedness.toFixed(1) : '—'}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 900, color: isTop ? '#16a34a' : '#0a0a0a' }}>{o.lossesAvoidedPct != null ? `${o.lossesAvoidedPct.toFixed(0)}%` : '—'}</td>
@@ -427,7 +461,7 @@ export default function PortsControlCenter() {
                             disabled={!!spinning}
                             style={{ fontSize: 12, fontWeight: 600, color: spinning ? '#bbb' : '#fff', background: spinning ? '#e5e5e5' : '#0a0a0a', border: 'none', borderRadius: 999, padding: '4px 12px', cursor: spinning ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
                           >
-                            {isSpin ? '🎡' : o.drawn ? 'Volver a girar' : 'Girar ruleta'}
+                            {isSpin ? '🎡' : o.drawn ? 'Spin again' : 'Spin the wheel'}
                           </button>
                         </td>
                       </tr>
@@ -440,7 +474,7 @@ export default function PortsControlCenter() {
               {outcomes[0]?.drawn && outcomes[0].breakdown?.length > 0 && (
                 <div style={{ marginTop: '1rem', fontSize: 12, color: '#666' }}>
                   <div style={{ fontWeight: 700, marginBottom: 6, color: '#0a0a0a' }}>
-                    Debrief · {outcomes[0].group} vs {outcomes[0].drawnEvent} (protección por medida, original → ajustada)
+                    Debrief · {outcomes[0].group} vs {outcomes[0].drawnEvent} (protection per measure, original → adjusted)
                   </div>
                   {outcomes[0].breakdown.map(b => (
                     <div key={b.measureId} style={{ display: 'flex', gap: 8, padding: '3px 0', borderTop: '0.5px solid #f0f0f0' }}>
@@ -456,25 +490,25 @@ export default function PortsControlCenter() {
 
         {/* 3 · RESULTADOS PARI (agregado) */}
         <div style={card}>
-          <div style={cardTitle}>Resultados PARI · toda la sala</div>
+          <div style={cardTitle}>PARI results · whole room</div>
 
           {submitted === 0 ? (
-            <p style={{ fontSize: 14, color: '#999', margin: 0 }}>Aún no hay resultados. Esperando envíos...</p>
+            <p style={{ fontSize: 14, color: '#999', margin: 0 }}>No results yet. Waiting for submissions...</p>
           ) : (
             <>
-              {/* Titular */}
+              {/* Headline */}
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '0.5rem 1.5rem', marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontWeight: 900, fontSize: '3rem', color: '#0a0a0a', lineHeight: 1 }}>{globalMean}</span>
-                  <span style={{ fontSize: '0.9rem', color: '#999', fontWeight: 700 }}>/100 media global</span>
+                  <span style={{ fontSize: '0.9rem', color: '#999', fontWeight: 700 }}>/100 room average</span>
                 </div>
-                <span style={{ fontSize: '0.9rem', color: '#666' }}>Rango {minScore}–{maxScore}</span>
+                <span style={{ fontSize: '0.9rem', color: '#666' }}>Range {minScore}–{maxScore}</span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                {/* Radar por áreas */}
+                {/* Area radar */}
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 8 }}>Media por área (0–20)</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 8 }}>Average by area (0–20)</div>
                   <div style={{ width: '100%', height: 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart data={radarData} outerRadius="72%">
@@ -489,7 +523,7 @@ export default function PortsControlCenter() {
 
                 {/* Histograma de scores */}
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 8 }}>Distribución de scores individuales</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 8 }}>Distribution of individual scores</div>
                   <div style={{ width: '100%', height: 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={histData} margin={{ top: 8, right: 8, bottom: 8, left: -20 }}>
@@ -503,9 +537,9 @@ export default function PortsControlCenter() {
                 </div>
               </div>
 
-              {/* Distribución de bandas */}
+              {/* Band distribution */}
               <div style={{ marginTop: '1.5rem' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 10 }}>Distribución de bandas</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 10 }}>Band distribution</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
                   {bandDist.map(b => (
                     <div key={b.band} style={{ border: '1px solid #e5e5e5', borderRadius: 10, padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -524,19 +558,19 @@ export default function PortsControlCenter() {
           )}
         </div>
 
-        {/* 4 · DESGLOSE POR TAMAÑO DE PUERTO (Q0) */}
+        {/* 4 · BREAKDOWN BY PORT SIZE (Q0) */}
         {portSizeStats && (
           <div style={card}>
-            <div style={cardTitle}>Media por tamaño de puerto</div>
+            <div style={cardTitle}>Average by port size</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem' }}>
               {portSizeStats.map(ps => (
                 <div key={ps.size} style={{ border: '1px solid #e5e5e5', borderRadius: 10, padding: '0.85rem 1rem' }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#0a0a0a', marginBottom: 6 }}>{ps.label}</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                     <span style={{ fontSize: 24, fontWeight: 900, color: '#0a0a0a' }}>{ps.avg}</span>
-                    <span style={{ fontSize: 12, color: '#999' }}>/100 medio</span>
+                    <span style={{ fontSize: 12, color: '#999' }}>/100 avg</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{ps.count} puerto{ps.count !== 1 ? 's' : ''}</div>
+                  <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{ps.count} port{ps.count !== 1 ? 's' : ''}</div>
                 </div>
               ))}
             </div>

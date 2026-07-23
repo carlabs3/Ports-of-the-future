@@ -24,11 +24,11 @@ export default function SessionEnd() {
           textTransform: 'uppercase', letterSpacing: '0.02em',
           color: '#0a0a0a', marginBottom: '0.6rem',
         }}>
-          ¡Gracias por participar!
+          Thank you for taking part!
         </h1>
 
         <p style={{ fontSize: '0.95rem', color: '#666', maxWidth: 320, lineHeight: 1.65, marginBottom: '2rem' }}>
-          Tu huella de carbono ha quedado registrada.
+          Your PAR Index has been recorded.
         </p>
 
         <button
@@ -40,11 +40,11 @@ export default function SessionEnd() {
             textTransform: 'uppercase', cursor: 'pointer', marginBottom: '2.5rem',
           }}
         >
-          Ver mi huella →
+          View my result →
         </button>
 
         <p style={{ fontSize: '0.85rem', color: '#999', fontStyle: 'italic' }}>
-          Pequeños cambios, gran impacto.
+          Small steps, big impact.
         </p>
       </div>
     </div>

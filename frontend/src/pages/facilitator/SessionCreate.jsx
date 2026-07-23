@@ -61,7 +61,7 @@ const MAX_GROUPS = 8
 
 export default function SessionCreate() {
   const [sessionName, setSessionName] = useState('')
-  const [groups, setGroups]     = useState(['Equipo A', 'Equipo B', 'Equipo C'])
+  const [groups, setGroups]     = useState(['Team A', 'Team B', 'Team C'])
   const [newGroup, setNewGroup] = useState('')
   const [ports, setPorts]       = useState([])   // [{ id, name, meta }]
   const [portByGroup, setPortByGroup] = useState({}) // group -> portId
@@ -72,7 +72,7 @@ export default function SessionCreate() {
   useEffect(() => {
     api.get('/api/par/ports')
       .then(res => setPorts(res.data || []))
-      .catch(() => setError('No se pudo cargar el catálogo de puertos'))
+      .catch(() => setError('Could not load the port catalogue'))
   }, [])
 
   function setPort(group, portId) {
@@ -84,15 +84,15 @@ export default function SessionCreate() {
     e?.preventDefault()
     const name = newGroup.trim()
     if (!name) return
-    if (groups.includes(name)) { setError('Ese grupo ya existe'); return }
-    if (groups.length >= MAX_GROUPS) { setError(`Máximo ${MAX_GROUPS} grupos`); return }
+    if (groups.includes(name)) { setError('That team already exists'); return }
+    if (groups.length >= MAX_GROUPS) { setError(`Maximum ${MAX_GROUPS} teams`); return }
     setGroups(prev => [...prev, name])
     setNewGroup('')
     setError('')
   }
 
   function removeGroup(name) {
-    if (groups.length <= MIN_GROUPS) { setError(`Mínimo ${MIN_GROUPS} grupos`); return }
+    if (groups.length <= MIN_GROUPS) { setError(`Minimum ${MIN_GROUPS} teams`); return }
     setGroups(prev => prev.filter(g => g !== name))
     setPortByGroup(prev => {
       const next = { ...prev }
@@ -105,15 +105,15 @@ export default function SessionCreate() {
   async function handleSubmit(e) {
     e.preventDefault()
     if (groups.length < MIN_GROUPS) {
-      setError(`Añade al menos ${MIN_GROUPS} grupos`)
+      setError(`Add at least ${MIN_GROUPS} teams`)
       return
     }
     // Every group needs a distinct port.
     const missing = groups.find(g => !portByGroup[g])
-    if (missing) { setError(`Asigna un puerto al grupo "${missing}"`); return }
+    if (missing) { setError(`Assign a port to team "${missing}"`); return }
     const chosen = groups.map(g => portByGroup[g])
     if (new Set(chosen).size !== chosen.length) {
-      setError('Cada grupo debe tener un puerto distinto'); return
+      setError('Each team must have a different port'); return
     }
     const portAssignments = groups.map(g => ({ group: g, portId: portByGroup[g] }))
 
@@ -121,9 +121,9 @@ export default function SessionCreate() {
     setError('')
     try {
       const { data } = await api.post('/api/sessions', { name: sessionName, groups, portAssignments })
-      navigate(`/session/${data.code}/rankings`)
+      navigate(`/session/${data.code}/control`)
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al crear la sesión')
+      setError(err.response?.data?.error || 'Error creating the session')
       setLoading(false)
     }
   }
@@ -131,13 +131,13 @@ export default function SessionCreate() {
   return (
     <div style={s.page}>
       <div style={s.inner}>
-        <h1 style={s.title}>Nueva Sesión</h1>
+        <h1 style={s.title}>New Session</h1>
         <div style={s.card}>
           <form onSubmit={handleSubmit}>
 
             {/* Session name */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="sessionName">Nombre de la sesión</label>
+              <label style={s.label} htmlFor="sessionName">Session name</label>
               <input
                 id="sessionName"
                 style={s.addInput}
@@ -147,19 +147,19 @@ export default function SessionCreate() {
                 onChange={e => setSessionName(e.target.value)}
                 maxLength={80}
               />
-              <p style={s.hint}>Opcional — si lo dejas vacío se usará el código como nombre.</p>
+              <p style={s.hint}>Optional — if left empty, the code will be used as the name.</p>
             </div>
 
             {/* Groups */}
             <div style={s.field}>
-              <label style={s.label}>Equipos</label>
+              <label style={s.label}>Teams</label>
 
               {/* Add new group */}
               <div style={s.addRow}>
                 <input
                   style={s.addInput}
                   type="text"
-                  placeholder="Nombre del equipo..."
+                  placeholder="Team name..."
                   value={newGroup}
                   onChange={e => { setNewGroup(e.target.value); setError('') }}
                   onKeyDown={e => e.key === 'Enter' && addGroup(e)}
@@ -171,7 +171,7 @@ export default function SessionCreate() {
                   onClick={addGroup}
                   disabled={groups.length >= MAX_GROUPS}
                 >
-                  + Añadir
+                  + Add
                 </button>
               </div>
 
@@ -188,7 +188,7 @@ export default function SessionCreate() {
                       value={portByGroup[g] || ''}
                       onChange={e => setPort(g, e.target.value)}
                     >
-                      <option value="">— Elige puerto —</option>
+                      <option value="">— Choose port —</option>
                       {ports.map(p => (
                         <option key={p.id} value={p.id} disabled={takenByOthers.has(p.id)}>
                           {p.name}{p.meta?.zone ? ` · ${p.meta.zone}` : ''}{takenByOthers.has(p.id) ? ' (ocupado)' : ''}
@@ -199,7 +199,7 @@ export default function SessionCreate() {
                       type="button"
                       style={s.chipX}
                       onClick={() => removeGroup(g)}
-                      title="Eliminar"
+                      title="Remove"
                     >
                       ×
                     </button>
@@ -208,14 +208,14 @@ export default function SessionCreate() {
               })}
 
               <p style={s.hint}>
-                {groups.length} equipo{groups.length !== 1 ? 's' : ''} · mín. {MIN_GROUPS}, máx. {MAX_GROUPS} · un puerto distinto por equipo
+                {groups.length} team{groups.length !== 1 ? 's' : ''} · min. {MIN_GROUPS}, max. {MAX_GROUPS} · one distinct port per team
               </p>
             </div>
 
             {error && <p style={s.error}>{error}</p>}
 
             <button style={s.btn} type="submit" disabled={loading}>
-              {loading ? 'Creando...' : 'Crear Sesión →'}
+              {loading ? 'Creating...' : 'Create Session →'}
             </button>
           </form>
         </div>
