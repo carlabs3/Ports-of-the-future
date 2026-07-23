@@ -8,7 +8,6 @@ import bcrypt from 'bcryptjs'
 
 import authRoutes from './src/routes/auth.js'
 import sessionsRouter from './src/routes/sessions.js'
-import resultRoutes from './src/routes/results.js'
 import parRouter from './src/routes/par.js'
 import { registerSocketHandlers } from './src/sockets/sessionSocket.js'
 import { registerParSocketHandlers } from './src/sockets/parSocket.js'
@@ -51,7 +50,6 @@ app.use(express.json())
 
 app.use('/api/auth', authRoutes)
 app.use('/api/sessions', sessionsRouter(io))
-app.use('/api/results', resultRoutes)
 app.use('/api/par', parRouter(io))
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))

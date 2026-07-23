@@ -101,16 +101,15 @@ export default function FacilitatorDashboard() {
       .filter(s => s.status === 'active' || s.status === 'waiting')
       .forEach(s => socket.emit('facilitator:join', { code: s.code }))
 
-    function onFootprintSubmitted() {
+    function refreshSessions() {
       api.get('/api/sessions').then(({ data }) => setSessions(data)).catch(() => {})
     }
 
-    socket.on('footprint:submitted', onFootprintSubmitted)
-    socket.on('ranking:update', onFootprintSubmitted)
+    // Refresh the session list live as PAR submissions arrive.
+    socket.on('par:update', refreshSessions)
 
     return () => {
-      socket.off('footprint:submitted', onFootprintSubmitted)
-      socket.off('ranking:update', onFootprintSubmitted)
+      socket.off('par:update', refreshSessions)
     }
   }, [sessions.length])
 
@@ -158,7 +157,7 @@ export default function FacilitatorDashboard() {
               </p>
             </div>
             <button
-              onClick={() => navigate(`/session/${activeBanner.code}/rankings`)}
+              onClick={() => navigate(`/session/${activeBanner.code}/control`)}
               style={{ background: '#0a0a0a', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '999px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', letterSpacing: '0.06em' }}
             >
               RETOMAR SESIÓN →
@@ -240,11 +239,11 @@ export default function FacilitatorDashboard() {
                     </button>
                   ) : (
                     <Link
-                      to={`/session/${session.code}/rankings`}
+                      to={`/session/${session.code}/control`}
                       style={{ flex: 1 }}
                     >
                       <button style={{ ...s.btnOpen, width: '100%' }}>
-                        {session.status === 'closed' ? 'Ver resultados' : 'Abrir sesión'}
+                        {session.status === 'closed' ? 'Ver resultados' : 'Centro de control (PAR)'} →
                       </button>
                     </Link>
                   )}
@@ -252,13 +251,6 @@ export default function FacilitatorDashboard() {
                     Eliminar
                   </button>
                 </div>
-                {session.status !== 'draft' && (
-                  <Link to={`/session/${session.code}/control`} style={{ display: 'block', marginTop: '0.5rem' }}>
-                    <button style={{ ...s.btnOpen, width: '100%', background: 'transparent', color: '#0a0a0a', border: '1px solid #0a0a0a' }}>
-                      Centro de control (PAR) →
-                    </button>
-                  </Link>
-                )}
               </div>
             ))}
           </div>
