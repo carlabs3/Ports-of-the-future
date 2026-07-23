@@ -64,6 +64,10 @@ export default function PortsControlCenter() {
   const [saving, setSaving]                   = useState(false)
   const [saveError, setSaveError]             = useState('')
 
+  // Phase 8 — roulette outcomes
+  const [outcomes, setOutcomes] = useState([]) // sorted desc by lossesAvoidedPct
+  const [spinning, setSpinning] = useState(null) // group being spun (cosmetic)
+
   const joinUrl = `${window.location.origin}/?code=${code}`
 
   // Fetch the full listing (aligned individual + demographics) and rebuild rows.
@@ -93,10 +97,18 @@ export default function PortsControlCenter() {
       .catch(() => {})
   }, [code])
 
+  // Fetch roulette outcomes (ranking), sorted desc by the backend.
+  const fetchOutcomes = useCallback(() => {
+    api.get(`/api/par/${code}/outcomes`)
+      .then(res => setOutcomes(res.data.outcomes || []))
+      .catch(() => {})
+  }, [code])
+
   // Initial populate + session groups + port catalogue (repopulates on reload).
   useEffect(() => {
     fetchResults()
     fetchStrategies()
+    fetchOutcomes()
     api.get(`/api/sessions/${code}/info`)
       .then(res => {
         setGroups(res.data.groups || [])
@@ -109,7 +121,7 @@ export default function PortsControlCenter() {
     api.get('/api/par/measures')
       .then(res => setMeasuresCatalog(res.data || []))
       .catch(() => {})
-  }, [code, fetchResults, fetchStrategies])
+  }, [code, fetchResults, fetchStrategies, fetchOutcomes])
 
   // Live updates: join the room and listen for 'par:update'.
   useEffect(() => {
@@ -130,15 +142,18 @@ export default function PortsControlCenter() {
     function onStrategyUpdate(payload) {
       if (payload?.group) setStrategyByGroup(prev => ({ ...prev, [payload.group]: payload }))
     }
+    function onOutcomeUpdate() { fetchOutcomes() }
     socket.on('par:update', onParUpdate)
     socket.on('strategy:update', onStrategyUpdate)
+    socket.on('outcome:update', onOutcomeUpdate)
 
     return () => {
       socket.off('connect', joinRoom)
       socket.off('par:update', onParUpdate)
       socket.off('strategy:update', onStrategyUpdate)
+      socket.off('outcome:update', onOutcomeUpdate)
     }
-  }, [code, fetchResults, fetchStrategies])
+  }, [code, fetchResults, fetchStrategies, fetchOutcomes])
 
   // ── Aggregates (all client-side) ───────────────────────────────────────────
   const submitted = individual.length
@@ -224,6 +239,22 @@ export default function PortsControlCenter() {
       setSaveError(err.response?.data?.error || 'Error al guardar')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Spin the roulette for a table. The backend decides the event; the spin is
+  // purely cosmetic here.
+  async function drawWheel(group) {
+    if (spinning) return
+    setSpinning(group)
+    try {
+      await api.post(`/api/par/${code}/strategy/${encodeURIComponent(group)}/draw`)
+      fetchOutcomes()
+    } catch {
+      // leave prior outcome in place on error
+    } finally {
+      // brief cosmetic delay so the "spinning" state is visible
+      setTimeout(() => setSpinning(null), 1000)
     }
   }
 
@@ -353,6 +384,72 @@ export default function PortsControlCenter() {
                   {saving ? 'Guardando...' : 'Guardar medidas'}
                 </button>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* 2.5 · RULETA DE EVENTOS + RANKING */}
+        <div style={card}>
+          <div style={cardTitle}>Ruleta de eventos y ranking</div>
+          {outcomes.length === 0 ? (
+            <p style={{ fontSize: 14, color: '#999', margin: 0 }}>Sin mesas todavía.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: '#999', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <th style={{ padding: '6px 8px' }}>#</th>
+                    <th style={{ padding: '6px 8px' }}>Mesa</th>
+                    <th style={{ padding: '6px 8px' }}>Puerto</th>
+                    <th style={{ padding: '6px 8px' }}>Evento sorteado</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Preparación</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>% evitado</th>
+                    <th style={{ padding: '6px 8px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {outcomes.map((o, i) => {
+                    const isTop = i === 0 && o.drawn
+                    const isSpin = spinning === o.group
+                    return (
+                      <tr key={o.group} style={{ borderTop: '1px solid #eee', background: isTop ? '#f0f7ee' : 'transparent' }}>
+                        <td style={{ padding: '8px', fontWeight: 700, color: isTop ? '#16a34a' : '#999' }}>{o.drawn ? i + 1 : '—'}</td>
+                        <td style={{ padding: '8px', fontWeight: 700, color: '#0a0a0a' }}>{o.group}{isTop ? ' 🏅' : ''}</td>
+                        <td style={{ padding: '8px', color: '#666' }}>{o.portName || '—'}</td>
+                        <td style={{ padding: '8px', color: '#0a0a0a' }}>
+                          {isSpin ? <span style={{ color: '#999' }}>Girando…</span> : (o.drawnEvent || '—')}
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#0a0a0a' }}>{o.preparedness != null ? o.preparedness.toFixed(1) : '—'}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 900, color: isTop ? '#16a34a' : '#0a0a0a' }}>{o.lossesAvoidedPct != null ? `${o.lossesAvoidedPct.toFixed(0)}%` : '—'}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>
+                          <button
+                            onClick={() => drawWheel(o.group)}
+                            disabled={!!spinning}
+                            style={{ fontSize: 12, fontWeight: 600, color: spinning ? '#bbb' : '#fff', background: spinning ? '#e5e5e5' : '#0a0a0a', border: 'none', borderRadius: 999, padding: '4px 12px', cursor: spinning ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            {isSpin ? '🎡' : o.drawn ? 'Volver a girar' : 'Girar ruleta'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+
+              {/* Debrief: per-measure breakdown for the top table (event already drawn). */}
+              {outcomes[0]?.drawn && outcomes[0].breakdown?.length > 0 && (
+                <div style={{ marginTop: '1rem', fontSize: 12, color: '#666' }}>
+                  <div style={{ fontWeight: 700, marginBottom: 6, color: '#0a0a0a' }}>
+                    Debrief · {outcomes[0].group} vs {outcomes[0].drawnEvent} (protección por medida, original → ajustada)
+                  </div>
+                  {outcomes[0].breakdown.map(b => (
+                    <div key={b.measureId} style={{ display: 'flex', gap: 8, padding: '3px 0', borderTop: '0.5px solid #f0f0f0' }}>
+                      <span style={{ flex: 1 }}>{b.measureId}. {b.name}</span>
+                      <span style={{ color: '#999' }}>{b.sOriginal} → <strong style={{ color: '#0a0a0a' }}>{b.sAdjusted}</strong></span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

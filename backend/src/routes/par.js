@@ -3,11 +3,14 @@ import { Resend } from 'resend'
 import { authMiddleware } from '../middleware/authMiddleware.js'
 import ParIndexResult from '../models/ParIndexResult.js'
 import TeamStrategy from '../models/TeamStrategy.js'
-import { PORTS } from '../config/ports/index.js'
+import { PORTS, PORTS_BY_ID } from '../config/ports/index.js'
+import { EVENTS_BY_CODE } from '../config/events.js'
 import { getPublicQuestionnaire } from '../services/questionnaireService.js'
 import { persistParSubmission, buildParRanking, computeParGroups } from '../services/parSubmissionService.js'
 import { validateMeasureSelection, getPublicMeasures, MEASURE_BUDGET } from '../services/measuresService.js'
 import { computeEffectiveCultureBand } from '../services/cultureService.js'
+import { computePreparedness } from '../services/preparednessService.js'
+import { drawEvent } from '../services/wheelService.js'
 
 const BAND_LABELS = {
   reactive:   'Reactive',
@@ -99,6 +102,86 @@ export default function parRouter(io) {
     } catch (err) {
       console.error('PAR strategy save error:', err.message)
       res.status(500).json({ error: 'Error al guardar estrategia' })
+    }
+  })
+
+  // Facilitator-only: spin the roulette for a table. Draws an event from the
+  // port's SECRET exposure weights, computes preparedness with the table's
+  // measures + effective culture band, and stores the outcome snapshot.
+  router.post('/:code/strategy/:group/draw', authMiddleware, async (req, res) => {
+    try {
+      const { code, group } = req.params
+      const strategy = await TeamStrategy.findOne({ sessionCode: code, group })
+      if (!strategy) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+
+      const eventCode = drawEvent(strategy.portId)
+      if (!eventCode) return res.status(400).json({ error: 'No se pudo sortear el evento (puerto sin pesos)' })
+
+      // Recompute the effective culture band live so the outcome uses fresh state.
+      const cultureBand = await computeEffectiveCultureBand(code, group, strategy.measures || [])
+      const { preparedness, lossesAvoidedPct, breakdown } = computePreparedness({
+        measureIds: strategy.measures || [], eventCode, cultureBand,
+      })
+
+      strategy.drawnEvent = eventCode
+      strategy.preparedness = preparedness
+      strategy.lossesAvoidedPct = lossesAvoidedPct
+      await strategy.save()
+
+      const event = EVENTS_BY_CODE[eventCode]
+      const payload = {
+        group,
+        portName:    PORTS_BY_ID[strategy.portId]?.name || null,
+        eventCode,
+        eventName:   event?.name || eventCode,
+        cultureBand,
+        preparedness,
+        lossesAvoidedPct,
+        breakdown, // per-measure sᵢ (debrief) — no exposure weights, no full matrix
+      }
+
+      io.to(code).emit('outcome:update', payload)
+      res.json({ ok: true, outcome: payload })
+    } catch (err) {
+      console.error('PAR draw error:', err.message)
+      res.status(500).json({ error: 'Error al sortear el evento' })
+    }
+  })
+
+  // Facilitator-only: per-table outcomes for the ranking, ordered by
+  // lossesAvoidedPct desc. Includes the drawn event NAME and per-measure
+  // breakdown (debrief) — never exposure weights or the raw protection matrix.
+  router.get('/:code/outcomes', authMiddleware, async (req, res) => {
+    try {
+      const { code } = req.params
+      const strategies = await TeamStrategy.find({ sessionCode: code })
+        .select('group portId measures drawnEvent preparedness lossesAvoidedPct -_id')
+
+      const outcomes = await Promise.all(strategies.map(async s => {
+        const drawn = s.drawnEvent || null
+        let breakdown = []
+        if (drawn) {
+          const cultureBand = await computeEffectiveCultureBand(code, s.group, s.measures || [])
+          breakdown = computePreparedness({ measureIds: s.measures || [], eventCode: drawn, cultureBand }).breakdown
+        }
+        return {
+          group:            s.group,
+          portName:         PORTS_BY_ID[s.portId]?.name || null,
+          drawn:            !!drawn,
+          eventCode:        drawn,
+          drawnEvent:       drawn ? (EVENTS_BY_CODE[drawn]?.name || drawn) : null,
+          preparedness:     s.preparedness ?? null,
+          lossesAvoidedPct: s.lossesAvoidedPct ?? null,
+          breakdown,
+        }
+      }))
+
+      // Sort by lossesAvoidedPct desc; un-drawn tables (null) go last.
+      outcomes.sort((a, b) => (b.lossesAvoidedPct ?? -1) - (a.lossesAvoidedPct ?? -1))
+      res.json({ outcomes })
+    } catch (err) {
+      console.error('PAR outcomes error:', err.message)
+      res.status(500).json({ error: 'Error al obtener resultados de la ruleta' })
     }
   })
 
