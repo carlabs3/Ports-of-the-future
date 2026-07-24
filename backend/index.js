@@ -78,10 +78,37 @@ mongoose
   })
 
 async function seedAdmin() {
-  const existing = await User.findOne({ email: 'admin@co2sprint.com' })
-  if (!existing) {
-    const hash = await bcrypt.hash('admin123', 10)
-    await User.create({ email: 'admin@co2sprint.com', password: hash })
-    console.log('Admin creado — email: admin@co2sprint.com / password: admin123')
+  // Defensive: shout in the log if insecure defaults / missing secrets are in
+  // use, so a forgotten env var in production is obvious instead of silent.
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn('⚠️  WARNING: usando ADMIN_PASSWORD por defecto — NO usar en producción. Define ADMIN_PASSWORD en las variables de entorno.')
+  }
+  if (!process.env.JWT_SECRET) {
+    console.warn('⚠️  WARNING: JWT_SECRET no está definido — NO usar en producción. Define JWT_SECRET en las variables de entorno.')
+  }
+
+  // Admin credentials come from the environment. Defaults exist ONLY so local
+  // development works with no setup; production must override both.
+  const email    = process.env.ADMIN_EMAIL    || 'admin@portsofthefuture.com'
+  const password = process.env.ADMIN_PASSWORD || 'admin123'
+
+  const existing = await User.findOne({ email })
+  if (existing) {
+    console.log(`Admin already exists, skipping — ${email}`)
+    return
+  }
+
+  try {
+    const hash = await bcrypt.hash(password, 10)
+    await User.create({ email, password: hash })
+    console.log(`Admin created — ${email}`)
+  } catch (err) {
+    // Idempotent across restarts / races: a concurrent create just means it
+    // now exists — never fail startup on a duplicate.
+    if (err.code === 11000) {
+      console.log(`Admin already exists, skipping — ${email}`)
+    } else {
+      console.error(`Admin seed error: ${err.message}`)
+    }
   }
 }
