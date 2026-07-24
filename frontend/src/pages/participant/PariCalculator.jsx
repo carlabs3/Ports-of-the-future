@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { socket } from '../../utils/socket.js'
 import api from '../../utils/api.js'
+import { BACKEND_URL } from '../../utils/config.js'
 import { useSession } from '../../context/SessionContext.jsx'
 
 // SECURITY: this screen never receives option scores. It fetches the public
@@ -115,7 +116,7 @@ export default function PariCalculator() {
     if (!pending) return
     try {
       const payload = JSON.parse(pending)
-      fetch(`${import.meta.env.VITE_BACKEND_URL}/api/par/submit`, {
+      fetch(`${BACKEND_URL}/api/par/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -202,7 +203,7 @@ export default function PariCalculator() {
     // Capa 2: HTTP de respaldo con keepalive (sobrevive al bloqueo de pantalla)
     let result = null
     try {
-      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/par/submit`, {
+      const res = await fetch(`${BACKEND_URL}/api/par/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

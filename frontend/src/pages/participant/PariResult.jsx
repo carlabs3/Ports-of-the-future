@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import axios from 'axios'
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from 'recharts'
 import { socket } from '../../utils/socket.js'
+import { BACKEND_URL } from '../../utils/config.js'
 
 // Band presentation. Spanish labels (display only) — the band value itself
 // comes from the backend and is the source of truth.
@@ -82,7 +83,7 @@ export default function PariResult() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput)) { setEmailStatus('invalid'); return }
     setEmailStatus('sending')
     try {
-      await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/par/send-email`, {
+      await axios.post(`${BACKEND_URL}/api/par/send-email`, {
         email: emailInput,
         score: result.score,
         band:  result.band,

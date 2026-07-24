@@ -20,13 +20,14 @@ dotenv.config()
 const configSummary = validateConfig()
 console.log(`Config OK — events: ${configSummary.events}, measures: ${configSummary.measures}, ports: ${configSummary.ports}`)
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'https://co2-sprint-app.vercel.app',
-  'https://co2-sprint-app-carlabs3s-projects.vercel.app',
-  process.env.FRONTEND_URL
-].filter(Boolean)
+// Allowed frontend origins for CORS + Socket.io. FRONTEND_URL may be a single
+// origin or a comma-separated list (e.g. local + the Vercel URL). Falls back to
+// the Vite dev-server origins so local development works with no config.
+// The SAME list is applied to both Express CORS and Socket.io below.
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:5174')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean)
 
 const corsOptions = {
   origin: allowedOrigins,
