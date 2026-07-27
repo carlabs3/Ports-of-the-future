@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/authMiddleware.js'
 import ParIndexResult from '../models/ParIndexResult.js'
 import TeamStrategy from '../models/TeamStrategy.js'
 import { PORTS, PORTS_BY_ID } from '../config/ports/index.js'
-import { EVENTS_BY_CODE } from '../config/events.js'
+import { EVENTS_BY_CODE, EVENT_CODES } from '../config/events.js'
 import { getPublicQuestionnaire } from '../services/questionnaireService.js'
 import { persistParSubmission, buildParRanking, computeParGroups } from '../services/parSubmissionService.js'
 import { validateMeasureSelection, getPublicMeasures, MEASURE_BUDGET } from '../services/measuresService.js'
@@ -50,13 +50,14 @@ export default function parRouter(io) {
   router.get('/:code/strategies', authMiddleware, async (req, res) => {
     try {
       const strategies = await TeamStrategy.find({ sessionCode: req.params.code })
-        .select('group portId measures coinsSpent -_id')
+        .select('group portId measures coinsSpent confirmed -_id')
       const out = await Promise.all(strategies.map(async s => ({
         group:       s.group,
         portId:      s.portId,
         measures:    s.measures || [],
         coinsSpent:  s.coinsSpent || 0,
         coinsRemaining: MEASURE_BUDGET - (s.coinsSpent || 0),
+        confirmed:   !!s.confirmed,
         cultureBand: await computeEffectiveCultureBand(req.params.code, s.group, s.measures || []),
       })))
       res.json({ budget: MEASURE_BUDGET, strategies: out })
@@ -72,19 +73,23 @@ export default function parRouter(io) {
       const { code, group } = req.params
       const { measures } = req.body
 
+      // Locked once confirmed — measures can't be edited afterwards.
+      const existing = await TeamStrategy.findOne({ sessionCode: code, group })
+      if (!existing) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+      if (existing.confirmed) {
+        return res.status(409).json({ error: 'Las medidas de esta mesa están confirmadas y bloqueadas.' })
+      }
+
       const check = validateMeasureSelection(measures || [])
       if (!check.ok) return res.status(400).json({ error: check.error, budget: MEASURE_BUDGET })
 
       const cultureBand = await computeEffectiveCultureBand(code, group, measures || [])
 
-      // Strategies are pre-created at session creation (they carry the required
-      // portId), so update the existing doc rather than upsert.
       const updated = await TeamStrategy.findOneAndUpdate(
         { sessionCode: code, group },
         { measures: measures || [], coinsSpent: check.cost, cultureBand },
         { new: true }
       )
-      if (!updated) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
 
       const payload = {
         group:          updated.group,
@@ -93,6 +98,7 @@ export default function parRouter(io) {
         coinsSpent:     updated.coinsSpent,
         coinsRemaining: MEASURE_BUDGET - updated.coinsSpent,
         cultureBand:    updated.cultureBand,
+        confirmed:      updated.confirmed,
       }
 
       // Live tablero update, same style as par:update.
@@ -105,14 +111,93 @@ export default function parRouter(io) {
     }
   })
 
+  // Facilitator-only: confirm (lock) a table's measures. After this the table's
+  // measures can't be edited, and it counts toward the wheel gate.
+  router.patch('/:code/strategy/:group/confirm', authMiddleware, async (req, res) => {
+    try {
+      const { code, group } = req.params
+      const updated = await TeamStrategy.findOneAndUpdate(
+        { sessionCode: code, group },
+        { confirmed: true },
+        { new: true }
+      )
+      if (!updated) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+
+      const payload = {
+        group:          updated.group,
+        portId:         updated.portId,
+        measures:       updated.measures,
+        coinsSpent:     updated.coinsSpent,
+        coinsRemaining: MEASURE_BUDGET - updated.coinsSpent,
+        cultureBand:    updated.cultureBand,
+        confirmed:      updated.confirmed,
+      }
+      io.to(code).emit('strategy:update', payload)
+      res.json({ ok: true, strategy: payload })
+    } catch (err) {
+      console.error('PAR strategy confirm error:', err.message)
+      res.status(500).json({ error: 'Error al confirmar medidas' })
+    }
+  })
+
+  // Facilitator-only: unlock (re-open) a table's measures. Reverts confirmed to
+  // false so measures can be edited again — which also makes the wheel gate fail
+  // until it's re-confirmed. SAFEGUARD: refuse if the table has already drawn
+  // (drawnEvent present); by then it knows its exposure weights, so re-editing
+  // measures with the result known would be the exact leak the gate prevents.
+  router.patch('/:code/strategy/:group/unlock', authMiddleware, async (req, res) => {
+    try {
+      const { code, group } = req.params
+      const strategy = await TeamStrategy.findOne({ sessionCode: code, group })
+      if (!strategy) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+      if (strategy.drawnEvent) {
+        return res.status(409).json({
+          error: 'No se puede desbloquear una mesa que ya ha girado la ruleta: conoce su exposición y podría editar medidas con el resultado conocido.',
+        })
+      }
+
+      strategy.confirmed = false
+      await strategy.save()
+
+      const payload = {
+        group:          strategy.group,
+        portId:         strategy.portId,
+        measures:       strategy.measures,
+        coinsSpent:     strategy.coinsSpent,
+        coinsRemaining: MEASURE_BUDGET - strategy.coinsSpent,
+        cultureBand:    strategy.cultureBand,
+        confirmed:      strategy.confirmed,
+      }
+      io.to(code).emit('strategy:update', payload)
+      res.json({ ok: true, strategy: payload })
+    } catch (err) {
+      console.error('PAR strategy unlock error:', err.message)
+      res.status(500).json({ error: 'Error al desbloquear medidas' })
+    }
+  })
+
   // Facilitator-only: spin the roulette for a table. Draws an event from the
   // port's SECRET exposure weights, computes preparedness with the table's
   // measures + effective culture band, and stores the outcome snapshot.
+  // GATE: rejects (409) unless EVERY table in the session is confirmed — this is
+  // what makes revealing the exposure weights (below) safe.
   router.post('/:code/strategy/:group/draw', authMiddleware, async (req, res) => {
     try {
       const { code, group } = req.params
       const strategy = await TeamStrategy.findOne({ sessionCode: code, group })
       if (!strategy) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+
+      // GATE: every table in the session must be confirmed before any draw. This
+      // is what makes revealing the exposure weights safe (no decision left to
+      // contaminate). Reject otherwise.
+      const allStrategies = await TeamStrategy.find({ sessionCode: code }).select('group confirmed -_id')
+      const pending = allStrategies.filter(s => !s.confirmed).map(s => s.group)
+      if (allStrategies.length === 0 || pending.length > 0) {
+        return res.status(409).json({
+          error: `Todas las mesas deben confirmar sus medidas antes de girar la ruleta. Pendientes: ${pending.join(', ') || '—'}`,
+          pending,
+        })
+      }
 
       const eventCode = drawEvent(strategy.portId)
       if (!eventCode) return res.status(400).json({ error: 'No se pudo sortear el evento (puerto sin pesos)' })
@@ -129,15 +214,24 @@ export default function parRouter(io) {
       await strategy.save()
 
       const event = EVENTS_BY_CODE[eventCode]
+      const port = PORTS_BY_ID[strategy.portId]
+      // Exposure weights are revealed HERE ONLY (wheel phase, all tables locked)
+      // so the client can draw proportional wheel slices. Never sent earlier.
+      const exposure = EVENT_CODES.map(c => ({
+        code: c,
+        name: EVENTS_BY_CODE[c]?.name || c,
+        weight: port?.exposureWeights?.[c] || 0,
+      }))
       const payload = {
         group,
-        portName:    PORTS_BY_ID[strategy.portId]?.name || null,
+        portName:    port?.name || null,
         eventCode,
         eventName:   event?.name || eventCode,
+        exposure,    // [{ code, name, weight }] — 7 slices, weights sum 10
         cultureBand,
         preparedness,
         lossesAvoidedPct,
-        breakdown, // per-measure sᵢ (debrief) — no exposure weights, no full matrix
+        breakdown, // per-measure sᵢ (debrief)
       }
 
       io.to(code).emit('outcome:update', payload)

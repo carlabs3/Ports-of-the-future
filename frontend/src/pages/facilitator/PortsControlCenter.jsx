@@ -6,6 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip,
 } from 'recharts'
 import api from '../../utils/api.js'
+import EventWheel from '../../components/EventWheel.jsx'
 import { socket } from '../../utils/socket.js'
 
 // Read-only PARI observation board. It only reads and displays live PAR data;
@@ -67,6 +68,7 @@ export default function PortsControlCenter() {
   // Phase 8 — roulette outcomes
   const [outcomes, setOutcomes] = useState([]) // sorted desc by lossesAvoidedPct
   const [spinning, setSpinning] = useState(null) // group being spun (cosmetic)
+  const [wheel, setWheel]       = useState(null) // { group, slices, resultCode, eventName, preparedness, lossesAvoidedPct }
 
   // Phase 9 — session close
   const [closed, setClosed]   = useState(false)
@@ -217,11 +219,20 @@ export default function PortsControlCenter() {
         cultureBand: strat?.cultureBand ?? null,
         coinsSpent: strat?.coinsSpent ?? 0,
         measuresCount: strat?.measures?.length ?? 0,
+        confirmed: !!strat?.confirmed,
+        hasStrategy: !!strat,
         portName: portId != null ? (portNameById[portId] || `Port ${portId}`) : null,
         status,
       }
     })
   }, [groups, groupAgg, portAssignments, portNameById, strategyByGroup])
+
+  // Wheel gate: every table with a strategy must be confirmed before drawing.
+  const strategyList = Object.values(strategyByGroup)
+  const allConfirmed = strategyList.length > 0 && strategyList.every(s => s.confirmed)
+  const pendingConfirm = strategyList.filter(s => !s.confirmed).map(s => s.group)
+  // Tables that have already spun — their measures can't be unlocked.
+  const drawnGroups = new Set(outcomes.filter(o => o.drawn).map(o => o.group))
 
   // ── Measure-entry helpers ───────────────────────────────────────────────────
   function openEditor(group) {
@@ -247,6 +258,28 @@ export default function PortsControlCenter() {
       setSaveError(err.response?.data?.error || 'Error saving')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Confirm (lock) a table's measures. After this its measures can't be edited
+  // and it counts toward the wheel gate.
+  async function confirmMeasures(group) {
+    if (!window.confirm(`Confirm ${group}'s measures? They can't be edited afterwards.`)) return
+    try {
+      const res = await api.patch(`/api/par/${code}/strategy/${encodeURIComponent(group)}/confirm`)
+      setStrategyByGroup(prev => ({ ...prev, [group]: res.data.strategy }))
+    } catch {
+      window.alert('Could not confirm the measures. Try again.')
+    }
+  }
+
+  // Unlock (re-open) a table's measures. Backend refuses if it already drew.
+  async function unlockMeasures(group) {
+    try {
+      const res = await api.patch(`/api/par/${code}/strategy/${encodeURIComponent(group)}/unlock`)
+      setStrategyByGroup(prev => ({ ...prev, [group]: res.data.strategy }))
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Could not unlock the measures.')
     }
   }
 
@@ -280,16 +313,32 @@ export default function PortsControlCenter() {
     }
   }
 
-  // Spin the roulette for a table. The backend decides the event; the spin is
-  // purely cosmetic here.
+  // Spin the roulette for a table. The backend decides the event (gated on all
+  // tables confirmed) and returns the outcome incl. exposure weights; the wheel
+  // animation is purely cosmetic and opens in an overlay.
   async function drawWheel(group) {
     if (spinning) return
+    if (!allConfirmed) {
+      window.alert(`All tables must confirm their measures first. Pending: ${pendingConfirm.join(', ') || '—'}`)
+      return
+    }
     setSpinning(group)
     try {
-      await api.post(`/api/par/${code}/strategy/${encodeURIComponent(group)}/draw`)
+      const res = await api.post(`/api/par/${code}/strategy/${encodeURIComponent(group)}/draw`)
+      const o = res.data.outcome
+      // Open the wheel overlay with the server-resolved event + exposure slices.
+      setWheel({
+        group,
+        portName: o.portName,
+        slices: o.exposure || [],
+        resultCode: o.eventCode,
+        eventName: o.eventName,
+        preparedness: o.preparedness,
+        lossesAvoidedPct: o.lossesAvoidedPct,
+      })
       fetchOutcomes()
-    } catch {
-      // leave prior outcome in place on error
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Could not spin the wheel.')
     } finally {
       // brief cosmetic delay so the "spinning" state is visible
       setTimeout(() => setSpinning(null), 1000)
@@ -392,14 +441,40 @@ export default function PortsControlCenter() {
                     {gs.count} PAR{gs.count !== 1 ? 's' : ''}
                     {gs.cultureBand && <> · Culture: <span style={{ color: BAND_CONFIG[gs.cultureBand].color, fontWeight: 700 }}>{BAND_CONFIG[gs.cultureBand].label}</span></>}
                   </div>
-                  <div style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span>🪙 {gs.coinsSpent}/{budget} · {gs.measuresCount} measure{gs.measuresCount !== 1 ? 's' : ''}</span>
-                    <button
-                      onClick={() => openEditor(gs.group)}
-                      style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#0a0a0a', background: 'transparent', border: '1px solid #0a0a0a', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
-                    >
-                      Edit measures
-                    </button>
+                    {gs.confirmed ? (
+                      <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a' }}>🔒 Confirmed</span>
+                        {drawnGroups.has(gs.group) ? (
+                          <span title="already drawn" style={{ fontSize: 11, color: '#bbb' }}>Unlock</span>
+                        ) : (
+                          <button
+                            onClick={() => unlockMeasures(gs.group)}
+                            style={{ fontSize: 11, fontWeight: 600, color: '#0a0a0a', background: 'transparent', border: '1px solid #e5e5e5', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
+                          >
+                            Unlock
+                          </button>
+                        )}
+                      </span>
+                    ) : (
+                      <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
+                        <button
+                          onClick={() => openEditor(gs.group)}
+                          style={{ fontSize: 11, fontWeight: 600, color: '#0a0a0a', background: 'transparent', border: '1px solid #0a0a0a', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
+                        >
+                          Edit measures
+                        </button>
+                        {gs.hasStrategy && (
+                          <button
+                            onClick={() => confirmMeasures(gs.group)}
+                            style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#1B4B7A', border: 'none', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
+                          >
+                            Confirm
+                          </button>
+                        )}
+                      </span>
+                    )}
                   </div>
                 </div>
               )
@@ -453,6 +528,12 @@ export default function PortsControlCenter() {
         {/* 2.5 · RULETA DE EVENTOS + RANKING */}
         <div style={card}>
           <div style={cardTitle}>Event roulette &amp; ranking</div>
+          {!allConfirmed && (
+            <p style={{ fontSize: 12, color: '#b07a30', margin: '0 0 0.75rem' }}>
+              🔒 The wheel is locked until every table confirms its measures.
+              {pendingConfirm.length > 0 && <> Pending: <strong>{pendingConfirm.join(', ')}</strong>.</>}
+            </p>
+          )}
           {outcomes.length === 0 ? (
             <p style={{ fontSize: 14, color: '#999', margin: 0 }}>No tables yet.</p>
           ) : (
@@ -484,13 +565,19 @@ export default function PortsControlCenter() {
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#0a0a0a' }}>{o.preparedness != null ? o.preparedness.toFixed(1) : '—'}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 900, color: isTop ? '#16a34a' : '#0a0a0a' }}>{o.lossesAvoidedPct != null ? `${o.lossesAvoidedPct.toFixed(0)}%` : '—'}</td>
                         <td style={{ padding: '8px', textAlign: 'right' }}>
-                          <button
-                            onClick={() => drawWheel(o.group)}
-                            disabled={!!spinning}
-                            style={{ fontSize: 12, fontWeight: 600, color: spinning ? '#bbb' : '#fff', background: spinning ? '#e5e5e5' : '#0a0a0a', border: 'none', borderRadius: 999, padding: '4px 12px', cursor: spinning ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
-                          >
-                            {isSpin ? '🎡' : o.drawn ? 'Spin again' : 'Spin the wheel'}
-                          </button>
+                          {(() => {
+                            const disabled = !!spinning || !allConfirmed
+                            return (
+                              <button
+                                onClick={() => drawWheel(o.group)}
+                                disabled={disabled}
+                                title={!allConfirmed ? 'All tables must confirm their measures first' : undefined}
+                                style={{ fontSize: 12, fontWeight: 600, color: disabled ? '#bbb' : '#fff', background: disabled ? '#e5e5e5' : '#0a0a0a', border: 'none', borderRadius: 999, padding: '4px 12px', cursor: disabled ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                              >
+                                {isSpin ? '🎡' : o.drawn ? 'Spin again' : 'Spin the wheel'}
+                              </button>
+                            )
+                          })()}
                         </td>
                       </tr>
                     )
@@ -606,6 +693,33 @@ export default function PortsControlCenter() {
         )}
 
       </div>
+
+      {/* Event wheel overlay (cosmetic spin; result shown regardless) */}
+      {wheel && (
+        <div
+          onClick={() => setWheel(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1.5rem' }}
+        >
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 16, padding: '1.5rem', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 12px 40px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#999', marginBottom: '0.5rem' }}>
+              {wheel.group} · {wheel.portName || ''}
+            </div>
+            <EventWheel slices={wheel.slices} resultCode={wheel.resultCode} />
+            <div style={{ marginTop: 16, fontSize: 15 }}>
+              <div style={{ fontWeight: 900, fontSize: '1.2rem', color: '#0a0a0a' }}>{wheel.eventName}</div>
+              <div style={{ color: '#666', marginTop: 4 }}>
+                Preparedness <strong style={{ color: '#0a0a0a' }}>{wheel.preparedness?.toFixed(1)}</strong>
+                {' · '}<strong style={{ color: '#16a34a' }}>{wheel.lossesAvoidedPct?.toFixed(0)}%</strong> losses avoided
+              </div>
+            </div>
+            <button onClick={() => setWheel(null)}
+              style={{ marginTop: 18, background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 999, padding: '9px 24px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
