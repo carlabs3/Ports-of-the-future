@@ -154,10 +154,10 @@ export default function JoinSession() {
         const { status, groups: g } = res.data
         if (status === 'draft') {
           setGroups([])
-          setCodeError('El taller aún no ha comenzado. Espera al facilitador.')
+          setCodeError("The workshop hasn't started yet. Wait for the facilitator.")
         } else if (status === 'closed') {
           setGroups([])
-          setCodeError('Este taller ha finalizado.')
+          setCodeError('This workshop has ended.')
         } else {
           setGroups(g || [])
           setCodeError('')

@@ -14,6 +14,9 @@ const BORDER = '#e5e5e5'
 // Visual palette per PAR area (by order). Backend labels are authoritative.
 const AREA_COLORS = ['#38bdf8', '#f59e0b', '#4ade80', '#a855f7', '#f472b6']
 
+// Single source for the port-navy selected state (Q0 demographics only).
+const PORTS_BLUE = '#1B4B7A'
+
 function DotsLoader() {
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -34,7 +37,10 @@ function DotsLoader() {
 }
 
 // Single-choice option list — reuses the calculator's grotesk card language.
-function OptionList({ options, selected, onSelect, color }) {
+// `selectedText` is the label/dot colour when selected (defaults to the dark
+// text used on the light per-area colours; demographics pass white for the
+// navy pill so it stays legible).
+function OptionList({ options, selected, onSelect, color, selectedText = 'rgba(0,0,0,0.8)' }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {options.map(opt => {
@@ -55,9 +61,9 @@ function OptionList({ options, selected, onSelect, color }) {
               background: isSel ? color : 'transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              {isSel && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(0,0,0,0.75)' }} />}
+              {isSel && <div style={{ width: 7, height: 7, borderRadius: '50%', background: selectedText }} />}
             </div>
-            <span style={{ fontSize: 15, fontWeight: isSel ? 500 : 400, color: isSel ? 'rgba(0,0,0,0.8)' : '#555', lineHeight: 1.4 }}>
+            <span style={{ fontSize: 15, fontWeight: isSel ? 500 : 400, color: isSel ? selectedText : '#555', lineHeight: 1.4 }}>
               {opt.label}
             </span>
           </button>
@@ -243,7 +249,8 @@ export default function PariCalculator() {
               options={demo.portSize?.options || []}
               selected={portSize}
               onSelect={setPortSize}
-              color="#0a0a0a"
+              color={PORTS_BLUE}
+              selectedText="#fff"
             />
           </div>
 
@@ -256,7 +263,8 @@ export default function PariCalculator() {
                 options={demo.worldZone.options}
                 selected={worldZone}
                 onSelect={setWorldZone}
-                color="#0a0a0a"
+                color={PORTS_BLUE}
+                selectedText="#fff"
               />
             </div>
           )}

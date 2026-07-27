@@ -23,6 +23,23 @@ const AREA_LABELS = {
 }
 const AREA_ORDER = ['governance', 'organisation', 'budget', 'measures', 'preparedness']
 
+// Custom radar axis tick: wraps a long label into up to 2 balanced lines and
+// uses a small font, so the 5 area names don't clip at the sides on narrow
+// phones (~380px). textAnchor is supplied by recharts per label position.
+function RadarAngleTick({ x, y, textAnchor, payload }) {
+  const words = String(payload?.value ?? '').split(' ')
+  const lines = words.length <= 2
+    ? words
+    : [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')]
+  return (
+    <text x={x} y={y} textAnchor={textAnchor} fill="#555" fontSize={10}>
+      {lines.map((ln, i) => (
+        <tspan key={i} x={x} dy={i === 0 ? (lines.length > 1 ? -3 : 4) : 11}>{ln}</tspan>
+      ))}
+    </text>
+  )
+}
+
 export default function PariResult() {
   const location = useLocation()
   const { code } = useParams()
@@ -102,7 +119,7 @@ export default function PariResult() {
 
   // ── Waiting for the result to arrive ──────────────────────────────────────
   if (!result || result.score == null) return (
-    <div style={{ minHeight: 'calc(100vh - 52px)', background: '#f5f5f5', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
+    <div style={{ minHeight: 'calc(100dvh - 52px)', background: '#f5f5f5', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
       <div style={{ fontSize: '3rem', marginBottom: '1.25rem' }}>⏳</div>
       <p style={{ fontSize: '0.9rem', color: '#888', maxWidth: 300, lineHeight: 1.65 }}>
         Calculating your PAR Index...
@@ -118,7 +135,7 @@ export default function PariResult() {
   }))
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: 'calc(100vh - 52px)', fontFamily: "'Instrument Sans', sans-serif" }}>
+    <div style={{ background: '#f5f5f5', minHeight: 'calc(100dvh - 52px)', fontFamily: "'Instrument Sans', sans-serif" }}>
       {/* ═══ HEADER ═══ */}
       <div style={{ background: '#0a0a0a', color: '#fff' }}>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '1.5rem 1.5rem 0' }}>
@@ -152,11 +169,11 @@ export default function PariResult() {
           <div style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#999', marginBottom: '0.5rem' }}>
             Profile by area (0–20)
           </div>
-          <div style={{ width: '100%', height: 300 }}>
+          <div style={{ width: '100%', height: 330 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarData} outerRadius="72%">
+              <RadarChart data={radarData} outerRadius="62%" margin={{ top: 16, right: 64, bottom: 16, left: 64 }}>
                 <PolarGrid />
-                <PolarAngleAxis dataKey="area" tick={{ fontSize: 11, fill: '#555' }} />
+                <PolarAngleAxis dataKey="area" tick={<RadarAngleTick />} />
                 <Radar dataKey="value" stroke={cfg.color} fill={cfg.color} fillOpacity={0.5} />
               </RadarChart>
             </ResponsiveContainer>

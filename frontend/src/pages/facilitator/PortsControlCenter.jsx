@@ -71,6 +71,8 @@ export default function PortsControlCenter() {
   // Phase 9 — session close
   const [closed, setClosed]   = useState(false)
   const [closing, setClosing] = useState(false)
+  const [draft, setDraft]     = useState(false)
+  const [starting, setStarting] = useState(false)
 
   const joinUrl = `${window.location.origin}/?code=${code}`
 
@@ -118,6 +120,7 @@ export default function PortsControlCenter() {
         setGroups(res.data.groups || [])
         setPortAssignments(res.data.portAssignments || [])
         setClosed(res.data.status === 'closed')
+        setDraft(res.data.status === 'draft')
       })
       .catch(() => {})
     api.get('/api/par/ports')
@@ -262,6 +265,21 @@ export default function PortsControlCenter() {
     }
   }
 
+  // Start the session (draft → active) so participants can join. Reuses the
+  // existing activate endpoint; no new backend.
+  async function startSession() {
+    if (starting || !draft) return
+    setStarting(true)
+    try {
+      await api.patch(`/api/sessions/${code}/activate`)
+      setDraft(false)
+    } catch {
+      window.alert('Could not start the session. Try again.')
+    } finally {
+      setStarting(false)
+    }
+  }
+
   // Spin the roulette for a table. The backend decides the event; the spin is
   // purely cosmetic here.
   async function drawWheel(group) {
@@ -300,12 +318,22 @@ export default function PortsControlCenter() {
     <div style={{ background: '#f5f5f5', minHeight: 'calc(100vh - 52px)', padding: '2rem 1.5rem', fontFamily: "'Instrument Sans', sans-serif" }}>
       <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-        {/* Session close bar */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        {/* Session lifecycle bar: draft → start · active → close · closed → banner */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: draft ? 'space-between' : 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+          {draft && (
+            <span style={{ fontSize: 13, color: '#b07a30' }}>
+              Not started yet — participants can't join until you start the session.
+            </span>
+          )}
           {closed ? (
             <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a', background: '#eaf7ee', border: '1px solid rgba(74,222,128,0.4)', borderRadius: 999, padding: '6px 14px' }}>
               ✓ Session closed · results are final
             </span>
+          ) : draft ? (
+            <button onClick={startSession} disabled={starting}
+              style={{ fontSize: 14, fontWeight: 700, color: '#fff', background: starting ? '#9ab' : '#1B4B7A', border: 'none', borderRadius: 999, padding: '9px 22px', cursor: starting ? 'default' : 'pointer' }}>
+              {starting ? 'Starting...' : '▶ Start session'}
+            </button>
           ) : (
             <button onClick={closeSession} disabled={closing}
               style={{ fontSize: 13, fontWeight: 600, color: closing ? '#bbb' : '#0a0a0a', background: 'transparent', border: '1px solid #0a0a0a', borderRadius: 999, padding: '6px 16px', cursor: closing ? 'default' : 'pointer' }}>
