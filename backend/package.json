@@ -1,8 +1,11 @@
 {
-  "name": "co2-sprint-backend",
+  "name": "ports-of-the-future-backend",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
