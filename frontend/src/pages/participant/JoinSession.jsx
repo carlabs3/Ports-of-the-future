@@ -177,7 +177,7 @@ export default function JoinSession() {
     let valid = true
 
     if (!code || code.length < 9) {
-      setCodeError('Enter a valid code (e.g. DROP-4872)')
+      setCodeError('Enter a valid code (e.g. PORT-4872)')
       valid = false
     }
     if (!age) {
@@ -224,7 +224,7 @@ export default function JoinSession() {
               type="text"
               value={code}
               onChange={e => { setCode(formatCode(e.target.value)); setCodeError('') }}
-              placeholder="DROP-4872"
+              placeholder="PORT-4872"
               maxLength={9}
             />
             {codeError && <div style={s.error}>{codeError}</div>}

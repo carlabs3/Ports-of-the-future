@@ -5,7 +5,7 @@ export async function generateCode() {
   let exists = true
   while (exists) {
     const num = Math.floor(1000 + Math.random() * 9000)
-    code = `DROP-${num}`
+    code = `PORT-${num}`
     exists = await Session.exists({ code })
   }
   return code

@@ -38,7 +38,7 @@ export default function Home() {
       return
     }
     if (formatted.length < 9) {
-      setError('The code must be in the format DROP-0000')
+      setError('The code must be in the format PORT-0000')
       return
     }
     navigate(`/join?code=${formatted}`)
@@ -112,7 +112,7 @@ export default function Home() {
                   <input
                     className="join-input"
                     type="text"
-                    placeholder="DROP-0000"
+                    placeholder="PORT-0000"
                     value={code}
                     onChange={handleCodeChange}
                     maxLength={9}
