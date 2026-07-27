@@ -95,7 +95,16 @@ async function seedAdmin() {
 
   const existing = await User.findOne({ email })
   if (existing) {
-    console.log(`Admin already exists, skipping — ${email}`)
+    // Resync: if ADMIN_PASSWORD changed, update the stored hash. If it already
+    // matches, do nothing (avoid rewriting on every restart).
+    const matches = await bcrypt.compare(password, existing.password)
+    if (matches) {
+      console.log(`Admin already exists, password unchanged — ${email}`)
+      return
+    }
+    existing.password = await bcrypt.hash(password, 10)
+    await existing.save()
+    console.log(`Admin password updated — ${email}`)
     return
   }
 
