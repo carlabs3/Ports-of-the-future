@@ -9,6 +9,9 @@ const sessionSchema = new Schema({
   // legacy sessions simply have an empty array.
   portAssignments: [{ group: String, portId: Number }],
   status: { type: String, enum: ['draft', 'waiting', 'active', 'actions', 'closed'], default: 'draft' },
+  // Facilitator-driven control-centre phase (Ports of the Future). Manual only —
+  // never derived from data. Independent of `currentStep`/STEP_MAP (legacy).
+  phase: { type: String, enum: ['join', 'par', 'strategy', 'wheel', 'debrief'], default: 'join' },
   currentStep: { type: Number, default: 2 },
   resultsRevealed: { type: Boolean, default: false },
   step3Revealed:   { type: Boolean, default: false },

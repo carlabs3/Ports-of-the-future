@@ -32,6 +32,17 @@ const BAND_CONFIG = {
 const PORT_SIZE_LABELS = { small: 'Small', medium: 'Medium', large: 'Large' }
 const PORT_SIZE_ORDER = ['small', 'medium', 'large']
 
+// Facilitator-driven phases. Manual only — the tab you pick is the phase; it is
+// never derived from the data. Persisted server-side (Session.phase) so a reload
+// or a different laptop resumes on the same phase.
+const PHASES = [
+  { id: 'join',     label: 'Unirse' },
+  { id: 'par',      label: 'PAR' },
+  { id: 'strategy', label: 'Estrategia' },
+  { id: 'wheel',    label: 'Ruleta' },
+  { id: 'debrief',  label: 'Debrief' },
+]
+
 // NOTE: band boundaries live ONLY in the backend (scoringService.getBand).
 // This screen never derives a band from a score — it displays the band the
 // backend sends (per-group in `groups`, per-submission in `individual.band`).
@@ -75,6 +86,9 @@ export default function PortsControlCenter() {
   const [closing, setClosing] = useState(false)
   const [draft, setDraft]     = useState(false)
   const [starting, setStarting] = useState(false)
+
+  // Control-centre phase (facilitator-driven, persisted in Session.phase).
+  const [phase, setPhase] = useState('join')
 
   const joinUrl = `${window.location.origin}/?code=${code}`
 
@@ -123,6 +137,7 @@ export default function PortsControlCenter() {
         setPortAssignments(res.data.portAssignments || [])
         setClosed(res.data.status === 'closed')
         setDraft(res.data.status === 'draft')
+        setPhase(res.data.phase || 'join')
       })
       .catch(() => {})
     api.get('/api/par/ports')
@@ -153,15 +168,18 @@ export default function PortsControlCenter() {
       if (payload?.group) setStrategyByGroup(prev => ({ ...prev, [payload.group]: payload }))
     }
     function onOutcomeUpdate() { fetchOutcomes() }
+    function onPhaseChange({ phase: p }) { if (p) setPhase(p) }
     socket.on('par:update', onParUpdate)
     socket.on('strategy:update', onStrategyUpdate)
     socket.on('outcome:update', onOutcomeUpdate)
+    socket.on('phase:change', onPhaseChange)
 
     return () => {
       socket.off('connect', joinRoom)
       socket.off('par:update', onParUpdate)
       socket.off('strategy:update', onStrategyUpdate)
       socket.off('outcome:update', onOutcomeUpdate)
+      socket.off('phase:change', onPhaseChange)
     }
   }, [code, fetchResults, fetchStrategies, fetchOutcomes])
 
@@ -313,6 +331,20 @@ export default function PortsControlCenter() {
     }
   }
 
+  // Switch the control-centre phase. Optimistic (updates the tab immediately);
+  // the server persists it and echoes phase:change back to confirm. Manual only.
+  async function changePhase(next) {
+    if (next === phase) return
+    const prev = phase
+    setPhase(next)
+    try {
+      await api.patch(`/api/sessions/${code}/phase`, { phase: next })
+    } catch {
+      setPhase(prev)
+      window.alert('Could not change the phase. Try again.')
+    }
+  }
+
   // Spin the roulette for a table. The backend decides the event (gated on all
   // tables confirmed) and returns the outcome incl. exposure weights; the wheel
   // animation is purely cosmetic and opens in an overlay.
@@ -391,7 +423,27 @@ export default function PortsControlCenter() {
           )}
         </div>
 
-        {/* 1 · HEADER */}
+        {/* Phase tabs — facilitator picks the phase; only the active panel shows.
+            Manual: the phase is never derived from the data. */}
+        <div style={{ ...card, padding: '0.5rem', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {PHASES.map(p => {
+            const active = phase === p.id
+            return (
+              <button key={p.id} onClick={() => changePhase(p.id)}
+                style={{
+                  flex: '1 1 auto', minWidth: 90, padding: '10px 14px', borderRadius: 8,
+                  border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                  background: active ? '#1B4B7A' : 'transparent',
+                  color: active ? '#fff' : '#666', transition: 'background 0.15s ease',
+                }}>
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* 1 · HEADER — phase: join */}
+        {phase === 'join' && (
         <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center' }}>
           <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 12, padding: 8, flexShrink: 0 }}>
             <QRCodeSVG value={joinUrl} size={96} />
@@ -417,7 +469,10 @@ export default function PortsControlCenter() {
           </div>
         </div>
 
-        {/* 2 · GROUP STATUS */}
+        )}
+
+        {/* 2 · GROUP STATUS — phase: strategy */}
+        {phase === 'strategy' && (
         <div style={card}>
           <div style={cardTitle}>Group status</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
@@ -525,7 +580,10 @@ export default function PortsControlCenter() {
           )}
         </div>
 
-        {/* 2.5 · RULETA DE EVENTOS + RANKING */}
+        )}
+
+        {/* 2.5 · RULETA DE EVENTOS + RANKING — phase: wheel / debrief */}
+        {(phase === 'wheel' || phase === 'debrief') && (
         <div style={card}>
           <div style={cardTitle}>Event roulette &amp; ranking</div>
           {!allConfirmed && (
@@ -603,7 +661,10 @@ export default function PortsControlCenter() {
           )}
         </div>
 
-        {/* 3 · RESULTADOS PARI (agregado) */}
+        )}
+
+        {/* 3 · RESULTADOS PARI (agregado) — phase: par / debrief */}
+        {(phase === 'par' || phase === 'debrief') && (
         <div style={card}>
           <div style={cardTitle}>PARI results · whole room</div>
 
@@ -673,8 +734,10 @@ export default function PortsControlCenter() {
           )}
         </div>
 
-        {/* 4 · BREAKDOWN BY PORT SIZE (Q0) */}
-        {portSizeStats && (
+        )}
+
+        {/* 4 · BREAKDOWN BY PORT SIZE (Q0) — phase: par / debrief */}
+        {(phase === 'par' || phase === 'debrief') && portSizeStats && (
           <div style={card}>
             <div style={cardTitle}>Average by port size</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem' }}>
