@@ -10,7 +10,6 @@ export function SessionProvider({ children }) {
   const [participantGroup,  setParticipantGroup]  = useState('')
   const [participantAge,    setParticipantAge]    = useState('')
   const [participantGender, setParticipantGender] = useState('')
-  const [currentStep,       setCurrentStep]       = useState(1)
   const [sessionClosed,     setSessionClosed]     = useState(false)
 
   // Keeps participant data alive so the reconnect handler can re-emit session:join
@@ -19,7 +18,6 @@ export function SessionProvider({ children }) {
 
   useEffect(() => {
     socket.connect()
-    socket.on('step:change', ({ step }) => setCurrentStep(step))
     socket.on('session:closed', () => setSessionClosed(true))
 
     // Re-join room and update socketId in backend after any reconnect
@@ -63,7 +61,6 @@ export function SessionProvider({ children }) {
     }
 
     return () => {
-      socket.off('step:change')
       socket.off('session:closed')
       socket.off('connect', onConnect)
       socket.disconnect()
@@ -94,7 +91,6 @@ export function SessionProvider({ children }) {
     setParticipantGroup('')
     setParticipantAge('')
     setParticipantGender('')
-    setCurrentStep(1)
     setSessionClosed(false)
     socket.disconnect()
     socket.connect()
@@ -103,7 +99,6 @@ export function SessionProvider({ children }) {
   return (
     <SessionContext.Provider value={{
       sessionCode,
-      currentStep,
       participantName,
       participantGroup,
       participantAge,

@@ -22,7 +22,7 @@ export function registerSocketHandlers(io) {
         socket.data.sessionCode = code
 
         // Join the room IMMEDIATELY before any async DB operations
-        // so the socket receives broadcasts (step:change etc.) without race conditions
+        // so the socket receives broadcasts without race conditions
         socket.join(code)
         console.log(`[socket] ${socket.id} joined room ${code} (group: ${group})`)
 
@@ -40,29 +40,11 @@ export function registerSocketHandlers(io) {
 
         io.to(code).emit('participant:joined', { total: totalUnique, name, group })
 
-        const session = await Session.findOne({ code }, 'status currentStep resultsRevealed step3Revealed')
-        if (session) {
-          if (session.currentStep >= 2) socket.emit('step:change', { step: session.currentStep })
-          if (session.resultsRevealed)  socket.emit('results:revealed')
-          if (session.status === 'closed') socket.emit('session:closed')
-        }
+        const session = await Session.findOne({ code }, 'status')
+        if (session && session.status === 'closed') socket.emit('session:closed')
       } catch {
         socket.emit('error', { message: 'Error al unirse a la sesión' })
       }
-    })
-
-    socket.on('step:change', async ({ sessionCode, step }) => {
-      try {
-        await Session.findOneAndUpdate({ code: sessionCode }, { currentStep: step })
-        io.to(sessionCode).emit('step:change', { step })
-      } catch {}
-    })
-
-    socket.on('results:reveal', async ({ sessionCode }) => {
-      try {
-        await Session.findOneAndUpdate({ code: sessionCode }, { resultsRevealed: true })
-      } catch {}
-      io.to(sessionCode).emit('results:revealed')
     })
 
     socket.on('disconnect', async () => {

@@ -8,8 +8,6 @@ import { generateCode } from '../utils/generateCode.js'
 import { validatePortAssignments } from '../services/portAssignmentService.js'
 import { buildSessionSummary } from '../services/parSubmissionService.js'
 
-const STEP_MAP = { waiting: 1, active: 2, closed: 3 }
-
 export default function sessionsRouter(io) {
   const router = Router()
 
@@ -83,37 +81,6 @@ export default function sessionsRouter(io) {
       res.json(session)
     } catch {
       res.status(500).json({ error: 'Error al obtener sesión' })
-    }
-  })
-
-  router.patch('/:code/status', async (req, res) => {
-    try {
-      const { status } = req.body
-      const session = await Session.findOneAndUpdate(
-        { code: req.params.code, facilitatorId: req.user.id },
-        { status },
-        { new: true }
-      )
-      if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
-      io.to(req.params.code).emit('step:change', { step: STEP_MAP[status] ?? 1 })
-      res.json(session)
-    } catch {
-      res.status(500).json({ error: 'Error al actualizar estado' })
-    }
-  })
-
-  router.patch('/:code/step', async (req, res) => {
-    try {
-      const { step } = req.body
-      const session = await Session.findOneAndUpdate(
-        { code: req.params.code, facilitatorId: req.user.id },
-        { currentStep: step },
-        { new: true }
-      )
-      if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
-      res.json({ ok: true })
-    } catch {
-      res.status(500).json({ error: 'Error al actualizar step' })
     }
   })
 
