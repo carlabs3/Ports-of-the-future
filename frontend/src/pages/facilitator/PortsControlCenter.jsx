@@ -73,6 +73,7 @@ export default function PortsControlCenter() {
   const [strategyByGroup, setStrategyByGroup] = useState({})  // group -> { measures, coinsSpent, cultureBand, portId }
   const [editingGroup, setEditingGroup]       = useState(null)
   const [draftMeasures, setDraftMeasures]     = useState([])  // ids being edited
+  const [draftText, setDraftText]             = useState('')  // raw "11 8 25" typed by the facilitator
   const [saving, setSaving]                   = useState(false)
   const [saveError, setSaveError]             = useState('')
 
@@ -253,14 +254,40 @@ export default function PortsControlCenter() {
   const drawnGroups = new Set(outcomes.filter(o => o.drawn).map(o => o.group))
 
   // ── Measure-entry helpers ───────────────────────────────────────────────────
+  // Parse free-typed numbers ("11 8 25", commas/spaces/newlines) into measure
+  // ids: dedupe, split known (exist in the catalogue) from unknown (flagged).
+  const knownMeasureIds = useMemo(() => new Set(measuresCatalog.map(m => m.id)), [measuresCatalog])
+  const parseMeasureText = useCallback((text) => {
+    const nums = (String(text).match(/\d+/g) || []).map(Number)
+    const seen = new Set(), valid = [], unknown = []
+    for (const n of nums) {
+      if (seen.has(n)) continue
+      seen.add(n)
+      if (knownMeasureIds.has(n)) valid.push(n)
+      else unknown.push(n)
+    }
+    return { valid, unknown }
+  }, [knownMeasureIds])
+
   function openEditor(group) {
     setSaveError('')
-    setDraftMeasures(strategyByGroup[group]?.measures || [])
+    const ms = strategyByGroup[group]?.measures || []
+    setDraftMeasures(ms)
+    setDraftText(ms.join(' '))
     setEditingGroup(group)
   }
-  function toggleDraftMeasure(id) {
-    setDraftMeasures(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  // Typing numbers is the primary entry; it drives the selection (and the boxes).
+  function onDraftTextChange(raw) {
+    setDraftText(raw)
+    setDraftMeasures(parseMeasureText(raw).valid)
   }
+  // Toggling a box keeps the typed text in sync so both stay consistent.
+  function toggleDraftMeasure(id) {
+    const next = draftMeasures.includes(id) ? draftMeasures.filter(x => x !== id) : [...draftMeasures, id]
+    setDraftMeasures(next)
+    setDraftText(next.join(' '))
+  }
+  const draftUnknown = useMemo(() => parseMeasureText(draftText).unknown, [draftText, parseMeasureText])
   const draftCost = useMemo(
     () => draftMeasures.reduce((s, id) => s + (measuresCatalog.find(m => m.id === id)?.cost || 0), 0),
     [draftMeasures, measuresCatalog]
@@ -278,16 +305,21 @@ export default function PortsControlCenter() {
       setSaving(false)
     }
   }
-
-  // Confirm (lock) a table's measures. After this its measures can't be edited
-  // and it counts toward the wheel gate.
-  async function confirmMeasures(group) {
-    if (!window.confirm(`Confirm ${group}'s measures? They can't be edited afterwards.`)) return
+  // Confirm from within the editor: persist the current draft first, THEN lock.
+  // The big read-aloud line above this button is the review step — no browser
+  // confirm() dialog. Locking is reversible via Unlock (unless already drawn).
+  async function saveAndConfirm(group) {
+    setSaving(true)
+    setSaveError('')
     try {
+      await api.put(`/api/par/${code}/strategy/${encodeURIComponent(group)}`, { measures: draftMeasures })
       const res = await api.patch(`/api/par/${code}/strategy/${encodeURIComponent(group)}/confirm`)
       setStrategyByGroup(prev => ({ ...prev, [group]: res.data.strategy }))
-    } catch {
-      window.alert('Could not confirm the measures. Try again.')
+      setEditingGroup(null)
+    } catch (err) {
+      setSaveError(err.response?.data?.error || 'Error confirming')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -471,8 +503,11 @@ export default function PortsControlCenter() {
                     <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#0a0a0a' }}>{gs.group}</span>
                     <span style={{ fontSize: 11, fontWeight: 600, color: st.color }}>{st.label}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
-                    🏙 {gs.portName || '— no port —'}
+                  {/* Hide other tables' assigned port while dictating, so the
+                      tables that dictate last don't see the earlier ones' ports.
+                      Only the table currently open in the editor shows its port. */}
+                  <div style={{ fontSize: 11, color: editingGroup === gs.group ? '#666' : '#bbb', marginBottom: 8 }}>
+                    🏙 {editingGroup === gs.group ? (gs.portName || '— no port —') : '••• hidden •••'}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                     <span style={{ fontSize: 22, fontWeight: 900, color: '#0a0a0a' }}>{gs.avg != null ? gs.avg : '—'}</span>
@@ -502,18 +537,10 @@ export default function PortsControlCenter() {
                       <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
                         <button
                           onClick={() => openEditor(gs.group)}
-                          style={{ fontSize: 11, fontWeight: 600, color: '#0a0a0a', background: 'transparent', border: '1px solid #0a0a0a', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
+                          style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#1B4B7A', border: 'none', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
                         >
-                          Edit measures
+                          Dictate measures
                         </button>
-                        {gs.hasStrategy && (
-                          <button
-                            onClick={() => confirmMeasures(gs.group)}
-                            style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#1B4B7A', border: 'none', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
-                          >
-                            Confirm
-                          </button>
-                        )}
                       </span>
                     )}
                   </div>
@@ -532,6 +559,25 @@ export default function PortsControlCenter() {
                 </span>
                 <button onClick={() => setEditingGroup(null)} style={{ fontSize: 12, color: '#999', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕ Close</button>
               </div>
+
+              {/* Primary entry: type the measure numbers as the tables call them
+                  out (e.g. "11 8 25"). Drives the selection; the boxes mirror it. */}
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#999', marginBottom: 6 }}>
+                Type the measure numbers
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={draftText}
+                onChange={e => onDraftTextChange(e.target.value)}
+                placeholder="e.g. 11 8 25"
+                style={{ width: '100%', border: '1.5px solid #0a0a0a', borderRadius: 8, padding: '0.6rem 0.75rem', fontSize: 16, fontWeight: 700, letterSpacing: '0.05em', color: '#0a0a0a', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
+              />
+              {draftUnknown.length > 0 && (
+                <p style={{ fontSize: 12, color: '#cc4444', margin: '0 0 8px' }}>
+                  Unknown measure{draftUnknown.length !== 1 ? 's' : ''}: {draftUnknown.join(', ')} — ignored.
+                </p>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 6, maxHeight: 340, overflowY: 'auto' }}>
                 {measuresCatalog.map(m => {
@@ -553,13 +599,30 @@ export default function PortsControlCenter() {
               )}
               {saveError && <p style={{ fontSize: 12, color: '#cc4444', margin: '10px 0 0' }}>{saveError}</p>}
 
-              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              {/* Read-aloud line — read this to the table before locking it in.
+                  Part of the confirm step (the button sits right below it). */}
+              <div style={{ marginTop: 14, padding: '0.85rem 1rem', background: '#f5f5f5', border: '1px solid #e5e5e5', borderRadius: 10 }}>
+                <div style={{ fontSize: 'clamp(1.1rem, 3.5vw, 1.5rem)', fontWeight: 900, color: '#0a0a0a', lineHeight: 1.3 }}>
+                  Mesa {editingGroup} → {draftMeasures.length ? draftMeasures.join(', ') : 'sin medidas'}
+                  {' · '}
+                  <span style={{ color: draftCost > budget ? '#cc4444' : '#16a34a' }}>{draftCost} de {budget} fichas</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 <button
                   onClick={() => saveMeasures(editingGroup)}
                   disabled={saving || draftCost > budget}
-                  style={{ background: (saving || draftCost > budget) ? '#e5e5e5' : '#0a0a0a', color: (saving || draftCost > budget) ? '#bbb' : '#fff', border: 'none', borderRadius: 999, padding: '0.5rem 1.25rem', fontSize: 13, fontWeight: 600, cursor: (saving || draftCost > budget) ? 'default' : 'pointer' }}
+                  style={{ background: 'transparent', color: (saving || draftCost > budget) ? '#bbb' : '#0a0a0a', border: `1px solid ${(saving || draftCost > budget) ? '#e5e5e5' : '#0a0a0a'}`, borderRadius: 999, padding: '0.5rem 1.25rem', fontSize: 13, fontWeight: 600, cursor: (saving || draftCost > budget) ? 'default' : 'pointer' }}
                 >
-                  {saving ? 'Saving...' : 'Save measures'}
+                  {saving ? 'Saving...' : 'Save (keep open)'}
+                </button>
+                <button
+                  onClick={() => saveAndConfirm(editingGroup)}
+                  disabled={saving || draftCost > budget}
+                  style={{ background: (saving || draftCost > budget) ? '#e5e5e5' : '#1B4B7A', color: (saving || draftCost > budget) ? '#bbb' : '#fff', border: 'none', borderRadius: 999, padding: '0.5rem 1.25rem', fontSize: 13, fontWeight: 700, cursor: (saving || draftCost > budget) ? 'default' : 'pointer' }}
+                >
+                  {saving ? 'Confirming...' : '🔒 Confirm & lock'}
                 </button>
               </div>
             </div>
