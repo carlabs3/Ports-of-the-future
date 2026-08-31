@@ -442,33 +442,19 @@ export default function PortsControlCenter() {
           })}
         </div>
 
-        {/* 1 · HEADER — phase: join */}
+        {/* 1 · JOIN — phase: join. Focal screen: only the QR and the code, large.
+            No group chips, no counters, no empty panels. */}
         {phase === 'join' && (
-        <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center' }}>
-          <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 12, padding: 8, flexShrink: 0 }}>
-            <QRCodeSVG value={joinUrl} size={96} />
+        <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1.5rem', padding: '2.5rem 1.5rem' }}>
+          <p style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#999', margin: 0 }}>
+            Scan to join · Ports of the Future
+          </p>
+          <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 16, padding: 16 }}>
+            <QRCodeSVG value={joinUrl} size={240} />
           </div>
-          <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-            <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#999', margin: '0 0 4px' }}>
-              Control centre · PAR Index
-            </p>
-            <div style={{ fontWeight: 900, fontSize: '2rem', letterSpacing: '0.05em', color: '#0a0a0a', lineHeight: 1 }}>{code}</div>
-            <p style={{ fontSize: '0.8rem', color: '#666', margin: '6px 0 0' }}>{joinUrl}</p>
-          </div>
-          <div style={{ textAlign: 'center', padding: '0 1rem' }}>
-            <div style={{ fontWeight: 900, fontSize: '2.4rem', color: '#0a0a0a', lineHeight: 1 }}>{submitted}</div>
-            <div style={{ fontSize: '0.72rem', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>PAR submitted</div>
-          </div>
-          <div style={{ flex: '1 1 160px', minWidth: 0 }}>
-            <div style={{ fontSize: '0.72rem', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Groups</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {(groups.length ? groups : ['—']).map(g => (
-                <span key={g} style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 999, background: '#f5f5f5', color: '#0a0a0a', border: '1px solid #e5e5e5' }}>{g}</span>
-              ))}
-            </div>
-          </div>
+          <div style={{ fontWeight: 900, fontSize: 'clamp(3rem, 12vw, 5rem)', letterSpacing: '0.08em', color: '#0a0a0a', lineHeight: 1 }}>{code}</div>
+          <p style={{ fontSize: '1rem', color: '#666', margin: 0, wordBreak: 'break-all' }}>{joinUrl}</p>
         </div>
-
         )}
 
         {/* 2 · GROUP STATUS — phase: strategy */}
