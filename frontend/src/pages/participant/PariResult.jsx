@@ -135,7 +135,7 @@ export default function PariResult() {
   }))
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: 'calc(100dvh - 52px)', fontFamily: "'Instrument Sans', sans-serif" }}>
+    <div style={{ background: '#f5f5f5', minHeight: 'calc(100dvh - 52px)', fontFamily: 'var(--font-sans)' }}>
       {/* ═══ HEADER ═══ */}
       <div style={{ background: '#0a0a0a', color: '#fff' }}>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '1.5rem 1.5rem 0' }}>

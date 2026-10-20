@@ -428,7 +428,7 @@ export default function PortsControlCenter() {
   }
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: 'calc(100vh - 52px)', padding: '2rem 1.5rem', fontFamily: "'Instrument Sans', sans-serif" }}>
+    <div style={{ background: '#f5f5f5', minHeight: 'calc(100vh - 52px)', padding: '2rem 1.5rem', fontFamily: 'var(--font-sans)' }}>
       <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
         {/* Session lifecycle bar: draft → start · active → close · closed → banner */}

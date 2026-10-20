@@ -5,17 +5,34 @@
 // classes; this file is the JS twin for the same values.
 
 // ── Brand palette ───────────────────────────────────────────────────────────
+// Values reference the CSS custom properties in tokens.css — that file is THE
+// source of truth for every literal. These `var(--…)` strings resolve wherever
+// a browser applies the style (inline style objects, SVG attributes, etc.).
+// The ONLY exception is a library that cannot resolve a CSS variable (recharts,
+// canvas): pass a literal hex there and comment it back to this file.
 export const COLOR = {
-  paper:   '#FFFFFF', // page ground
-  ice:     '#C5E4FF', // panels, empty bar tracks
-  sky:     '#77AEF1', // large flat hero blocks only
-  harbour: '#4177C0', // selected state, active tab, links, data bars
-  ink:     '#0B1B33', // text, rules, primary buttons
-  signal:  '#E3BF40', // one highlight per screen (weakest area)
-  onInk:     '#FFFFFF',
-  onHarbour: '#FFFFFF',
-  ink60:   'rgba(11, 27, 51, 0.60)',
-  ink40:   'rgba(11, 27, 51, 0.40)',
+  paper:   'var(--paper)',   // page ground
+  ice:     'var(--ice)',     // panels, empty bar tracks
+  sky:     'var(--sky)',     // large flat hero blocks only
+  harbour: 'var(--harbour)', // selected state, active tab, links, data bars
+  ink:     'var(--ink)',     // text, rules, primary buttons
+  signal:  'var(--signal)',  // one highlight per screen (weakest area)
+  onInk:     'var(--on-ink)',
+  onHarbour: 'var(--on-harbour)',
+  ink60:   'var(--ink-60)',
+  ink40:   'var(--ink-40)',
+}
+
+// Raw hex literals — for libraries that cannot resolve a CSS variable (recharts
+// fills, canvas, offscreen SVG rasterisation). Prefer COLOR.* everywhere else.
+// Keep these in sync with tokens.css by hand; they are the same six values.
+export const COLOR_HEX = {
+  paper:   '#FFFFFF',
+  ice:     '#C5E4FF',
+  sky:     '#77AEF1',
+  harbour: '#4177C0',
+  ink:     '#0B1B33',
+  signal:  '#E3BF40',
 }
 
 // 1px ink hairline — the only rule style in the system.
@@ -23,8 +40,8 @@ export const HAIRLINE = `1px solid ${COLOR.ink}`
 
 // ── Type ────────────────────────────────────────────────────────────────────
 export const FONT = {
-  sans: "'Inter Tight', 'Helvetica Neue', Arial, sans-serif",
-  mono: "'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace",
+  sans: 'var(--font-sans)', // Inter Tight stack — see tokens.css
+  mono: 'var(--font-mono)', // JetBrains Mono stack — see tokens.css
 }
 
 // Sizes read the shared --type-scale so a projector bump via CSS still applies

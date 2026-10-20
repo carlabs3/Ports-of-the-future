@@ -232,7 +232,7 @@ export default function PariCalculator() {
   if (phase === 'demographics') {
     const canContinue = portSize !== '' && (!hasWorldZone || worldZone !== '')
     return (
-      <div style={{ minHeight: 'calc(100dvh - 52px)', background: '#f5f5f5', display: 'flex', flexDirection: 'column', fontFamily: "'Instrument Sans', sans-serif" }}>
+      <div style={{ minHeight: 'calc(100dvh - 52px)', background: '#f5f5f5', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-sans)' }}>
         <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '28px 18px 120px', flex: 1 }}>
           <p style={{ fontSize: 12, color: '#999', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 8px' }}>
             Before you start
@@ -304,7 +304,7 @@ export default function PariCalculator() {
   const qWithinArea = areaQuestions.findIndex(q => q.questionId === current.questionId)
 
   return (
-    <div style={{ height: 'calc(100dvh - 52px)', background: '#f5f5f5', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: "'Instrument Sans', sans-serif" }}>
+    <div style={{ height: 'calc(100dvh - 52px)', background: '#f5f5f5', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-sans)' }}>
 
       {/* Area tabs (numbered) */}
       <div style={{ display: 'flex', padding: '0 16px', borderBottom: `1px solid ${BORDER}`, background: '#f5f5f5', flexShrink: 0 }}>

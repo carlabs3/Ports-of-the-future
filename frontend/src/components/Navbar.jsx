@@ -26,7 +26,7 @@ const styles = {
     gap: '0.75rem',
   },
   link: {
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: 'var(--font-sans)',
     fontWeight: 500,
     fontSize: '0.85rem',
     color: 'rgba(255,255,255,0.6)',
