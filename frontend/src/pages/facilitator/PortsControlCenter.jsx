@@ -63,6 +63,10 @@ const cardTitle = {
   letterSpacing: '0.12em', color: '#999', marginBottom: '1rem',
 }
 
+// Read-aloud helpers (Strategy tab).
+const COIN_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six']
+const andList = (arr) => arr.length <= 1 ? arr.join('') : `${arr.slice(0, -1).join(', ')} and ${arr[arr.length - 1]}`
+
 // Mono section label (tokens). Shared by the rebuilt tabs.
 const uiLabel = {
   fontFamily: FONT.mono, fontSize: FS.label, fontWeight: FW.medium, letterSpacing: LS.mono,
@@ -101,9 +105,10 @@ export default function PortsControlCenter() {
   const [measuresCatalog, setMeasuresCatalog] = useState([]) // [{ id, name, cost }]
   const [budget, setBudget]                   = useState(6)
   const [strategyByGroup, setStrategyByGroup] = useState({})  // group -> { measures, coinsSpent, cultureBand, portId }
-  const [editingGroup, setEditingGroup]       = useState(null)
-  const [draftMeasures, setDraftMeasures]     = useState([])  // ids being edited
-  const [draftText, setDraftText]             = useState('')  // raw "11 8 25" typed by the facilitator
+  const [editingGroup, setEditingGroup]       = useState(null) // the team now dictating
+  const [draftMeasures, setDraftMeasures]     = useState([])  // ids being entered
+  const [numInput, setNumInput]               = useState('')  // the measure number being added
+  const [addError, setAddError]               = useState('')  // inline validation for Add
   const [saving, setSaving]                   = useState(false)
   const [saveError, setSaveError]             = useState('')
 
@@ -317,56 +322,49 @@ export default function PortsControlCenter() {
   const drawnGroups = new Set(outcomes.filter(o => o.drawn).map(o => o.group))
 
   // ── Measure-entry helpers ───────────────────────────────────────────────────
-  // Parse free-typed numbers ("11 8 25", commas/spaces/newlines) into measure
-  // ids: dedupe, split known (exist in the catalogue) from unknown (flagged).
-  const knownMeasureIds = useMemo(() => new Set(measuresCatalog.map(m => m.id)), [measuresCatalog])
-  const parseMeasureText = useCallback((text) => {
-    const nums = (String(text).match(/\d+/g) || []).map(Number)
-    const seen = new Set(), valid = [], unknown = []
-    for (const n of nums) {
-      if (seen.has(n)) continue
-      seen.add(n)
-      if (knownMeasureIds.has(n)) valid.push(n)
-      else unknown.push(n)
-    }
-    return { valid, unknown }
-  }, [knownMeasureIds])
+  const measureById = useMemo(() => new Map(measuresCatalog.map(m => [m.id, m])), [measuresCatalog])
+  const draftCost = useMemo(
+    () => draftMeasures.reduce((s, id) => s + (measureById.get(id)?.cost || 0), 0),
+    [draftMeasures, measureById]
+  )
+  // Any entered measure that raises the culture band (#19 / #20 in config).
+  const draftRaisesCulture = draftMeasures.some(id => measureById.get(id)?.raisesCultureBand)
 
+  // Read-aloud sentence for the dictating team, e.g.
+  // "Team D: measures 8, 15 and 19. Six coins. Correct?"
+  const readAloud = editingGroup
+    ? `${editingGroup}: ${draftMeasures.length ? `measure${draftMeasures.length !== 1 ? 's' : ''} ${andList(draftMeasures)}` : 'no measures'}. ${COIN_WORDS[draftCost] ?? draftCost} coin${draftCost !== 1 ? 's' : ''}. Correct?`
+    : ''
+
+  // Start dictating a team: load its current measures into the draft.
   function openEditor(group) {
     setSaveError('')
-    const ms = strategyByGroup[group]?.measures || []
-    setDraftMeasures(ms)
-    setDraftText(ms.join(' '))
+    setAddError('')
+    setNumInput('')
+    setDraftMeasures(strategyByGroup[group]?.measures || [])
     setEditingGroup(group)
   }
-  // Typing numbers is the primary entry; it drives the selection (and the boxes).
-  function onDraftTextChange(raw) {
-    setDraftText(raw)
-    setDraftMeasures(parseMeasureText(raw).valid)
+  // Add one measure number (1–25). Inline validation: range, exists, duplicate,
+  // budget. The teams call numbers out one at a time, so this is the entry.
+  function addMeasure() {
+    const n = parseInt(numInput, 10)
+    setAddError('')
+    if (!Number.isInteger(n) || n < 1 || n > 25) { setAddError('Enter a measure number from 1 to 25.'); return }
+    const m = measureById.get(n)
+    if (!m) { setAddError(`Measure ${n} doesn't exist.`); return }
+    if (draftMeasures.includes(n)) { setAddError(`Measure ${n} is already added.`); return }
+    if (draftCost + m.cost > budget) { setAddError(`Over budget: measure ${n} costs ${m.cost}, only ${budget - draftCost} left.`); return }
+    setDraftMeasures(prev => [...prev, n])
+    setNumInput('')
   }
-  // Toggling a box keeps the typed text in sync so both stay consistent.
-  function toggleDraftMeasure(id) {
-    const next = draftMeasures.includes(id) ? draftMeasures.filter(x => x !== id) : [...draftMeasures, id]
-    setDraftMeasures(next)
-    setDraftText(next.join(' '))
+  function removeMeasure(id) {
+    setAddError('')
+    setDraftMeasures(prev => prev.filter(x => x !== id))
   }
-  const draftUnknown = useMemo(() => parseMeasureText(draftText).unknown, [draftText, parseMeasureText])
-  const draftCost = useMemo(
-    () => draftMeasures.reduce((s, id) => s + (measuresCatalog.find(m => m.id === id)?.cost || 0), 0),
-    [draftMeasures, measuresCatalog]
-  )
-  async function saveMeasures(group) {
-    setSaving(true)
-    setSaveError('')
-    try {
-      const res = await api.put(`/api/par/${code}/strategy/${encodeURIComponent(group)}`, { measures: draftMeasures })
-      setStrategyByGroup(prev => ({ ...prev, [group]: res.data.strategy }))
-      setEditingGroup(null)
-    } catch (err) {
-      setSaveError(err.response?.data?.error || 'Error saving')
-    } finally {
-      setSaving(false)
-    }
+  function clearDraft() {
+    setAddError('')
+    setNumInput('')
+    setDraftMeasures([])
   }
   // Confirm from within the editor: persist the current draft first, THEN lock.
   // The big read-aloud line above this button is the review step — no browser
@@ -487,12 +485,6 @@ export default function PortsControlCenter() {
       // brief cosmetic delay so the "spinning" state is visible
       setTimeout(() => setSpinning(null), 1000)
     }
-  }
-
-  const STATUS_STYLE = {
-    empty:     { dot: '#d4d4d4', label: 'No data',   color: '#999' },
-    receiving: { dot: '#f59e0b', label: 'Receiving', color: '#b07a30' },
-    ready:     { dot: '#4ade80', label: 'Ready',     color: '#16a34a' },
   }
 
   const currentIndex = Math.max(0, PHASES.findIndex(p => p.id === phase))
@@ -638,146 +630,138 @@ export default function PortsControlCenter() {
         </div>
         )}
 
-        {/* 2 · GROUP STATUS — phase: strategy */}
+        {/* 2 · STRATEGY — phase: strategy. One team dictates at a time. Other
+            teams' port / score / culture / measures stay hidden. */}
         {phase === 'strategy' && (
-        <div style={card}>
-          <div style={cardTitle}>Group status</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
-            {groupStats.map(gs => {
-              const st = STATUS_STYLE[gs.status]
-              return (
-                <div key={gs.group} style={{ border: '1px solid #e5e5e5', borderRadius: 10, padding: '0.85rem 1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ width: 9, height: 9, borderRadius: '50%', background: st.dot, flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#0a0a0a' }}>{gs.group}</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: st.color }}>{st.label}</span>
-                  </div>
-                  {/* Hide other tables' assigned port while dictating, so the
-                      tables that dictate last don't see the earlier ones' ports.
-                      Only the table currently open in the editor shows its port. */}
-                  <div style={{ fontSize: 11, color: editingGroup === gs.group ? '#666' : '#bbb', marginBottom: 8 }}>
-                    🏙 {editingGroup === gs.group ? (gs.portName || '— no port —') : '••• hidden •••'}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 22, fontWeight: 900, color: '#0a0a0a' }}>{gs.avg != null ? gs.avg : '—'}</span>
-                    {gs.avg != null && <span style={{ fontSize: 12, color: '#999' }}>/100 avg</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-                    {gs.count} PAR{gs.count !== 1 ? 's' : ''}
-                    {gs.cultureBand && <> · Culture: <span style={{ color: BAND_CONFIG[gs.cultureBand].color, fontWeight: 700 }}>{BAND_CONFIG[gs.cultureBand].label}</span></>}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span>🪙 {gs.coinsSpent}/{budget} · {gs.measuresCount} measure{gs.measuresCount !== 1 ? 's' : ''}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 340px) 1fr', gap: 20, alignItems: 'start' }}>
+
+            {/* LEFT: team list — one status chip each, nothing else */}
+            <div style={{ border: HAIRLINE, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                <p style={uiLabel}>Teams</p>
+                <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>
+                  {groupStats.filter(g => g.confirmed).length} of {groupStats.length} locked
+                </span>
+              </div>
+              {groupStats.map(gs => {
+                const dictating = editingGroup === gs.group
+                return (
+                  <div key={gs.group} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', borderTop: HAIRLINE }}>
+                    <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>{gs.group}</span>
                     {gs.confirmed ? (
-                      <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a' }}>🔒 Confirmed</span>
-                        {drawnGroups.has(gs.group) ? (
-                          <span title="already drawn" style={{ fontSize: 11, color: '#bbb' }}>Unlock</span>
-                        ) : (
-                          <button
-                            onClick={() => unlockMeasures(gs.group)}
-                            style={{ fontSize: 11, fontWeight: 600, color: '#0a0a0a', background: 'transparent', border: '1px solid #e5e5e5', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
-                          >
+                      <>
+                        <span style={{ ...uiLabel, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, padding: '4px 10px' }}>Locked ✓</span>
+                        {!drawnGroups.has(gs.group) && (
+                          <button onClick={() => unlockMeasures(gs.group)}
+                            style={{ fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: FW.semibold, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: 'pointer' }}>
                             Unlock
                           </button>
                         )}
-                      </span>
+                      </>
+                    ) : dictating ? (
+                      <span style={{ ...uiLabel, color: COLOR.ink, background: COLOR.signal, border: HAIRLINE, padding: '4px 10px' }}>Dictating</span>
                     ) : (
-                      <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
-                        <button
-                          onClick={() => openEditor(gs.group)}
-                          style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#1B4B7A', border: 'none', borderRadius: 999, padding: '2px 10px', cursor: 'pointer' }}
-                        >
-                          Dictate measures
+                      <>
+                        <span style={{ ...uiLabel, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, padding: '4px 10px' }}>Waiting</span>
+                        <button onClick={() => openEditor(gs.group)}
+                          style={{ fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: FW.semibold, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: 'pointer' }}>
+                          Dictate →
                         </button>
-                      </span>
+                      </>
                     )}
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
+
+            {/* RIGHT: dictation panel for the team now dictating */}
+            <div style={{ border: HAIRLINE, padding: 28, minHeight: 220 }}>
+              {!editingGroup ? (
+                <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>
+                  Pick a team on the left to start dictating its measures.
+                </p>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
+                    <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: 0 }}>{editingGroup}</h2>
+                    <span style={uiLabel}>Now dictating</span>
+                  </div>
+
+                  {/* 6-cell coin meter */}
+                  <p style={uiLabel}>{draftCost} of {budget} coins spent</p>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, marginBottom: 24 }}>
+                    {Array.from({ length: budget }).map((_, i) => (
+                      <div key={i} style={{ flex: 1, height: 28, border: HAIRLINE, background: i < draftCost ? COLOR.ink : COLOR.ice }} />
+                    ))}
+                  </div>
+
+                  {/* Number input + Add */}
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <input
+                      type="number" min={1} max={25} inputMode="numeric"
+                      value={numInput}
+                      onChange={e => { setNumInput(e.target.value); setAddError('') }}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addMeasure() } }}
+                      placeholder="Measure # (1–25)"
+                      style={{ flex: 1, border: HAIRLINE, borderRadius: 0, padding: '14px 16px', fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, color: COLOR.ink, background: COLOR.paper, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                    <button onClick={addMeasure}
+                      style={{ height: 'auto', padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
+                      + Add
+                    </button>
+                  </div>
+                  {addError && <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: '#c0392b', margin: '10px 0 0' }}>{addError}</p>}
+
+                  {/* Entered measures as rows */}
+                  <div style={{ marginTop: 20 }}>
+                    {draftMeasures.length === 0 ? (
+                      <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No measures yet.</p>
+                    ) : draftMeasures.map(id => {
+                      const m = measureById.get(id)
+                      return (
+                        <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: HAIRLINE }}>
+                          <span style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, minWidth: 28 }}>{id}</span>
+                          <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.body }}>{m?.name || `Measure ${id}`}</span>
+                          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>🪙 {m?.cost ?? '—'}</span>
+                          <button onClick={() => removeMeasure(id)} title="Remove"
+                            style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, width: 32, height: 32, cursor: 'pointer' }}>×</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Culture-band note for #19 / #20 */}
+                  {draftRaisesCulture && (
+                    <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, background: COLOR.ice, border: HAIRLINE, padding: '10px 14px', margin: '20px 0 0' }}>
+                      This raises the team's culture band by one level (measure #19 / #20).
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Measure-entry editor (facilitator) */}
+          {/* BOTTOM ink bar: read-aloud sentence + lock */}
           {editingGroup && (
-            <div style={{ marginTop: '1rem', border: '1px solid #0a0a0a', borderRadius: 12, padding: '1rem 1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#0a0a0a' }}>Measures · {editingGroup}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: draftCost > budget ? '#cc4444' : '#16a34a' }}>
-                  🪙 {draftCost}/{budget}
-                </span>
-                <button onClick={() => setEditingGroup(null)} style={{ fontSize: 12, color: '#999', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕ Close</button>
-              </div>
-
-              {/* Primary entry: type the measure numbers as the tables call them
-                  out (e.g. "11 8 25"). Drives the selection; the boxes mirror it. */}
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#999', marginBottom: 6 }}>
-                Type the measure numbers
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={draftText}
-                onChange={e => onDraftTextChange(e.target.value)}
-                placeholder="e.g. 11 8 25"
-                style={{ width: '100%', border: '1.5px solid #0a0a0a', borderRadius: 8, padding: '0.6rem 0.75rem', fontSize: 16, fontWeight: 700, letterSpacing: '0.05em', color: '#0a0a0a', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
-              />
-              {draftUnknown.length > 0 && (
-                <p style={{ fontSize: 12, color: '#cc4444', margin: '0 0 8px' }}>
-                  Unknown measure{draftUnknown.length !== 1 ? 's' : ''}: {draftUnknown.join(', ')} — ignored.
-                </p>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 6, maxHeight: 340, overflowY: 'auto' }}>
-                {measuresCatalog.map(m => {
-                  const sel = draftMeasures.includes(m.id)
-                  return (
-                    <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, border: `1px solid ${sel ? '#0a0a0a' : '#e5e5e5'}`, background: sel ? '#f5f5f5' : '#fff', cursor: 'pointer', fontSize: 13 }}>
-                      <input type="checkbox" checked={sel} onChange={() => toggleDraftMeasure(m.id)} />
-                      <span style={{ flex: 1, color: '#0a0a0a' }}>{m.id}. {m.name}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#666' }}>🪙{m.cost}</span>
-                    </label>
-                  )
-                })}
-              </div>
-
-              {draftCost > budget && (
-                <p style={{ fontSize: 12, color: '#cc4444', margin: '10px 0 0' }}>
-                  Over budget ({draftCost} &gt; {budget}). Remove a measure.
-                </p>
-              )}
-              {saveError && <p style={{ fontSize: 12, color: '#cc4444', margin: '10px 0 0' }}>{saveError}</p>}
-
-              {/* Read-aloud line — read this to the table before locking it in.
-                  Part of the confirm step (the button sits right below it). */}
-              <div style={{ marginTop: 14, padding: '0.85rem 1rem', background: '#f5f5f5', border: '1px solid #e5e5e5', borderRadius: 10 }}>
-                <div style={{ fontSize: 'clamp(1.1rem, 3.5vw, 1.5rem)', fontWeight: 900, color: '#0a0a0a', lineHeight: 1.3 }}>
-                  Mesa {editingGroup} → {draftMeasures.length ? draftMeasures.join(', ') : 'sin medidas'}
-                  {' · '}
-                  <span style={{ color: draftCost > budget ? '#cc4444' : '#16a34a' }}>{draftCost} de {budget} fichas</span>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => saveMeasures(editingGroup)}
-                  disabled={saving || draftCost > budget}
-                  style={{ background: 'transparent', color: (saving || draftCost > budget) ? '#bbb' : '#0a0a0a', border: `1px solid ${(saving || draftCost > budget) ? '#e5e5e5' : '#0a0a0a'}`, borderRadius: 999, padding: '0.5rem 1.25rem', fontSize: 13, fontWeight: 600, cursor: (saving || draftCost > budget) ? 'default' : 'pointer' }}
-                >
-                  {saving ? 'Saving...' : 'Save (keep open)'}
+            <div style={{ background: COLOR.ink, color: COLOR.onInk, padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+              <p style={{ flex: '1 1 320px', fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, lineHeight: 1.3, margin: 0 }}>
+                {readAloud}
+              </p>
+              {saveError && <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.signal }}>{saveError}</span>}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={clearDraft}
+                  style={{ height: 48, padding: '0 20px', border: `1px solid ${COLOR.onInk}`, borderRadius: 0, background: 'transparent', color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
+                  Clear
                 </button>
-                <button
-                  onClick={() => saveAndConfirm(editingGroup)}
-                  disabled={saving || draftCost > budget}
-                  style={{ background: (saving || draftCost > budget) ? '#e5e5e5' : '#1B4B7A', color: (saving || draftCost > budget) ? '#bbb' : '#fff', border: 'none', borderRadius: 999, padding: '0.5rem 1.25rem', fontSize: 13, fontWeight: 700, cursor: (saving || draftCost > budget) ? 'default' : 'pointer' }}
-                >
-                  {saving ? 'Confirming...' : '🔒 Confirm & lock'}
+                <button onClick={() => saveAndConfirm(editingGroup)} disabled={saving || draftCost > budget}
+                  style={{ height: 48, padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold, cursor: (saving || draftCost > budget) ? 'default' : 'pointer', opacity: (saving || draftCost > budget) ? 0.5 : 1 }}>
+                  {saving ? 'Locking…' : `Yes — lock ${editingGroup} →`}
                 </button>
               </div>
             </div>
           )}
         </div>
-
         )}
 
         {/* 2.5 · RULETA DE EVENTOS + RANKING — phase: wheel / debrief */}
