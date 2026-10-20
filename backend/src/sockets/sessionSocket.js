@@ -15,7 +15,7 @@ export function registerSocketHandlers(io) {
       } catch {}
     })
 
-    socket.on('session:join', async ({ code, name, group, age, gender }) => {
+    socket.on('session:join', async ({ code, name, group }) => {
       try {
         socket.data.name = name || 'Anónimo'
         socket.data.group = group
@@ -28,7 +28,7 @@ export function registerSocketHandlers(io) {
 
         await Participant.findOneAndUpdate(
           { socketId: socket.id },
-          { sessionCode: code, group, age: age || '', gender: gender || '', socketId: socket.id },
+          { sessionCode: code, group, socketId: socket.id },
           { upsert: true, new: true }
         )
 

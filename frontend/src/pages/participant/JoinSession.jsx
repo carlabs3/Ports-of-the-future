@@ -3,9 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSession } from '../../context/SessionContext.jsx'
 import api from '../../utils/api.js'
 
-const AGE_RANGES = ['< 20', '20-29', '30-39', '40-49', '50-59', '60+', 'Prefer not to say']
-const GENDERS    = ['Female', 'Male', 'Non-binary', 'Prefer not to say']
-
 const s = {
   page: {
     flex: 1,
@@ -69,19 +66,6 @@ const s = {
     color: '#0a0a0a',
     boxSizing: 'border-box',
   },
-  select: {
-    width: '100%',
-    border: '1px solid #e5e5e5',
-    borderRadius: '12px',
-    padding: '0.6rem 0.75rem',
-    fontSize: '1rem',
-    background: '#ffffff',
-    outline: 'none',
-    letterSpacing: '0.03em',
-    fontWeight: 700,
-    appearance: 'none',
-    boxSizing: 'border-box',
-  },
   groupRow: {
     display: 'flex',
     gap: '0.5rem',
@@ -125,15 +109,11 @@ export default function JoinSession() {
   const [searchParams] = useSearchParams()
   const codeFromUrl = searchParams.get('code')
 
-  const [code,        setCode]        = useState('')
-  const [age,         setAge]         = useState('')
-  const [gender,      setGender]      = useState('')
-  const [group,       setGroup]       = useState('')
-  const [groups,      setGroups]      = useState([])
-  const [codeError,   setCodeError]   = useState('')
-  const [ageError,    setAgeError]    = useState('')
-  const [genderError, setGenderError] = useState('')
-  const [groupError,  setGroupError]  = useState('')
+  const [code,       setCode]       = useState('')
+  const [group,      setGroup]      = useState('')
+  const [groups,     setGroups]     = useState([])
+  const [codeError,  setCodeError]  = useState('')
+  const [groupError, setGroupError] = useState('')
 
   const { joinSession, clearSession } = useSession()
   const navigate = useNavigate()
@@ -180,14 +160,6 @@ export default function JoinSession() {
       setCodeError('Enter a valid code (e.g. PORT-4872)')
       valid = false
     }
-    if (!age) {
-      setAgeError('Select your age range')
-      valid = false
-    }
-    if (!gender) {
-      setGenderError('Select an option')
-      valid = false
-    }
     if (!group) {
       setGroupError('Select a group')
       valid = false
@@ -195,10 +167,10 @@ export default function JoinSession() {
     if (!valid) return
 
     localStorage.setItem(`ports_participant_${code}`, JSON.stringify({
-      code, name: 'Anónimo', group, age, gender,
+      code, name: 'Anónimo', group,
       joinedAt: new Date().toISOString(),
     }))
-    joinSession(code, 'Anónimo', group, age, gender)
+    joinSession(code, 'Anónimo', group)
     navigate(`/session/${code}/par`)
   }
 
@@ -250,40 +222,10 @@ export default function JoinSession() {
             </div>
           )}
 
-          {/* Age + Gender */}
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.8rem' }}>
-            <div style={{ flex: 1 }}>
-              <label style={s.label} htmlFor="age">Age</label>
-              <select
-                id="age"
-                value={age}
-                onChange={e => { setAge(e.target.value); setAgeError('') }}
-                style={{ ...s.select, color: age ? '#0a0a0a' : '#aaa', ...(ageError ? s.fieldError : {}) }}
-              >
-                <option value="">—</option>
-                {AGE_RANGES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-              {ageError && <div style={s.error}>{ageError}</div>}
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={s.label} htmlFor="gender">Gender</label>
-              <select
-                id="gender"
-                value={gender}
-                onChange={e => { setGender(e.target.value); setGenderError('') }}
-                style={{ ...s.select, color: gender ? '#0a0a0a' : '#aaa', ...(genderError ? s.fieldError : {}) }}
-              >
-                <option value="">—</option>
-                {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-              {genderError && <div style={s.error}>{genderError}</div>}
-            </div>
-          </div>
-
           <p style={{ fontSize: '11px', color: '#999', lineHeight: 1.5, marginBottom: '16px', marginTop: 0 }}>
-            Age, gender and questionnaire answers are collected anonymously for the
-            workshop results. They are not linked to any name and are not shared with
-            third parties.
+            Your questionnaire answers are collected anonymously for the workshop
+            results. They are not linked to any name and are not shared with third
+            parties.
           </p>
 
           <button style={s.btn} type="submit">Join →</button>

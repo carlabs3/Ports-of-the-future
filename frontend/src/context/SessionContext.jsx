@@ -8,8 +8,6 @@ export function SessionProvider({ children }) {
   const [sessionCode,       setSessionCode]       = useState(null)
   const [participantName,   setParticipantName]   = useState('')
   const [participantGroup,  setParticipantGroup]  = useState('')
-  const [participantAge,    setParticipantAge]    = useState('')
-  const [participantGender, setParticipantGender] = useState('')
   const [sessionClosed,     setSessionClosed]     = useState(false)
 
   // Keeps participant data alive so the reconnect handler can re-emit session:join
@@ -37,18 +35,14 @@ export function SessionProvider({ children }) {
         api.get(`/api/sessions/${saved.code}/info`)
           .then(res => {
             if (res.data.status === 'active') {
-              participantDataRef.current = { code: saved.code, name: saved.name, group: saved.group, age: saved.age, gender: saved.gender }
+              participantDataRef.current = { code: saved.code, name: saved.name, group: saved.group }
               setSessionCode(saved.code)
               setParticipantName(saved.name || '')
               setParticipantGroup(saved.group || '')
-              setParticipantAge(saved.age || '')
-              setParticipantGender(saved.gender || '')
               socket.emit('session:join', {
-                code:   saved.code,
-                name:   saved.name,
-                group:  saved.group,
-                age:    saved.age,
-                gender: saved.gender,
+                code:  saved.code,
+                name:  saved.name,
+                group: saved.group,
               })
             } else {
               localStorage.removeItem(key)
@@ -67,15 +61,13 @@ export function SessionProvider({ children }) {
     }
   }, [])
 
-  function joinSession(code, name, group, age, gender) {
-    participantDataRef.current = { code, name, group, age: age || '', gender: gender || '' }
+  function joinSession(code, name, group) {
+    participantDataRef.current = { code, name, group }
     setSessionCode(code)
     setParticipantName(name)
     setParticipantGroup(group)
-    setParticipantAge(age || '')
-    setParticipantGender(gender || '')
     setSessionClosed(false)
-    socket.emit('session:join', { code, name, group, age, gender })
+    socket.emit('session:join', { code, name, group })
   }
 
   function clearSession() {
@@ -89,8 +81,6 @@ export function SessionProvider({ children }) {
     setSessionCode(null)
     setParticipantName('')
     setParticipantGroup('')
-    setParticipantAge('')
-    setParticipantGender('')
     setSessionClosed(false)
     socket.disconnect()
     socket.connect()
@@ -101,8 +91,6 @@ export function SessionProvider({ children }) {
       sessionCode,
       participantName,
       participantGroup,
-      participantAge,
-      participantGender,
       sessionClosed,
       joinSession,
       clearSession,

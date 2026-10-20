@@ -26,9 +26,9 @@ const parIndexResultSchema = new Schema({
   // Chosen optionIds, e.g. { q1: 'q1c', ... }
   answers: { type: Schema.Types.Mixed },
 
-  // Optional, carried from JoinSession if present
-  age:    { type: String, default: '' },
-  gender: { type: String, default: '' },
+  // MIGRATION NOTE: `age`/`gender` were removed (B2). They were never populated
+  // on this collection (persistParSubmission ignored them), so any legacy doc
+  // that carries them can be left as-is; nothing reads them.
 }, { timestamps: true })
 
 export default model('ParIndexResult', parIndexResultSchema)
