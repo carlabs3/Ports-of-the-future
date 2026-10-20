@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs'
 import authRoutes from './src/routes/auth.js'
 import sessionsRouter from './src/routes/sessions.js'
 import parRouter from './src/routes/par.js'
+import contactRouter from './src/routes/contact.js'
 import { registerSocketHandlers } from './src/sockets/sessionSocket.js'
 import { registerParSocketHandlers } from './src/sockets/parSocket.js'
 import { validateConfig } from './src/config/validateConfig.js'
@@ -46,12 +47,17 @@ const io = new Server(httpServer, {
 })
 
 app.set('io', io)
+// Behind Railway's proxy, trust the first hop so req.ip is the real client IP
+// (otherwise every request shares the proxy IP and the contact rate limit would
+// block the whole world after 5 requests).
+app.set('trust proxy', 1)
 app.use(cors(corsOptions))
 app.use(express.json())
 
 app.use('/api/auth', authRoutes)
 app.use('/api/sessions', sessionsRouter(io))
 app.use('/api/par', parRouter(io))
+app.use('/api/contact', contactRouter())
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
