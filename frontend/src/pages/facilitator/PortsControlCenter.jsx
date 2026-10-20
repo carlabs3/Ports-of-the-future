@@ -102,7 +102,13 @@ export default function PortsControlCenter() {
   // Control-centre phase (facilitator-driven, persisted in Session.phase).
   const [phase, setPhase] = useState('join')
 
-  const joinUrl = `${window.location.origin}/?code=${code}`
+  // Join tab: live participant count + port shuffle.
+  const [joinedCount, setJoinedCount] = useState(0)
+  const [shuffling, setShuffling]     = useState(false)
+  const [shuffleMsg, setShuffleMsg]   = useState('')
+
+  const joinUrl  = `${window.location.origin}/?code=${code}`
+  const shortUrl = window.location.host // shown without the ?code= query string
 
   // Fetch the full listing (aligned individual + demographics) and rebuild rows.
   const fetchResults = useCallback(() => {
@@ -181,10 +187,12 @@ export default function PortsControlCenter() {
     }
     function onOutcomeUpdate() { fetchOutcomes() }
     function onPhaseChange({ phase: p }) { if (p) setPhase(p) }
+    function onJoined(p) { if (typeof p?.total === 'number') setJoinedCount(p.total) }
     socket.on('par:update', onParUpdate)
     socket.on('strategy:update', onStrategyUpdate)
     socket.on('outcome:update', onOutcomeUpdate)
     socket.on('phase:change', onPhaseChange)
+    socket.on('participant:joined', onJoined)
 
     return () => {
       socket.off('connect', joinRoom)
@@ -192,6 +200,7 @@ export default function PortsControlCenter() {
       socket.off('strategy:update', onStrategyUpdate)
       socket.off('outcome:update', onOutcomeUpdate)
       socket.off('phase:change', onPhaseChange)
+      socket.off('participant:joined', onJoined)
     }
   }, [code, fetchResults, fetchStrategies, fetchOutcomes])
 
@@ -375,6 +384,22 @@ export default function PortsControlCenter() {
     }
   }
 
+  // Re-roll the random port assignment. Allowed only before the Strategy phase
+  // (the backend returns 409 otherwise). Ports stay hidden; this just confirms.
+  async function shufflePorts() {
+    if (shuffling) return
+    setShuffling(true)
+    setShuffleMsg('')
+    try {
+      await api.post(`/api/sessions/${code}/shuffle-ports`)
+      setShuffleMsg('Ports shuffled ✓')
+    } catch (err) {
+      setShuffleMsg(err.response?.data?.error || 'Could not shuffle the ports.')
+    } finally {
+      setShuffling(false)
+    }
+  }
+
   // Switch the control-centre phase. Optimistic (updates the tab immediately);
   // the server persists it and echoes phase:change back to confirm. Manual only.
   async function changePhase(next) {
@@ -478,11 +503,6 @@ export default function PortsControlCenter() {
             <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink, background: COLOR.ice, border: HAIRLINE, padding: '6px 12px' }}>
               Session ended
             </span>
-          ) : draft ? (
-            <button onClick={startSession} disabled={starting}
-              style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, borderRadius: 0, padding: '10px 18px', cursor: starting ? 'default' : 'pointer' }}>
-              {starting ? 'Starting…' : 'Start session'}
-            </button>
           ) : (
             <button onClick={() => setEndDialogOpen(true)}
               style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '10px 18px', cursor: 'pointer' }}>
@@ -531,18 +551,59 @@ export default function PortsControlCenter() {
       {/* ═══ BODY (full width) — tab panels rebuilt in B6–B10 ═══ */}
       <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-        {/* 1 · JOIN — phase: join. Focal screen: only the QR and the code, large.
-            No group chips, no counters, no empty panels. */}
+        {/* 1 · JOIN — phase: join. Big QR + code in a sky block, live counter,
+            "Start PAR Index →". No team list. */}
         {phase === 'join' && (
-        <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1.5rem', padding: '2.5rem 1.5rem' }}>
-          <p style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#999', margin: 0 }}>
-            Scan to join · Ports of the Future
-          </p>
-          <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 16, padding: 16 }}>
-            <QRCodeSVG value={joinUrl} size={240} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Sky block: QR + short URL + very large code */}
+          <div style={{ background: COLOR.sky, color: COLOR.ink, border: HAIRLINE, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 40, padding: 40 }}>
+            <div style={{ background: COLOR.paper, border: HAIRLINE, padding: 20, flexShrink: 0 }}>
+              <QRCodeSVG value={joinUrl} size={300} fgColor="#0B1B33" bgColor="#FFFFFF" />
+            </div>
+            <div style={{ flex: '1 1 320px', minWidth: 280 }}>
+              <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', margin: '0 0 8px' }}>
+                Scan or go to
+              </p>
+              <p style={{ fontFamily: FONT.mono, fontSize: FS.h3, fontWeight: FW.medium, margin: '0 0 28px', wordBreak: 'break-all' }}>
+                {shortUrl}
+              </p>
+              <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', margin: '0 0 8px' }}>
+                Session code
+              </p>
+              <div style={{ fontFamily: FONT.mono, fontWeight: FW.bold, fontSize: FS.mega, letterSpacing: '0.06em', lineHeight: 1 }}>{code}</div>
+            </div>
           </div>
-          <div style={{ fontWeight: 900, fontSize: 'clamp(3rem, 12vw, 5rem)', letterSpacing: '0.08em', color: '#0a0a0a', lineHeight: 1 }}>{code}</div>
-          <p style={{ fontSize: '1rem', color: '#666', margin: 0, wordBreak: 'break-all' }}>{joinUrl}</p>
+
+          {/* Actions: live counter · shuffle · start */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 20, borderTop: HAIRLINE, paddingTop: 20 }}>
+            <div style={{ flex: '1 1 auto' }}>
+              <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display }}>{joinedCount}</span>
+              <span style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, marginLeft: 10 }}>
+                {joinedCount === 1 ? 'person has joined' : 'people have joined'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {shuffleMsg && (
+                <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>{shuffleMsg}</span>
+              )}
+              <button onClick={shufflePorts} disabled={shuffling}
+                style={{ height: 56, padding: '0 22px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: shuffling ? 'default' : 'pointer' }}>
+                {shuffling ? 'Shuffling…' : '↻ Shuffle ports'}
+              </button>
+              {draft ? (
+                <button onClick={startSession} disabled={starting}
+                  style={{ height: 56, padding: '0 28px', border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: starting ? 'default' : 'pointer' }}>
+                  {starting ? 'Starting…' : 'Start session →'}
+                </button>
+              ) : (
+                <button onClick={() => changePhase('par')}
+                  style={{ height: 56, padding: '0 28px', border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: 'pointer' }}>
+                  Start PAR Index →
+                </button>
+              )}
+            </div>
+          </div>
         </div>
         )}
 
