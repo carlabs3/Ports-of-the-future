@@ -254,20 +254,6 @@ export default function PortsControlCenter() {
     }
   }, [code, fetchResults, fetchStrategies, fetchOutcomes])
 
-  // On entering the Roulette phase (all locked), auto-open the first team that
-  // still needs to spin so the screen shows one team at a time.
-  useEffect(() => {
-    if (phase === 'wheel' && allConfirmed && !wheelTeam) {
-      const first = groupStats.find(g => !drawnGroups.has(g.group))?.group || groupStats[0]?.group
-      if (first) openWheel(first)
-    }
-  }, [phase, allConfirmed]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load the debrief (expected results) when the facilitator enters that phase.
-  useEffect(() => {
-    if (phase === 'debrief') fetchDebrief()
-  }, [phase, fetchDebrief])
-
   // ── PAR tab: combinable filters + filtered aggregates (all client-side) ─────
   const anyFilter = !!(filters.portSize || filters.worldZone || filters.team || filters.band)
 
@@ -351,6 +337,25 @@ export default function PortsControlCenter() {
   const pendingConfirm = strategyList.filter(s => !s.confirmed).map(s => s.group)
   // Tables that have already spun — their measures can't be unlocked.
   const drawnGroups = new Set(outcomes.filter(o => o.drawn).map(o => o.group))
+
+  // NOTE: these two effects MUST stay below the declarations of `allConfirmed`,
+  // `groupStats` and `drawnGroups` — the dep array reads `allConfirmed` during
+  // render, so declaring them earlier put it in the temporal dead zone and
+  // crashed the whole control centre (ReferenceError on every render).
+
+  // On entering the Roulette phase (all locked), auto-open the first team that
+  // still needs to spin so the screen shows one team at a time.
+  useEffect(() => {
+    if (phase === 'wheel' && allConfirmed && !wheelTeam) {
+      const first = groupStats.find(g => !drawnGroups.has(g.group))?.group || groupStats[0]?.group
+      if (first) openWheel(first)
+    }
+  }, [phase, allConfirmed]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load the debrief (expected results) when the facilitator enters that phase.
+  useEffect(() => {
+    if (phase === 'debrief') fetchDebrief()
+  }, [phase, fetchDebrief])
 
   // ── Measure-entry helpers ───────────────────────────────────────────────────
   const measureById = useMemo(() => new Map(measuresCatalog.map(m => [m.id, m])), [measuresCatalog])
