@@ -1,7 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;900&display=swap');
+/* Design tokens (colours, type, base components) live in tokens.css, imported
+   before this file in main.jsx. The legacy tokens below are Home/login-only and
+   are retired as those screens are restyled. --font-sans is overridden by
+   tokens.css to Inter Tight. */
 
 :root {
-  --font-sans: 'Inter', sans-serif;
   --bg-cream: #F7F4F0;
   --bg-white: #ffffff;
   --border-soft: #E8E4DF;
@@ -22,7 +24,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 400;
 }
 

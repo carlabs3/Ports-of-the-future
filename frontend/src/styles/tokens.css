@@ -1,0 +1,216 @@
+/* ============================================================================
+   Ports of the Future — design tokens (Swiss grotesk)
+   ----------------------------------------------------------------------------
+   THE single source of truth for colour, type, spacing and the base components.
+   Every screen reads from here. Rules baked in:
+     · 1px --ink hairline rules, 0 border-radius, no shadows, no gradients.
+     · Band colours are a lightness ramp, NOT a traffic light.
+     · White text only on --harbour (18px+) or --ink. Text on --sky is --ink.
+     · Every font size is --fs-* × --type-scale, so a projector test can raise
+       all sizes by changing ONE variable (--type-scale) and nothing else.
+   ========================================================================== */
+
+:root {
+  /* ── Brand colours ──────────────────────────────────────────────────────
+     Token      Use
+     --paper    page ground
+     --ice      panels, empty bar tracks
+     --sky      large flat hero blocks only (never a tint, never small-text bg)
+     --harbour  selected state, active tab, links, data bars
+     --ink      text, rules, primary buttons
+     --signal   one highlight per screen (weakest area). Never decoration      */
+  --paper:   #FFFFFF;
+  --ice:     #C5E4FF;
+  --sky:     #77AEF1;
+  --harbour: #4177C0;
+  --ink:     #0B1B33;
+  --signal:  #E3BF40;
+
+  /* Text-on-colour pairings (do not improvise contrast elsewhere). */
+  --on-ink:     #FFFFFF; /* white text on ink */
+  --on-harbour: #FFFFFF; /* white text on harbour, 18px+ only */
+  --on-sky:     var(--ink); /* NEVER white on sky */
+  --ink-60:  rgba(11, 27, 51, 0.60); /* muted ink for secondary text */
+  --ink-40:  rgba(11, 27, 51, 0.40);
+  --hairline: var(--ink);            /* 1px rules are always ink */
+
+  /* ── Type families ──────────────────────────────────────────────────────
+     Display + body: Inter Tight (400–800). Labels/codes/counters: JetBrains
+     Mono (400/500/700). Fallback stack per spec.                             */
+  --font-sans: 'Inter Tight', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* ── Type scale ─────────────────────────────────────────────────────────
+     Raise every size at once by changing --type-scale (default 1). Do not
+     change the default here — it exists to be overridden after a projector
+     test without touching any component.                                     */
+  --type-scale: 1;
+
+  --fs-mega:    calc(96px * var(--type-scale)); /* the one huge number (score) */
+  --fs-display: calc(64px * var(--type-scale)); /* hero question no. / big stat */
+  --fs-h1:      calc(40px * var(--type-scale));
+  --fs-h2:      calc(28px * var(--type-scale));
+  --fs-h3:      calc(20px * var(--type-scale));
+  --fs-lg:      calc(18px * var(--type-scale)); /* min size for white-on-harbour */
+  --fs-body:    calc(16px * var(--type-scale));
+  --fs-sm:      calc(14px * var(--type-scale));
+  --fs-label:   calc(12px * var(--type-scale)); /* mono section labels */
+  --fs-micro:   calc(11px * var(--type-scale));
+
+  /* Weights (Inter Tight). Display is 800. */
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold: 600;
+  --fw-bold:    700;
+  --fw-display: 800;
+
+  /* Display letter-spacing: tight, −0.04em to −0.06em. */
+  --ls-display: -0.05em;
+  --ls-tight:   -0.02em;
+  --ls-mono:    0.02em; /* mono labels breathe slightly */
+
+  /* ── Spacing (8px base) ─────────────────────────────────────────────────*/
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* Shape: Swiss = flat. No radius, no shadow anywhere. */
+  --radius: 0;
+  --border: 1px solid var(--hairline);
+
+  /* 12-column grid helpers. */
+  --grid-cols: 12;
+  --grid-gap: var(--sp-5);
+  --control-pad: var(--sp-6);
+}
+
+/* ============================================================================
+   Base components — reusable classes the screens compose with.
+   ========================================================================== */
+
+/* ── Buttons ───────────────────────────────────────────────────────────────*/
+.ui-btn {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-tight);
+  border-radius: var(--radius);
+  border: var(--border);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-5);
+  height: 56px;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+}
+.ui-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Primary — ink fill, white text, 56px tall. */
+.ui-btn--primary {
+  background: var(--ink);
+  color: var(--on-ink);
+  border-color: var(--ink);
+}
+.ui-btn--primary:hover:not(:disabled) { opacity: 0.88; }
+
+/* Secondary — white, 1px ink border. */
+.ui-btn--secondary {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.ui-btn--secondary:hover:not(:disabled) { background: var(--ice); }
+
+/* ── Tabs ──────────────────────────────────────────────────────────────────*/
+.ui-tab {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-tight);
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-3) var(--sp-5);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.ui-tab--active {
+  background: var(--harbour);
+  color: var(--on-harbour);
+  border-color: var(--harbour);
+}
+.ui-tab--done { color: var(--ink-60); }
+
+/* ── Tag / chip ────────────────────────────────────────────────────────────*/
+.ui-chip {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-mono);
+  text-transform: uppercase;
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-1) var(--sp-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.ui-chip--ink    { background: var(--ink);    color: var(--on-ink);    border-color: var(--ink); }
+.ui-chip--signal { background: var(--signal); color: var(--ink);       border-color: var(--ink); }
+.ui-chip--outline{ background: var(--paper);  color: var(--ink);       border-color: var(--ink); }
+
+/* ── Section label (mono) ──────────────────────────────────────────────────*/
+.ui-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-mono);
+  text-transform: uppercase;
+  color: var(--ink-60);
+}
+
+/* ── Bar (ice track + fill) ────────────────────────────────────────────────*/
+.ui-bar {
+  position: relative;
+  width: 100%;
+  height: 16px;
+  background: var(--ice);         /* empty track is ice */
+  border: var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ui-bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  background: var(--harbour);     /* data bars are harbour */
+}
+.ui-bar__fill--signal { background: var(--signal); } /* weakest area */
+
+/* ── Hairline rule ─────────────────────────────────────────────────────────*/
+.ui-rule { border: 0; border-top: var(--border); margin: 0; }
+
+/* ============================================================================
+   Band ramp — lightness scale, NOT a traffic light.
+     Reactive   = white with ink border
+     Aware      = ice
+     Developing = harbour (white text)
+     Proactive  = ink (white text)
+   Use .band-<name> for a filled swatch/segment; the colour pairing is fixed.
+   ========================================================================== */
+.band-reactive   { background: var(--paper);   color: var(--ink);        border: var(--border); }
+.band-aware      { background: var(--ice);     color: var(--ink);        border: var(--border); }
+.band-developing { background: var(--harbour); color: var(--on-harbour); border: 1px solid var(--harbour); }
+.band-proactive  { background: var(--ink);     color: var(--on-ink);     border: 1px solid var(--ink); }
