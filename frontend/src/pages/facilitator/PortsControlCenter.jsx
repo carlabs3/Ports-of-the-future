@@ -1,14 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import {
-  RadarChart, PolarGrid, PolarAngleAxis, Radar,
-  BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip,
-} from 'recharts'
 import api from '../../utils/api.js'
 import EventWheel from '../../components/EventWheel.jsx'
 import { socket } from '../../utils/socket.js'
-import { COLOR, FONT, FS, FW, LS, HAIRLINE } from '../../styles/tokens.js'
+import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP } from '../../styles/tokens.js'
 
 // Read-only PARI observation board. It only reads and displays live PAR data;
 // it never triggers reveals, confirms actions, or writes anything.
@@ -67,6 +63,30 @@ const cardTitle = {
   letterSpacing: '0.12em', color: '#999', marginBottom: '1rem',
 }
 
+// Mono section label (tokens). Shared by the rebuilt tabs.
+const uiLabel = {
+  fontFamily: FONT.mono, fontSize: FS.label, fontWeight: FW.medium, letterSpacing: LS.mono,
+  textTransform: 'uppercase', color: COLOR.ink60, margin: 0,
+}
+
+// Single-select filter chip for the PAR tab. Active (a value chosen) reads
+// harbour; empty reads neutral.
+function FilterSelect({ value, onChange, placeholder, options }) {
+  const active = !!value
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      style={{
+        fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: active ? FW.bold : FW.regular,
+        border: `1px solid ${active ? COLOR.harbour : COLOR.ink}`, borderRadius: 0,
+        padding: '9px 12px', background: COLOR.paper, color: active ? COLOR.harbour : COLOR.ink,
+        cursor: 'pointer',
+      }}>
+      <option value="">{placeholder}</option>
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  )
+}
+
 export default function PortsControlCenter() {
   const { code } = useParams()
 
@@ -106,6 +126,10 @@ export default function PortsControlCenter() {
   const [joinedCount, setJoinedCount] = useState(0)
   const [shuffling, setShuffling]     = useState(false)
   const [shuffleMsg, setShuffleMsg]   = useState('')
+
+  // PAR tab: combinable filters + world-zone labels (for the filter dropdown).
+  const [filters, setFilters] = useState({ portSize: '', worldZone: '', team: '', band: '' })
+  const [worldZoneOptions, setWorldZoneOptions] = useState([]) // [{ optionId, label }]
 
   const joinUrl  = `${window.location.origin}/?code=${code}`
   const shortUrl = window.location.host // shown without the ?code= query string
@@ -164,6 +188,10 @@ export default function PortsControlCenter() {
     api.get('/api/par/measures')
       .then(res => setMeasuresCatalog(res.data || []))
       .catch(() => {})
+    // World-zone labels for the PAR filter dropdown (ids live in the data).
+    api.get('/api/par/questionnaire')
+      .then(res => setWorldZoneOptions(res.data?.demographics?.worldZone?.options || []))
+      .catch(() => {})
   }, [code, fetchResults, fetchStrategies, fetchOutcomes])
 
   // Live updates: join the room and listen for 'par:update'.
@@ -204,37 +232,52 @@ export default function PortsControlCenter() {
     }
   }, [code, fetchResults, fetchStrategies, fetchOutcomes])
 
-  // ── Aggregates (all client-side) ───────────────────────────────────────────
-  const submitted = individual.length
-  const scores = individual.map(r => r.score)
+  // ── PAR tab: combinable filters + filtered aggregates (all client-side) ─────
+  const anyFilter = !!(filters.portSize || filters.worldZone || filters.team || filters.band)
 
-  const globalMean = Math.round(mean(scores))
-  const minScore = scores.length ? Math.min(...scores) : 0
-  const maxScore = scores.length ? Math.max(...scores) : 0
+  const filteredRows = useMemo(() => rows.filter(r =>
+    (!filters.portSize  || r.portSize  === filters.portSize) &&
+    (!filters.worldZone || r.worldZone === filters.worldZone) &&
+    (!filters.team      || r.group     === filters.team) &&
+    (!filters.band      || r.band      === filters.band)
+  ), [rows, filters])
 
-  const radarData = useMemo(() => AREA_ORDER.map(id => ({
-    area: AREA_LABELS[id],
-    value: Math.round(mean(individual.map(r => r.areas?.[id] ?? 0)) * 10) / 10,
-  })), [individual])
+  const totalAnswers = rows.length         // all submissions this session
+  const shownCount   = filteredRows.length // after filters
+  // Anonymity floor: never show numbers/charts for fewer than 3 answers, so a
+  // Team + size + zone combination can't isolate one person on the projector.
+  const enoughToShow = shownCount >= 3
 
-  // Histogram: 10-wide score buckets (0–9, 10–19, ..., 100).
-  const histData = useMemo(() => {
-    const buckets = Array.from({ length: 10 }, (_, i) => ({
-      label: `${i * 10}–${i * 10 + 9}`, count: 0,
-    }))
-    for (const s of scores) {
-      const idx = Math.min(9, Math.floor(s / 10))
-      buckets[idx].count += 1
-    }
-    return buckets
-  }, [scores])
+  const fScores  = filteredRows.map(r => r.score)
+  const fAverage = fScores.length ? Math.round(mean(fScores)) : 0
+  const fMin     = fScores.length ? Math.min(...fScores) : 0
+  const fMax     = fScores.length ? Math.max(...fScores) : 0
 
-  const bandDist = useMemo(() => BAND_ORDER.map(b => ({
-    band: b,
-    label: BAND_CONFIG[b].label,
-    color: BAND_CONFIG[b].color,
-    count: individual.filter(r => r.band === b).length,
-  })), [individual])
+  // Average per area (0–20) over the filtered set, and the weakest area.
+  const areaMeans = AREA_ORDER.map(id => ({
+    id, label: AREA_LABELS[id],
+    value: filteredRows.length ? Math.round(mean(filteredRows.map(r => r.areas?.[id] ?? 0)) * 10) / 10 : 0,
+  }))
+  const weakestAreaId = areaMeans.reduce((min, a) => (a.value < min.value ? a : min), areaMeans[0]).id
+
+  // Histogram: 10-point bins (0–9 … 90–100) over the filtered set.
+  const histBins = Array.from({ length: 10 }, (_, i) => ({ label: `${i * 10}–${i * 10 + 9}`, count: 0 }))
+  for (const sc of fScores) histBins[Math.min(9, Math.floor(sc / 10))].count += 1
+  const histMax = Math.max(1, ...histBins.map(b => b.count))
+
+  // Band counts over the filtered set (ramp colours from tokens).
+  const bandCounts = BAND_ORDER.map(b => ({ band: b, count: filteredRows.filter(r => r.band === b).length }))
+
+  // By port size: avg score per size over the filtered set.
+  const sizeSummary = PORT_SIZE_ORDER
+    .map(size => {
+      const ss = filteredRows.filter(r => r.portSize === size).map(r => r.score)
+      return { size, label: PORT_SIZE_LABELS[size], count: ss.length, avg: ss.length ? Math.round(mean(ss)) : null }
+    })
+    .filter(s => s.count > 0)
+
+  // "N of M answered": people who answered out of people in the room.
+  const answeredDenom = Math.max(joinedCount, totalAnswers, 1)
 
   // Per-group stats — count/avg/band come from the backend aggregate; the
   // frontend only chooses the traffic-light status from the count.
@@ -445,18 +488,6 @@ export default function PortsControlCenter() {
       setTimeout(() => setSpinning(null), 1000)
     }
   }
-
-  // Port size breakdown (Q0) — only if there is portSize data.
-  const portSizeStats = useMemo(() => {
-    const present = rows.some(r => r.portSize)
-    if (!present) return null
-    return PORT_SIZE_ORDER
-      .map(size => {
-        const ss = rows.filter(r => r.portSize === size).map(r => r.score)
-        return { size, label: PORT_SIZE_LABELS[size], count: ss.length, avg: ss.length ? Math.round(mean(ss)) : null }
-      })
-      .filter(s => s.count > 0)
-  }, [rows])
 
   const STATUS_STYLE = {
     empty:     { dot: '#d4d4d4', label: 'No data',   color: '#999' },
@@ -831,95 +862,126 @@ export default function PortsControlCenter() {
         )}
 
         {/* 3 · RESULTADOS PARI (agregado) — phase: par / debrief */}
-        {(phase === 'par' || phase === 'debrief') && (
-        <div style={card}>
-          <div style={cardTitle}>PARI results · whole room</div>
+        {phase === 'par' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {submitted === 0 ? (
-            <p style={{ fontSize: 14, color: '#999', margin: 0 }}>No results yet. Waiting for submissions...</p>
+          {/* Filter bar */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, borderBottom: HAIRLINE, paddingBottom: 16 }}>
+            <span style={uiLabel}>Filter</span>
+            <FilterSelect value={filters.portSize}  onChange={v => setFilters(f => ({ ...f, portSize: v }))}  placeholder="All sizes" options={PORT_SIZE_ORDER.map(s => ({ value: s, label: PORT_SIZE_LABELS[s] }))} />
+            <FilterSelect value={filters.worldZone} onChange={v => setFilters(f => ({ ...f, worldZone: v }))} placeholder="All zones" options={worldZoneOptions.map(z => ({ value: z.optionId, label: z.label }))} />
+            <FilterSelect value={filters.team}      onChange={v => setFilters(f => ({ ...f, team: v }))}      placeholder="All teams" options={groups.map(g => ({ value: g, label: g }))} />
+            <FilterSelect value={filters.band}      onChange={v => setFilters(f => ({ ...f, band: v }))}      placeholder="All bands" options={BAND_ORDER.map(b => ({ value: b, label: BAND_RAMP[b].label }))} />
+            {anyFilter && (
+              <>
+                <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60 }}>Showing {shownCount} of {totalAnswers} answers</span>
+                <button onClick={() => setFilters({ portSize: '', worldZone: '', team: '', band: '' })}
+                  style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '8px 14px', cursor: 'pointer' }}>
+                  Clear filters
+                </button>
+              </>
+            )}
+          </div>
+
+          {totalAnswers === 0 ? (
+            <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No results yet. Waiting for submissions…</p>
+          ) : !enoughToShow ? (
+            <div style={{ border: HAIRLINE, padding: '40px 28px', textAlign: 'center' }}>
+              <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, color: COLOR.ink, margin: '0 0 8px' }}>
+                Too few answers to show (minimum 3)
+              </p>
+              <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>
+                {anyFilter ? 'This filter combination could identify individuals.' : 'Waiting for more submissions.'}
+              </p>
+            </div>
           ) : (
             <>
-              {/* Headline */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '0.5rem 1.5rem', marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                  <span style={{ fontWeight: 900, fontSize: '3rem', color: '#0a0a0a', lineHeight: 1 }}>{globalMean}</span>
-                  <span style={{ fontSize: '0.9rem', color: '#999', fontWeight: 700 }}>/100 room average</span>
-                </div>
-                <span style={{ fontSize: '0.9rem', color: '#666' }}>Range {minScore}–{maxScore}</span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                {/* Area radar */}
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 8 }}>Average by area (0–20)</div>
-                  <div style={{ width: '100%', height: 260 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart data={radarData} outerRadius="72%">
-                        <PolarGrid />
-                        <PolarAngleAxis dataKey="area" tick={{ fontSize: 11, fill: '#555' }} />
-                        <Radar dataKey="value" stroke="#0a0a0a" fill="#0a0a0a" fillOpacity={0.35} />
-                        <Tooltip />
-                      </RadarChart>
-                    </ResponsiveContainer>
+              {/* Top: room average (sky) + area bars */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+                {/* Left sky block */}
+                <div style={{ background: COLOR.sky, color: COLOR.ink, border: HAIRLINE, padding: 28 }}>
+                  <p style={uiLabel}>Room average</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 8 }}>
+                    <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.mega, letterSpacing: LS.display, lineHeight: 0.9 }}>{fAverage}</span>
+                    <span style={{ fontSize: FS.h3, fontWeight: FW.bold }}>/100</span>
+                  </div>
+                  <p style={{ fontFamily: FONT.sans, fontSize: FS.body, margin: '14px 0 0' }}>Lowest {fMin} · Highest {fMax}</p>
+                  <p style={{ ...uiLabel, marginTop: 24 }}>{shownCount} of {answeredDenom} answered</p>
+                  <div style={{ height: 10, background: COLOR.paper, border: HAIRLINE, marginTop: 6 }}>
+                    <div style={{ height: '100%', width: `${Math.min(100, (shownCount / answeredDenom) * 100)}%`, background: COLOR.ink }} />
                   </div>
                 </div>
 
-                {/* Histograma de scores */}
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 8 }}>Distribution of individual scores</div>
-                  <div style={{ width: '100%', height: 260 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={histData} margin={{ top: 8, right: 8, bottom: 8, left: -20 }}>
-                        <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#888' }} interval={0} angle={-35} textAnchor="end" height={50} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#888' }} />
-                        <Tooltip />
-                        <Bar dataKey="count" fill="#0a0a0a" radius={[3, 3, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                {/* Right: area bars /20, weakest in signal */}
+                <div style={{ border: HAIRLINE, padding: 28 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
+                    <p style={uiLabel}>Average by area (out of 20)</p>
+                    <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink, background: COLOR.signal, border: HAIRLINE, padding: '2px 8px' }}>
+                      Weakest: {AREA_LABELS[weakestAreaId]}
+                    </span>
                   </div>
-                </div>
-              </div>
-
-              {/* Band distribution */}
-              <div style={{ marginTop: '1.5rem' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 10 }}>Band distribution</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
-                  {bandDist.map(b => (
-                    <div key={b.band} style={{ border: '1px solid #e5e5e5', borderRadius: 10, padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ width: 12, height: 12, borderRadius: 3, background: b.color, flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0a0a0a' }}>{b.label}</div>
-                        <div style={{ fontSize: 11, color: '#999' }}>
-                          {b.count} · {submitted ? Math.round((b.count / submitted) * 100) : 0}%
+                  {areaMeans.map(a => {
+                    const weak = a.id === weakestAreaId
+                    return (
+                      <div key={a.id} style={{ padding: '8px 0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: weak ? FW.bold : FW.regular }}>{a.label}</span>
+                          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>{a.value}/20</span>
+                        </div>
+                        <div style={{ height: 14, background: COLOR.ice, border: HAIRLINE, position: 'relative' }}>
+                          <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${(a.value / 20) * 100}%`, background: weak ? COLOR.signal : COLOR.harbour }} />
                         </div>
                       </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Histogram — 10-point bins, upright labels */}
+              <div style={{ border: HAIRLINE, padding: 28 }}>
+                <p style={uiLabel}>Distribution of individual scores</p>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, marginTop: 20 }}>
+                  {histBins.map(b => (
+                    <div key={b.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, height: '100%' }}>
+                      <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end' }}>
+                        <div style={{ width: '100%', height: `${(b.count / histMax) * 100}%`, background: COLOR.harbour, border: b.count ? HAIRLINE : 'none' }} />
+                      </div>
+                      <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>{b.count}</span>
+                      <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60 }}>{b.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* Band distribution — one stacked bar, band ramp */}
+              <div style={{ border: HAIRLINE, padding: 28 }}>
+                <p style={uiLabel}>Band distribution</p>
+                <div style={{ display: 'flex', border: HAIRLINE, marginTop: 16, minHeight: 56 }}>
+                  {bandCounts.filter(b => b.count > 0).map((b, i) => {
+                    const ramp = BAND_RAMP[b.band]
+                    return (
+                      <div key={b.band} title={`${ramp.label}: ${b.count}`}
+                        style={{ flex: b.count, borderLeft: i === 0 ? 'none' : HAIRLINE, background: ramp.bg, color: ramp.text, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '8px 6px' }}>
+                        <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold }}>{b.count}</span>
+                        <span style={{ fontFamily: FONT.sans, fontSize: FS.micro }}>{ramp.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* By port size summary line */}
+              {sizeSummary.length > 0 && (
+                <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink, margin: 0 }}>
+                  <span style={{ ...uiLabel, marginRight: 12 }}>By port size</span>
+                  {sizeSummary.map((ps, i) => (
+                    <span key={ps.size}>{i > 0 ? '    ·    ' : ''}{ps.label} {ps.avg}/100 ({ps.count})</span>
+                  ))}
+                </p>
+              )}
             </>
           )}
         </div>
-
-        )}
-
-        {/* 4 · BREAKDOWN BY PORT SIZE (Q0) — phase: par / debrief */}
-        {(phase === 'par' || phase === 'debrief') && portSizeStats && (
-          <div style={card}>
-            <div style={cardTitle}>Average by port size</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem' }}>
-              {portSizeStats.map(ps => (
-                <div key={ps.size} style={{ border: '1px solid #e5e5e5', borderRadius: 10, padding: '0.85rem 1rem' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0a0a0a', marginBottom: 6 }}>{ps.label}</div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 24, fontWeight: 900, color: '#0a0a0a' }}>{ps.avg}</span>
-                    <span style={{ fontSize: 12, color: '#999' }}>/100 avg</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{ps.count} port{ps.count !== 1 ? 's' : ''}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         )}
 
       </div>
