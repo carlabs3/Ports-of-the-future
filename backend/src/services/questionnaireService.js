@@ -6,20 +6,21 @@ import { AREAS, QUESTIONS, DEMOGRAPHICS } from '../config/parQuestionnaire.js'
 // for every option — never spreading the whole option object, so a `score`
 // field cannot leak into the output even if the config gains new fields.
 
-// Normalise an option collection to [{ optionId, label }].
+// Normalise an option collection to [{ optionId, label, description? }].
 // Handles both config shapes:
-//   - object keyed by id:  { small: { label }, ... }  (e.g. portSize)
-//   - array of entries:    [ { id, label }, ... ]      (e.g. worldZone)
-// Only optionId and label are ever copied — nothing else.
+//   - object keyed by id:  { small: { label, description }, ... }  (portSize)
+//   - array of entries:    [ { id, label }, ... ]                  (worldZone)
+// Only optionId, label and an optional (non-scored) description are ever copied
+// — `score` is NEVER included, so it cannot leak into the public payload.
 function toPublicOptions(options) {
   if (!options) return []
+  const pick = (optionId, label, description) => (
+    description != null ? { optionId, label, description } : { optionId, label }
+  )
   if (Array.isArray(options)) {
-    return options.map(opt => ({ optionId: opt.id, label: opt.label }))
+    return options.map(opt => pick(opt.id, opt.label, opt.description))
   }
-  return Object.entries(options).map(([optionId, opt]) => ({
-    optionId,
-    label: opt.label,
-  }))
+  return Object.entries(options).map(([optionId, opt]) => pick(optionId, opt.label, opt.description))
 }
 
 export function getPublicQuestionnaire() {

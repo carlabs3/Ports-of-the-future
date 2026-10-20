@@ -35,15 +35,20 @@ export function SessionProvider({ children }) {
         api.get(`/api/sessions/${saved.code}/info`)
           .then(res => {
             if (res.data.status === 'active') {
-              participantDataRef.current = { code: saved.code, name: saved.name, group: saved.group }
               setSessionCode(saved.code)
               setParticipantName(saved.name || '')
               setParticipantGroup(saved.group || '')
-              socket.emit('session:join', {
-                code:  saved.code,
-                name:  saved.name,
-                group: saved.group,
-              })
+              // Only (re)join a team once one has been chosen. The join marker is
+              // written on "Before you start"; before that the device has a code
+              // but no group, and session:join requires a group.
+              if (saved.group) {
+                participantDataRef.current = { code: saved.code, name: saved.name, group: saved.group }
+                socket.emit('session:join', {
+                  code:  saved.code,
+                  name:  saved.name,
+                  group: saved.group,
+                })
+              }
             } else {
               localStorage.removeItem(key)
             }

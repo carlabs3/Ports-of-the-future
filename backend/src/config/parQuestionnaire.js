@@ -123,22 +123,26 @@ export const DEMOGRAPHICS = {
   portSize: {
     text: 'What is the size of your port?',
     scored: false,
+    // `description` is shown under each option on the "Before you start" screen.
     options: {
-      small:  { label: 'Small' },
-      medium: { label: 'Medium' },
-      large:  { label: 'Large' },
+      small:  { label: 'Small',  description: 'under 500,000 TEU a year, or mostly bulk, ferry or regional traffic.' },
+      medium: { label: 'Medium', description: '500,000 to 2 million TEU a year.' },
+      large:  { label: 'Large',  description: 'over 2 million TEU a year; a major international gateway.' },
     },
   },
   worldZone: {
     text: 'In which world zone is your port located?',
     scored: false,
-    // TODO: confirmar taxonomía de zonas con el cliente
-    // Provisional placeholders only — NOT an authoritative list. Do not rely on
-    // these values; they exist so the field has a shape until the client
-    // confirms the real taxonomy in a later phase.
+    // Authoritative zone taxonomy (confirmed with the client). Array shape, so
+    // each option carries its own stable id.
     options: [
-      // { id: 'zone-a', label: 'Example zone A (PROVISIONAL)' },
-      // { id: 'zone-b', label: 'Example zone B (PROVISIONAL)' },
+      { id: 'europe',          label: 'Europe' },
+      { id: 'africa',          label: 'Africa' },
+      { id: 'middle-east',     label: 'Middle East' },
+      { id: 'asia',            label: 'Asia' },
+      { id: 'oceania',         label: 'Oceania' },
+      { id: 'north-america',   label: 'North America' },
+      { id: 'latam-caribbean', label: 'Latin America & Caribbean' },
     ],
   },
 }

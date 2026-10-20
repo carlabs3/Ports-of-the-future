@@ -2,120 +2,62 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSession } from '../../context/SessionContext.jsx'
 import api from '../../utils/api.js'
+import { COLOR, FONT, FS, FW, LS, HAIRLINE } from '../../styles/tokens.js'
+
+// Join = session code only. Team, port size and world zone move to the
+// "Before you start" step (PariCalculator). The code is prefilled from the QR
+// (?code=…). We only write a lightweight participant marker here; the team is
+// added to it when the participant picks one on the next screen.
 
 const s = {
   page: {
-    flex: 1,
-    background: '#f5f5f5',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '2rem 1rem',
-    minHeight: 'calc(100vh - 60px)',
+    flex: 1, minHeight: 'calc(100vh - 52px)', background: COLOR.paper,
+    display: 'flex', flexDirection: 'column',
   },
-  card: {
-    background: '#ffffff',
-    width: '100%',
-    maxWidth: '390px',
-    borderRadius: '16px',
-    border: '1px solid #e5e5e5',
-    padding: '32px',
+  hero: {
+    background: COLOR.sky, color: COLOR.ink, padding: '40px 24px 36px',
+    borderBottom: HAIRLINE,
   },
-  logo: {
-    fontWeight: 900,
-    fontSize: '1.6rem',
-    letterSpacing: '-0.02em',
-    marginBottom: '0.3rem',
-    textTransform: 'uppercase',
-    color: '#0a0a0a',
+  heroInner: { maxWidth: 480, margin: '0 auto', width: '100%' },
+  title: {
+    fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1,
+    letterSpacing: LS.display, lineHeight: 1.02, margin: 0,
   },
-  asterisk: { color: '#0a0a0a' },
   tagline: {
-    fontSize: '0.75rem',
-    color: '#999',
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    marginBottom: '2.5rem',
+    fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono,
+    textTransform: 'uppercase', color: COLOR.ink, marginTop: 12,
   },
-  field: { marginBottom: '1.8rem' },
+  body: { maxWidth: 480, margin: '0 auto', width: '100%', padding: '32px 24px', flex: 1 },
+  intro: { fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, lineHeight: 1.5, margin: '0 0 28px' },
   label: {
-    display: 'block',
-    fontSize: '11px',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.1em',
-    color: '#666',
-    marginBottom: '0.5rem',
-  },
-  hint: {
-    fontSize: '0.68rem',
-    color: '#bbb',
-    marginTop: '0.35rem',
-    lineHeight: 1.5,
+    display: 'block', fontFamily: FONT.mono, fontSize: FS.label, fontWeight: FW.medium,
+    letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, marginBottom: 10,
   },
   input: {
-    width: '100%',
-    border: '1px solid #e5e5e5',
-    borderRadius: '12px',
-    padding: '0.6rem 0.75rem',
-    fontSize: '1.1rem',
-    background: '#ffffff',
-    outline: 'none',
-    letterSpacing: '0.05em',
-    fontWeight: 700,
-    color: '#0a0a0a',
-    boxSizing: 'border-box',
+    width: '100%', border: HAIRLINE, borderRadius: 0, padding: '16px 18px',
+    fontFamily: FONT.mono, fontSize: FS.h3, fontWeight: FW.bold, letterSpacing: '0.12em',
+    textTransform: 'uppercase', background: COLOR.paper, color: COLOR.ink,
+    outline: 'none', boxSizing: 'border-box',
   },
-  groupRow: {
-    display: 'flex',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
-  },
-  chip: (active) => ({
-    padding: '0.45rem 1rem',
-    fontSize: '0.75rem',
-    fontWeight: 700,
-    letterSpacing: '0.06em',
-    borderRadius: '999px',
-    background: active ? '#0a0a0a' : '#f5f5f5',
-    color: active ? '#fff' : '#0a0a0a',
-    border: '1px solid #e5e5e5',
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-  }),
+  inputError: { borderColor: '#c0392b' },
+  error: { fontFamily: FONT.sans, fontSize: FS.sm, color: '#c0392b', marginTop: 8 },
   btn: {
-    width: '100%',
-    background: '#0a0a0a',
-    color: '#fff',
-    padding: '1rem',
-    fontSize: '0.9rem',
-    letterSpacing: '0.1em',
-    borderRadius: '999px',
-    marginTop: '0.5rem',
-    border: 'none',
-    cursor: 'pointer',
+    width: '100%', height: 56, marginTop: 28, border: HAIRLINE, borderRadius: 0,
+    background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body,
+    fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: 'pointer',
   },
-  error: {
-    fontSize: '0.78rem',
-    color: '#cc4444',
-    marginTop: '0.35rem',
-  },
-  fieldError: {
-    border: '1px solid #cc4444',
-  },
+  btnDisabled: { opacity: 0.4, cursor: 'not-allowed' },
 }
 
 export default function JoinSession() {
   const [searchParams] = useSearchParams()
   const codeFromUrl = searchParams.get('code')
 
-  const [code,       setCode]       = useState('')
-  const [group,      setGroup]      = useState('')
-  const [groups,     setGroups]     = useState([])
-  const [codeError,  setCodeError]  = useState('')
-  const [groupError, setGroupError] = useState('')
+  const [code,      setCode]      = useState('')
+  const [codeError, setCodeError] = useState('')
+  const [ready,     setReady]     = useState(false) // session exists and is active
 
-  const { joinSession, clearSession } = useSession()
+  const { clearSession } = useSession()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -123,27 +65,28 @@ export default function JoinSession() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (codeFromUrl) setCode(codeFromUrl.toUpperCase())
+    if (codeFromUrl) setCode(formatCode(codeFromUrl))
   }, [codeFromUrl])
 
+  // Live session lookup — mirrors the old behaviour but only reads status.
   useEffect(() => {
     const clean = code.replace('-', '')
-    if (clean.length < 8) { setGroups([]); setCodeError(''); return }
+    if (clean.length < 8) { setReady(false); setCodeError(''); return }
     api.get(`/api/sessions/${code}/info`)
       .then(res => {
-        const { status, groups: g } = res.data
+        const { status } = res.data
         if (status === 'draft') {
-          setGroups([])
+          setReady(false)
           setCodeError("The workshop hasn't started yet. Wait for the facilitator.")
         } else if (status === 'closed') {
-          setGroups([])
+          setReady(false)
           setCodeError('This workshop has ended.')
         } else {
-          setGroups(g || [])
+          setReady(true)
           setCodeError('')
         }
       })
-      .catch(() => { setGroups([]); setCodeError('Session not found') })
+      .catch(() => { setReady(false); setCodeError('Session not found') })
   }, [code])
 
   function formatCode(val) {
@@ -154,81 +97,55 @@ export default function JoinSession() {
 
   function handleSubmit(e) {
     e.preventDefault()
-    let valid = true
-
     if (!code || code.length < 9) {
       setCodeError('Enter a valid code (e.g. PORT-4872)')
-      valid = false
+      return
     }
-    if (!group) {
-      setGroupError('Select a group')
-      valid = false
-    }
-    if (!valid) return
+    if (!ready) return
 
+    // Lightweight marker — the team is added on "Before you start". The marker
+    // guards the questionnaire/result screens against a reused device.
     localStorage.setItem(`ports_participant_${code}`, JSON.stringify({
-      code, name: 'Anónimo', group,
+      code, name: 'Anonymous',
       joinedAt: new Date().toISOString(),
     }))
-    joinSession(code, 'Anónimo', group)
     navigate(`/session/${code}/par`)
   }
 
+  const canJoin = code.length >= 9 && ready
+
   return (
     <div style={s.page}>
-      <div style={s.card}>
-        <div style={s.logo}>
-          Ports of the Future
+      <div style={s.hero}>
+        <div style={s.heroInner}>
+          <h1 style={s.title}>Ports of the Future</h1>
+          <p style={s.tagline}>Port Adaptation Readiness Index</p>
         </div>
-        <p style={s.tagline}>Port Adaptation Readiness Index</p>
-        <p style={{ fontSize: '12px', color: '#666', marginBottom: '16px', lineHeight: 1.5 }}>
+      </div>
+
+      <div style={s.body}>
+        <p style={s.intro}>
           A short individual questionnaire about your port's readiness for climate adaptation.
         </p>
 
         <form onSubmit={handleSubmit}>
+          <label style={s.label} htmlFor="code">Session code</label>
+          <input
+            id="code"
+            style={{ ...s.input, ...(codeError ? s.inputError : {}) }}
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            value={code}
+            onChange={e => { setCode(formatCode(e.target.value)); setCodeError('') }}
+            placeholder="PORT-4872"
+            maxLength={9}
+          />
+          {codeError && <div style={s.error}>{codeError}</div>}
 
-          {/* Code */}
-          <div style={s.field}>
-            <label style={s.label} htmlFor="code">Session code</label>
-            <input
-              id="code"
-              style={{ ...s.input, ...(codeError ? s.fieldError : {}) }}
-              type="text"
-              value={code}
-              onChange={e => { setCode(formatCode(e.target.value)); setCodeError('') }}
-              placeholder="PORT-4872"
-              maxLength={9}
-            />
-            {codeError && <div style={s.error}>{codeError}</div>}
-          </div>
-
-          {/* Group */}
-          {groups.length > 0 && (
-            <div style={s.field}>
-              <label style={s.label}>Your group</label>
-              <div style={s.groupRow}>
-                {groups.map(g => (
-                  <button
-                    key={g}
-                    type="button"
-                    style={s.chip(group === g)}
-                    onClick={() => { setGroup(g); setGroupError('') }}
-                  >
-                    {g}
-                  </button>
-                ))}
-              </div>
-              {groupError && <div style={{ ...s.error, marginTop: '0.5rem' }}>{groupError}</div>}
-            </div>
-          )}
-
-          <p style={{ fontSize: '11px', color: '#999', lineHeight: 1.5, marginBottom: '16px', marginTop: 0 }}>
-            Your questionnaire answers are collected anonymously for the workshop
-            results. They are not linked to any name and are not shared with third
-            parties.
-          </p>
-
-          <button style={s.btn} type="submit">Join →</button>
+          <button type="submit" style={{ ...s.btn, ...(canJoin ? {} : s.btnDisabled) }} disabled={!canJoin}>
+            Join →
+          </button>
         </form>
       </div>
     </div>

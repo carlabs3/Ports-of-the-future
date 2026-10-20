@@ -48,3 +48,27 @@ test('portSize is present in the demographic output', () => {
   assert.ok(Array.isArray(q.demographics.portSize.options))
   assert.ok(q.demographics.portSize.options.length > 0)
 })
+
+test('portSize options carry a non-empty description', () => {
+  const q = getPublicQuestionnaire()
+  for (const opt of q.demographics.portSize.options) {
+    assert.equal(typeof opt.description, 'string')
+    assert.ok(opt.description.length > 0, `${opt.optionId} missing description`)
+  }
+})
+
+test('worldZone exposes the 7 confirmed zones with optionId + label', () => {
+  const q = getPublicQuestionnaire()
+  const opts = q.demographics.worldZone.options
+  assert.ok(Array.isArray(opts))
+  assert.equal(opts.length, 7)
+  const labels = opts.map(o => o.label)
+  assert.deepEqual(labels, [
+    'Europe', 'Africa', 'Middle East', 'Asia', 'Oceania',
+    'North America', 'Latin America & Caribbean',
+  ])
+  for (const opt of opts) {
+    assert.equal(typeof opt.optionId, 'string')
+    assert.ok(opt.optionId.length > 0, 'empty worldZone optionId')
+  }
+})
