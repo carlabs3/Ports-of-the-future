@@ -97,7 +97,7 @@ export default function PariResult() {
 
   // ── Waiting for the result to arrive ──────────────────────────────────────
   if (!result || result.score == null) return (
-    <div style={{ minHeight: 'calc(100dvh - 52px)', background: COLOR.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
+    <div style={{ minHeight: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
       <div style={{ fontSize: '3rem', marginBottom: '1.25rem' }}>⏳</div>
       <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, maxWidth: 300, lineHeight: 1.65 }}>
         Calculating your PAR Index…
@@ -112,7 +112,7 @@ export default function PariResult() {
   const weakestId = AREA_ORDER.reduce((min, id) => (areas[id] ?? 0) < (areas[min] ?? 0) ? id : min, AREA_ORDER[0])
 
   return (
-    <div style={{ background: COLOR.paper, minHeight: 'calc(100dvh - 52px)', fontFamily: FONT.sans }}>
+    <div style={{ background: COLOR.paper, minHeight: '100dvh', fontFamily: FONT.sans }}>
       {/* ═══ HEADER — score on a harbour block ═══ */}
       <div style={{ background: COLOR.harbour, color: COLOR.onHarbour, borderBottom: HAIRLINE }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '28px 20px 32px' }}>

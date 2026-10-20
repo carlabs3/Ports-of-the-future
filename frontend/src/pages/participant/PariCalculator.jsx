@@ -161,7 +161,7 @@ export default function PariCalculator() {
   if (!hasParticipant) return null
 
   if (loadError) return (
-    <div style={{ minHeight: 'calc(100dvh - 52px)', background: COLOR.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
+    <div style={{ minHeight: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
       <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📡</div>
       <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, maxWidth: 320, lineHeight: 1.6, marginBottom: '1.5rem' }}>
         We couldn't load the questionnaire. Please check your connection.
@@ -174,7 +174,7 @@ export default function PariCalculator() {
   )
 
   if (!questionnaire) return (
-    <div style={{ minHeight: 'calc(100dvh - 52px)', background: COLOR.paper, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ minHeight: '100dvh', background: COLOR.paper, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <DotsLoader />
     </div>
   )
@@ -255,7 +255,7 @@ export default function PariCalculator() {
     }
 
     return (
-      <div style={{ minHeight: 'calc(100dvh - 52px)', background: COLOR.paper, display: 'flex', flexDirection: 'column', fontFamily: FONT.sans }}>
+      <div style={{ minHeight: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', fontFamily: FONT.sans }}>
         {/* Sky header */}
         <div style={{ background: COLOR.sky, color: COLOR.ink, padding: '32px 20px 28px', borderBottom: HAIRLINE }}>
           <div style={{ maxWidth: 560, margin: '0 auto', width: '100%' }}>
@@ -359,7 +359,7 @@ export default function PariCalculator() {
   const qNumber = String(stepIndex + 1).padStart(2, '0')
 
   return (
-    <div style={{ height: 'calc(100dvh - 52px)', background: COLOR.paper, display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: FONT.sans }}>
+    <div style={{ height: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: FONT.sans }}>
 
       {/* Sky header: big question number + 10-segment progress */}
       <div style={{ background: COLOR.sky, color: COLOR.ink, borderBottom: HAIRLINE, flexShrink: 0 }}>

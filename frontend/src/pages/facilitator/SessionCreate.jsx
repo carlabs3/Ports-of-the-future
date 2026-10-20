@@ -10,7 +10,7 @@ const MAX_TEAMS = 8
 const teamNames = (count) => Array.from({ length: count }, (_, i) => `Team ${String.fromCharCode(65 + i)}`)
 
 const s = {
-  page: { flex: 1, minHeight: 'calc(100vh - 52px)', background: COLOR.paper, padding: '48px 24px' },
+  page: { flex: 1, minHeight: 'calc(100vh - 56px)', background: COLOR.paper, padding: '48px 24px' },
   inner: { maxWidth: 560, margin: '0 auto' },
   title: { fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, color: COLOR.ink, margin: '0 0 32px' },
   card: { border: HAIRLINE, padding: 28 },

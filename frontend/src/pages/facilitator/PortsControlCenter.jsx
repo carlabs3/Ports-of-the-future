@@ -537,7 +537,7 @@ export default function PortsControlCenter() {
   const nextPhase = PHASES[currentIndex + 1]
 
   return (
-    <div style={{ background: COLOR.paper, minHeight: 'calc(100vh - 52px)', fontFamily: FONT.sans, color: COLOR.ink }}>
+    <div style={{ background: COLOR.paper, minHeight: '100vh', fontFamily: FONT.sans, color: COLOR.ink }}>
 
       {/* ═══ HEADER — title · phase tabs · code · End session ═══ */}
       <header style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', padding: '16px 24px', borderBottom: HAIRLINE }}>

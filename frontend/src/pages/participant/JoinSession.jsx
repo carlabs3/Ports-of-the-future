@@ -11,7 +11,7 @@ import { COLOR, FONT, FS, FW, LS, HAIRLINE } from '../../styles/tokens.js'
 
 const s = {
   page: {
-    flex: 1, minHeight: 'calc(100vh - 52px)', background: COLOR.paper,
+    flex: 1, minHeight: '100vh', background: COLOR.paper,
     display: 'flex', flexDirection: 'column',
   },
   hero: {
