@@ -57,6 +57,16 @@
   --fs-label:   calc(12px * var(--type-scale)); /* mono section labels */
   --fs-micro:   calc(11px * var(--type-scale));
 
+  /* Landing-page editorial display sizes — bespoke to the public page and larger
+     than the app's component scale. Responsive via clamp(mobile → desktop), so
+     they need no media queries. Kept here so tokens.css stays the single source
+     of sizes. Not multiplied by --type-scale (the landing is not projected). */
+  --fs-landing-hero:  clamp(52px, 8.5vw, 104px); /* hero H1 */
+  --fs-landing-stat:  clamp(56px, 9vw, 112px);   /* big stat numbers */
+  --fs-landing-h2:    clamp(34px, 5vw, 64px);    /* section H2 */
+  --fs-landing-title: clamp(26px, 3.4vw, 32px);  /* tile / list titles */
+  --fs-landing-lead:  clamp(18px, 2.2vw, 22px);  /* hero + lead paragraphs */
+
   /* Weights (Inter Tight). Display is 800. */
   --fw-regular: 400;
   --fw-medium:  500;
