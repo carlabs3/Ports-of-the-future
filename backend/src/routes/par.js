@@ -176,6 +176,49 @@ export default function parRouter(io) {
     }
   })
 
+  // Facilitator-only: wheel composition for ONE team, revealed only after every
+  // table is locked (same gate as the draw). Returns the exposure weights so the
+  // client can render the wheel + "what this wheel holds" legend BEFORE spinning.
+  // Does NOT draw — no event is chosen and nothing is persisted.
+  router.get('/:code/strategy/:group/wheel', authMiddleware, async (req, res) => {
+    try {
+      const { code, group } = req.params
+      const strategy = await TeamStrategy.findOne({ sessionCode: code, group })
+      if (!strategy) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+
+      // Same gate as the draw: exposure weights are only revealed once every
+      // table is locked, so no measure decision can still be contaminated.
+      const all = await TeamStrategy.find({ sessionCode: code }).select('group confirmed -_id')
+      const pending = all.filter(s => !s.confirmed).map(s => s.group)
+      if (all.length === 0 || pending.length > 0) {
+        return res.status(409).json({
+          error: `Todas las mesas deben confirmar sus medidas antes de abrir la ruleta. Pendientes: ${pending.join(', ') || '—'}`,
+          pending,
+        })
+      }
+
+      const port = PORTS_BY_ID[strategy.portId]
+      const exposure = EVENT_CODES.map(c => ({
+        code: c,
+        name: EVENTS_BY_CODE[c]?.name || c,
+        weight: port?.exposureWeights?.[c] || 0,
+      }))
+      const cultureBand = await computeEffectiveCultureBand(code, group, strategy.measures || [])
+      res.json({
+        group,
+        portName:   port?.name || null,
+        exposure,                        // [{ code, name, weight }] — weights sum 10
+        measures:   strategy.measures || [],
+        cultureBand,
+        drawn:      !!strategy.drawnEvent,
+        eventCode:  strategy.drawnEvent || null,
+      })
+    } catch (err) {
+      console.error('PAR wheel error:', err.message)
+      res.status(500).json({ error: 'Error al obtener la ruleta' })
+    }
+  })
+
   // Facilitator-only: spin the roulette for a table. Draws an event from the
   // port's SECRET exposure weights, computes preparedness with the table's
   // measures + effective culture band, and stores the outcome snapshot.

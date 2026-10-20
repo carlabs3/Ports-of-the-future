@@ -2,9 +2,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
-import EventWheel from '../../components/EventWheel.jsx'
+import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
 import { socket } from '../../utils/socket.js'
 import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP } from '../../styles/tokens.js'
+
+// Culture multiplier by band (display only — the backend applies it in scoring).
+const CULTURE_FACTOR = { reactive: 0.8, aware: 0.9, developing: 1.0, proactive: 1.1 }
 
 // Read-only PARI observation board. It only reads and displays live PAR data;
 // it never triggers reveals, confirms actions, or writes anything.
@@ -115,7 +118,10 @@ export default function PortsControlCenter() {
   // Phase 8 — roulette outcomes
   const [outcomes, setOutcomes] = useState([]) // sorted desc by lossesAvoidedPct
   const [spinning, setSpinning] = useState(null) // group being spun (cosmetic)
-  const [wheel, setWheel]       = useState(null) // { group, slices, resultCode, eventName, preparedness, lossesAvoidedPct }
+  // Roulette: one team at a time, full screen.
+  const [wheelTeam, setWheelTeam]       = useState(null) // group on the roulette screen
+  const [wheelComp, setWheelComp]       = useState(null) // { portName, exposure, measures, cultureBand }
+  const [wheelOutcome, setWheelOutcome] = useState(null) // draw result once spun
 
   // Phase 9 — session close
   const [closed, setClosed]   = useState(false)
@@ -236,6 +242,15 @@ export default function PortsControlCenter() {
       socket.off('participant:joined', onJoined)
     }
   }, [code, fetchResults, fetchStrategies, fetchOutcomes])
+
+  // On entering the Roulette phase (all locked), auto-open the first team that
+  // still needs to spin so the screen shows one team at a time.
+  useEffect(() => {
+    if (phase === 'wheel' && allConfirmed && !wheelTeam) {
+      const first = groupStats.find(g => !drawnGroups.has(g.group))?.group || groupStats[0]?.group
+      if (first) openWheel(first)
+    }
+  }, [phase, allConfirmed]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── PAR tab: combinable filters + filtered aggregates (all client-side) ─────
   const anyFilter = !!(filters.portSize || filters.worldZone || filters.team || filters.band)
@@ -455,36 +470,51 @@ export default function PortsControlCenter() {
     }
   }
 
-  // Spin the roulette for a table. The backend decides the event (gated on all
-  // tables confirmed) and returns the outcome incl. exposure weights; the wheel
-  // animation is purely cosmetic and opens in an overlay.
-  async function drawWheel(group) {
-    if (spinning) return
-    if (!allConfirmed) {
-      window.alert(`All tables must confirm their measures first. Pending: ${pendingConfirm.join(', ') || '—'}`)
-      return
-    }
-    setSpinning(group)
+  // Open a team's wheel: fetch its composition (exposure + measures), revealed
+  // only after every team is locked. If the team already drew, also load its
+  // stored outcome so re-selecting it shows the result.
+  async function openWheel(group) {
+    setWheelTeam(group)
+    setWheelComp(null)
+    setWheelOutcome(null)
     try {
-      const res = await api.post(`/api/par/${code}/strategy/${encodeURIComponent(group)}/draw`)
-      const o = res.data.outcome
-      // Open the wheel overlay with the server-resolved event + exposure slices.
-      setWheel({
-        group,
-        portName: o.portName,
-        slices: o.exposure || [],
-        resultCode: o.eventCode,
-        eventName: o.eventName,
-        preparedness: o.preparedness,
-        lossesAvoidedPct: o.lossesAvoidedPct,
-      })
+      const res = await api.get(`/api/par/${code}/strategy/${encodeURIComponent(group)}/wheel`)
+      setWheelComp(res.data)
+      if (res.data.drawn) {
+        const o = outcomes.find(x => x.group === group)
+        if (o) setWheelOutcome(o)
+      }
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Could not open the wheel.')
+      setWheelTeam(null)
+    }
+  }
+
+  // Spin: the backend decides the event (gated on all teams confirmed) and
+  // returns the outcome; the wheel animation is purely cosmetic.
+  async function spinWheel() {
+    if (spinning || !wheelTeam) return
+    setSpinning(wheelTeam)
+    try {
+      const res = await api.post(`/api/par/${code}/strategy/${encodeURIComponent(wheelTeam)}/draw`)
+      setWheelOutcome(res.data.outcome)
       fetchOutcomes()
     } catch (err) {
       window.alert(err.response?.data?.error || 'Could not spin the wheel.')
     } finally {
-      // brief cosmetic delay so the "spinning" state is visible
-      setTimeout(() => setSpinning(null), 1000)
+      setTimeout(() => setSpinning(null), 1200)
     }
+  }
+
+  // The next team that still needs to spin (after the current one), or null.
+  function nextTeamToDraw() {
+    const order = groupStats.map(g => g.group)
+    const start = order.indexOf(wheelTeam)
+    for (let k = 1; k <= order.length; k++) {
+      const g = order[(start + k) % order.length]
+      if (!drawnGroups.has(g)) return g
+    }
+    return null
   }
 
   const currentIndex = Math.max(0, PHASES.findIndex(p => p.id === phase))
@@ -764,85 +794,143 @@ export default function PortsControlCenter() {
         </div>
         )}
 
-        {/* 2.5 · RULETA DE EVENTOS + RANKING — phase: wheel / debrief */}
-        {(phase === 'wheel' || phase === 'debrief') && (
-        <div style={card}>
-          <div style={cardTitle}>Event roulette &amp; ranking</div>
-          {!allConfirmed && (
-            <p style={{ fontSize: 12, color: '#b07a30', margin: '0 0 0.75rem' }}>
-              🔒 The wheel is locked until every table confirms its measures.
-              {pendingConfirm.length > 0 && <> Pending: <strong>{pendingConfirm.join(', ')}</strong>.</>}
-            </p>
-          )}
-          {outcomes.length === 0 ? (
-            <p style={{ fontSize: 14, color: '#999', margin: 0 }}>No tables yet.</p>
+        {/* 4 · ROULETTE — phase: wheel. One team at a time, full screen. */}
+        {phase === 'wheel' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {!allConfirmed ? (
+            <div style={{ border: HAIRLINE, padding: '48px 28px', textAlign: 'center' }}>
+              <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight, margin: '0 0 8px' }}>The roulette opens once every team is locked.</p>
+              {pendingConfirm.length > 0 && <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Waiting on: {pendingConfirm.join(', ')}.</p>}
+            </div>
+          ) : !wheelTeam || !wheelComp ? (
+            <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Select a team below to open its wheel.</p>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', color: '#999', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    <th style={{ padding: '6px 8px' }}>#</th>
-                    <th style={{ padding: '6px 8px' }}>Table</th>
-                    <th style={{ padding: '6px 8px' }}>Port</th>
-                    <th style={{ padding: '6px 8px' }}>Drawn event</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Preparedness</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>% avoided</th>
-                    <th style={{ padding: '6px 8px' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outcomes.map((o, i) => {
-                    const isTop = i === 0 && o.drawn
-                    const isSpin = spinning === o.group
-                    return (
-                      <tr key={o.group} style={{ borderTop: '1px solid #eee', background: isTop ? '#f0f7ee' : 'transparent' }}>
-                        <td style={{ padding: '8px', fontWeight: 700, color: isTop ? '#16a34a' : '#999' }}>{o.drawn ? i + 1 : '—'}</td>
-                        <td style={{ padding: '8px', fontWeight: 700, color: '#0a0a0a' }}>{o.group}{isTop ? ' 🏅' : ''}</td>
-                        <td style={{ padding: '8px', color: '#666' }}>{o.portName || '—'}</td>
-                        <td style={{ padding: '8px', color: '#0a0a0a' }}>
-                          {isSpin ? <span style={{ color: '#999' }}>Spinning…</span> : (o.drawnEvent || '—')}
-                        </td>
-                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#0a0a0a' }}>{o.preparedness != null ? o.preparedness.toFixed(1) : '—'}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 900, color: isTop ? '#16a34a' : '#0a0a0a' }}>{o.lossesAvoidedPct != null ? `${o.lossesAvoidedPct.toFixed(0)}%` : '—'}</td>
-                        <td style={{ padding: '8px', textAlign: 'right' }}>
-                          {(() => {
-                            const disabled = !!spinning || !allConfirmed
-                            return (
-                              <button
-                                onClick={() => drawWheel(o.group)}
-                                disabled={disabled}
-                                title={!allConfirmed ? 'All tables must confirm their measures first' : undefined}
-                                style={{ fontSize: 12, fontWeight: 600, color: disabled ? '#bbb' : '#fff', background: disabled ? '#e5e5e5' : '#0a0a0a', border: 'none', borderRadius: 999, padding: '4px 12px', cursor: disabled ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
-                              >
-                                {isSpin ? '🎡' : o.drawn ? 'Spin again' : 'Spin the wheel'}
-                              </button>
-                            )
-                          })()}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+                <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: 0 }}>{wheelTeam}</h2>
+                <span style={uiLabel}>{wheelComp.portName}</span>
+              </div>
 
-              {/* Debrief: per-measure breakdown for the top table (event already drawn). */}
-              {outcomes[0]?.drawn && outcomes[0].breakdown?.length > 0 && (
-                <div style={{ marginTop: '1rem', fontSize: 12, color: '#666' }}>
-                  <div style={{ fontWeight: 700, marginBottom: 6, color: '#0a0a0a' }}>
-                    Debrief · {outcomes[0].group} vs {outcomes[0].drawnEvent} (protection per measure, original → adjusted)
-                  </div>
-                  {outcomes[0].breakdown.map(b => (
-                    <div key={b.measureId} style={{ display: 'flex', gap: 8, padding: '3px 0', borderTop: '0.5px solid #f0f0f0' }}>
-                      <span style={{ flex: 1 }}>{b.measureId}. {b.name}</span>
-                      <span style={{ color: '#999' }}>{b.sOriginal} → <strong style={{ color: '#0a0a0a' }}>{b.sAdjusted}</strong></span>
-                    </div>
-                  ))}
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 460px) 1fr', gap: 32, alignItems: 'start' }}>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} size={440} />
                 </div>
-              )}
+
+                <div>
+                  {!wheelOutcome ? (
+                    <>
+                      <p style={uiLabel}>What this wheel holds · 10 slots</p>
+                      <div style={{ marginTop: 14, marginBottom: 24 }}>
+                        {wheelComp.exposure.filter(e => e.weight > 0).map(e => (
+                          <div key={e.code} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0', borderTop: HAIRLINE }}>
+                            <span style={{ flex: '0 0 110px', fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.bold }}>{EVENT_WORDS[e.code] || e.name}</span>
+                            <div style={{ flex: 1, display: 'flex', gap: 3 }}>
+                              {Array.from({ length: 10 }).map((_, i) => (
+                                <div key={i} style={{ flex: 1, height: 14, border: HAIRLINE, background: i < e.weight ? COLOR.harbour : COLOR.ice }} />
+                              ))}
+                            </div>
+                            <span style={{ flex: '0 0 42px', textAlign: 'right', fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>{e.weight}/10</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <p style={uiLabel}>Measures bought</p>
+                      <div style={{ marginTop: 10, marginBottom: 24 }}>
+                        {wheelComp.measures.length === 0 ? (
+                          <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>None.</p>
+                        ) : wheelComp.measures.map(id => {
+                          const m = measureById.get(id)
+                          return (
+                            <div key={id} style={{ display: 'flex', gap: 12, padding: '7px 0', borderTop: HAIRLINE }}>
+                              <span style={{ fontFamily: FONT.mono, fontWeight: FW.bold, minWidth: 28 }}>{id}</span>
+                              <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.body }}>{m?.name || `Measure ${id}`}</span>
+                              <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>🪙 {m?.cost ?? '—'}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      <button onClick={spinWheel} disabled={!!spinning}
+                        style={{ width: '100%', height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: spinning ? 'default' : 'pointer', opacity: spinning ? 0.6 : 1 }}>
+                        {spinning ? 'Spinning…' : 'Spin the wheel →'}
+                      </button>
+                    </>
+                  ) : (() => {
+                    const cb = wheelComp.cultureBand
+                    const coinsHelped = (wheelOutcome.breakdown || []).filter(b => b.sOriginal > 0)
+                      .reduce((s, b) => s + (measureById.get(b.measureId)?.cost || 0), 0)
+                    return (
+                      <>
+                        <p style={uiLabel}>The wheel drew</p>
+                        <h3 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: '6px 0 2px' }}>{EVENT_WORDS[wheelOutcome.eventCode] || wheelOutcome.eventCode}</h3>
+                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '0 0 20px' }}>{wheelOutcome.eventName || wheelOutcome.drawnEvent}</p>
+
+                        <div style={{ background: COLOR.harbour, color: COLOR.onHarbour, border: HAIRLINE, padding: '20px 24px', marginBottom: 24 }}>
+                          <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.mega, letterSpacing: LS.display, lineHeight: 0.9 }}>{Math.round(wheelOutcome.lossesAvoidedPct)}%</span>
+                          <span style={{ fontSize: FS.h3, fontWeight: FW.bold, marginLeft: 10 }}>of losses avoided</span>
+                        </div>
+
+                        {/* Measure · Protection · With culture */}
+                        <div style={{ border: HAIRLINE, marginBottom: 16 }}>
+                          <div style={{ display: 'flex', ...uiLabel, padding: '8px 12px', background: COLOR.ice }}>
+                            <span style={{ flex: 1 }}>Measure</span>
+                            <span style={{ flex: '0 0 90px', textAlign: 'right' }}>Protection</span>
+                            <span style={{ flex: '0 0 110px', textAlign: 'right' }}>With culture</span>
+                          </div>
+                          {(wheelOutcome.breakdown || []).length === 0 ? (
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, padding: '10px 12px', margin: 0 }}>No measures bought.</p>
+                          ) : wheelOutcome.breakdown.map(b => (
+                            <div key={b.measureId} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', borderTop: HAIRLINE, fontFamily: FONT.sans, fontSize: FS.sm }}>
+                              <span style={{ flex: 1 }}><span style={{ fontFamily: FONT.mono, fontWeight: FW.bold, marginRight: 8 }}>{b.measureId}</span>{b.name}</span>
+                              <span style={{ flex: '0 0 90px', textAlign: 'right', fontFamily: FONT.mono }}>{b.sOriginal}</span>
+                              <span style={{ flex: '0 0 110px', textAlign: 'right', fontFamily: FONT.mono, fontWeight: FW.bold }}>{b.sAdjusted}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, margin: '0 0 6px' }}>
+                          Culture: <strong>{BAND_RAMP[cb]?.label || '—'}</strong> · scores ×{(CULTURE_FACTOR[cb] ?? 1).toFixed(1)}
+                        </p>
+                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, margin: '0 0 24px' }}>
+                          Coins that helped: <strong>{coinsHelped}</strong> of {budget}
+                        </p>
+
+                        {nextTeamToDraw() && (
+                          <button onClick={() => openWheel(nextTeamToDraw())}
+                            style={{ width: '100%', height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: 'pointer' }}>
+                            Next: {nextTeamToDraw()} →
+                          </button>
+                        )}
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Queue strip — one cell per team */}
+          {allConfirmed && groupStats.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, borderTop: HAIRLINE, paddingTop: 16, flexWrap: 'wrap' }}>
+              {groupStats.map(g => {
+                const o = outcomes.find(x => x.group === g.group)
+                const isNow = g.group === wheelTeam
+                const done = drawnGroups.has(g.group)
+                const bg = isNow ? COLOR.signal : done ? COLOR.ink : COLOR.paper
+                const fg = isNow ? COLOR.ink : done ? COLOR.onInk : COLOR.ink
+                return (
+                  <button key={g.group} onClick={() => openWheel(g.group)}
+                    style={{ flex: '1 1 90px', border: HAIRLINE, borderRadius: 0, background: bg, color: fg, padding: '10px 8px', cursor: 'pointer', textAlign: 'left' }}>
+                    <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.bold }}>{g.group}</div>
+                    <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, marginTop: 2 }}>
+                      {done && o?.lossesAvoidedPct != null ? `${Math.round(o.lossesAvoidedPct)}%` : isNow ? 'now' : 'waiting'}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
-
         )}
 
         {/* 3 · RESULTADOS PARI (agregado) — phase: par / debrief */}
@@ -969,33 +1057,6 @@ export default function PortsControlCenter() {
         )}
 
       </div>
-
-      {/* Event wheel overlay (cosmetic spin; result shown regardless) */}
-      {wheel && (
-        <div
-          onClick={() => setWheel(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1.5rem' }}
-        >
-          <div onClick={e => e.stopPropagation()}
-            style={{ background: '#fff', borderRadius: 16, padding: '1.5rem', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 12px 40px rgba(0,0,0,0.3)' }}>
-            <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#999', marginBottom: '0.5rem' }}>
-              {wheel.group} · {wheel.portName || ''}
-            </div>
-            <EventWheel slices={wheel.slices} resultCode={wheel.resultCode} />
-            <div style={{ marginTop: 16, fontSize: 15 }}>
-              <div style={{ fontWeight: 900, fontSize: '1.2rem', color: '#0a0a0a' }}>{wheel.eventName}</div>
-              <div style={{ color: '#666', marginTop: 4 }}>
-                Preparedness <strong style={{ color: '#0a0a0a' }}>{wheel.preparedness?.toFixed(1)}</strong>
-                {' · '}<strong style={{ color: '#16a34a' }}>{wheel.lossesAvoidedPct?.toFixed(0)}%</strong> losses avoided
-              </div>
-            </div>
-            <button onClick={() => setWheel(null)}
-              style={{ marginTop: 18, background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 999, padding: '9px 24px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
