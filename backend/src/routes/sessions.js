@@ -5,7 +5,7 @@ import Participant from '../models/Participant.js'
 import TeamStrategy from '../models/TeamStrategy.js'
 import ParIndexResult from '../models/ParIndexResult.js'
 import { generateCode } from '../utils/generateCode.js'
-import { validatePortAssignments } from '../services/portAssignmentService.js'
+import { generateTeamNames, validateTeamCount, assignRandomPorts } from '../services/portAssignmentService.js'
 import { buildSessionSummary } from '../services/parSubmissionService.js'
 
 export default function sessionsRouter(io) {
@@ -38,19 +38,24 @@ export default function sessionsRouter(io) {
 
   router.post('/', async (req, res) => {
     try {
-      const { groups, name, portAssignments } = req.body
-      const groupList = groups || []
+      const { name, teamCount } = req.body
 
-      // Phase 6: validate port assignments (one distinct existing port per group).
-      const check = validatePortAssignments(groupList, portAssignments || [])
+      // Teams are generated server-side (Team A … Team H) from a count, and each
+      // team is assigned a RANDOM distinct port. The client never names teams or
+      // picks ports.
+      const count = Number(teamCount)
+      const check = validateTeamCount(count)
       if (!check.ok) return res.status(400).json({ error: check.error })
+
+      const groups = generateTeamNames(count)
+      const portAssignments = assignRandomPorts(groups)
 
       const code = await generateCode()
       const session = await Session.create({
         code,
         facilitatorId: req.user.id,
         name: name || '',
-        groups: groupList,
+        groups,
         portAssignments,
       })
 
@@ -62,6 +67,40 @@ export default function sessionsRouter(io) {
       res.status(201).json(session)
     } catch {
       res.status(500).json({ error: 'Error al crear sesión' })
+    }
+  })
+
+  // Facilitator: re-roll the random port assignment. Allowed ONLY before the
+  // Strategy phase (join/par) — once teams start locking measures against their
+  // port, re-shuffling would be unfair, so this returns 409 from 'strategy' on.
+  // Ports stay hidden on the projected screen until the Roulette tab regardless.
+  const SHUFFLE_BLOCKED_PHASES = ['strategy', 'wheel', 'debrief']
+  router.post('/:code/shuffle-ports', async (req, res) => {
+    try {
+      const { code } = req.params
+      const session = await Session.findOne({ code, facilitatorId: req.user.id })
+      if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
+
+      if (SHUFFLE_BLOCKED_PHASES.includes(session.phase)) {
+        return res.status(409).json({
+          error: 'Ports can no longer be shuffled: the Strategy phase has started.',
+          phase: session.phase,
+        })
+      }
+
+      const portAssignments = assignRandomPorts(session.groups || [])
+      session.portAssignments = portAssignments
+      await session.save()
+
+      // Re-point each team's strategy at its new port (measures stay untouched;
+      // in join/par they are still empty and no draw has happened).
+      await Promise.all(portAssignments.map(pa =>
+        TeamStrategy.updateOne({ sessionCode: code, group: pa.group }, { portId: pa.portId })
+      ))
+
+      res.json({ ok: true, portAssignments })
+    } catch {
+      res.status(500).json({ error: 'Could not shuffle the ports' })
     }
   })
 
