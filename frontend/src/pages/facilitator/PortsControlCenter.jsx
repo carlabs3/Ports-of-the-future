@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
 import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
+import PortIllustration from '../../components/PortIllustration.jsx'
 import { socket } from '../../utils/socket.js'
 import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP } from '../../styles/tokens.js'
 
@@ -827,8 +828,11 @@ export default function PortsControlCenter() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 460px) 1fr', gap: 32, alignItems: 'start' }}>
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} size={440} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+                  {wheelComp.illustrationMotifs?.length > 0 && (
+                    <PortIllustration motifs={wheelComp.illustrationMotifs} size={320} />
+                  )}
+                  <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} size={420} />
                 </div>
 
                 <div>
@@ -995,7 +999,10 @@ export default function PortsControlCenter() {
                         : diff > 0 ? `▲ ${diff} lucky` : `▼ ${-diff} unlucky`
                     return (
                       <div key={t.group} style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '16px 18px', borderTop: HAIRLINE }}>
-                        <div style={{ flex: '0 0 200px' }}>
+                        {t.illustrationMotifs?.length > 0 && (
+                          <PortIllustration motifs={t.illustrationMotifs} size={116} style={{ flexShrink: 0 }} />
+                        )}
+                        <div style={{ flex: '0 0 180px' }}>
                           <div style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold }}>{t.group} · {t.portName || '—'}</div>
                           <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60 }}>{t.eventName || 'not drawn'}</div>
                         </div>

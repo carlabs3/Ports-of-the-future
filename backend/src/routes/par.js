@@ -11,7 +11,7 @@ import { persistParSubmission, buildParRanking, computeParGroups } from '../serv
 import { validateMeasureSelection, getPublicMeasures, MEASURE_BUDGET } from '../services/measuresService.js'
 import { computeEffectiveCultureBand, computeCultureBand } from '../services/cultureService.js'
 import { computePreparedness, computeExpectedLossesAvoided, computeCoinsThatHelped } from '../services/preparednessService.js'
-import { drawEvent } from '../services/wheelService.js'
+import { drawEvent, topExposureEvents } from '../services/wheelService.js'
 
 const BAND_LABELS = {
   reactive:   'Reactive',
@@ -211,6 +211,9 @@ export default function parRouter(io) {
         exposure,                        // [{ code, name, weight }] — weights sum 10
         measures:   strategy.measures || [],
         cultureBand,
+        // Two highest-exposure events → illustration motifs (safe here: all
+        // teams are locked, so exposure is already revealed for this team).
+        illustrationMotifs: topExposureEvents(port?.exposureWeights || {}),
         drawn:      !!strategy.drawnEvent,
         eventCode:  strategy.drawnEvent || null,
       })
@@ -360,6 +363,8 @@ export default function parRouter(io) {
           expected,                                     // plan's expected (0–100, 2dp)
           coinsThatHelped: drawn ? computeCoinsThatHelped({ measures, event: drawn }) : 0,
           coinsSpent:      s.coinsSpent || 0,
+          // Two highest-exposure events → illustration motifs (debrief only).
+          illustrationMotifs: topExposureEvents(port?.exposureWeights || {}),
         }
       }))
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { computePreparedness, adjustScore, cultureFactor, computeExpectedLossesAvoided, computeCoinsThatHelped } from '../src/services/preparednessService.js'
-import { drawEvent } from '../src/services/wheelService.js'
+import { drawEvent, topExposureEvents } from '../src/services/wheelService.js'
 import { MEASURES } from '../src/config/measures.js'
 import { PORTS_BY_ID } from '../src/config/ports/index.js'
 
@@ -149,4 +149,16 @@ test('computeCoinsThatHelped ignores unknown ids and zero-protection measures', 
 
 test('computeExpectedLossesAvoided: no measures → 0', () => {
   assert.equal(computeExpectedLossesAvoided({ measures: [], cultureBand: 'developing', exposureWeights: PORTS_BY_ID[1].exposureWeights }), 0)
+})
+
+// ── Illustration motifs: the two highest-exposure events ─────────────────────
+test('topExposureEvents returns the two highest-weight events, ties by order', () => {
+  // Nord-Maris: SS4 WS3 RF1 DR1 SI1 → top 2 = SS, WS
+  assert.deepEqual(topExposureEvents(PORTS_BY_ID[1].exposureWeights), ['SS', 'WS'])
+  // Boreal: SI4 WS3 SS2 RF1 → top 2 = SI, WS
+  assert.deepEqual(topExposureEvents(PORTS_BY_ID[7].exposureWeights), ['SI', 'WS'])
+  // zero-weight events are excluded; empty → []
+  assert.deepEqual(topExposureEvents({ SS: 0, RF: 0 }), [])
+  // tie on weight breaks by canonical EVENT_CODES order (SS before RF)
+  assert.deepEqual(topExposureEvents({ RF: 2, SS: 2 }, 2), ['SS', 'RF'])
 })

@@ -24,3 +24,14 @@ export function drawEvent(portId, rng = Math.random) {
   const nonZero = EVENT_CODES.filter(c => (weights[c] || 0) > 0)
   return nonZero[nonZero.length - 1] || null
 }
+
+// The port's N highest-exposure events (default 2), as event codes. Used to pick
+// the illustration motifs. Ties break by the canonical EVENT_CODES order so the
+// result is deterministic. Pure — takes the weights, not the whole port.
+export function topExposureEvents(weights = {}, n = 2) {
+  return EVENT_CODES
+    .filter(c => (Number(weights[c]) || 0) > 0)
+    .sort((a, b) => ((Number(weights[b]) || 0) - (Number(weights[a]) || 0))
+      || (EVENT_CODES.indexOf(a) - EVENT_CODES.indexOf(b)))
+    .slice(0, n)
+}
