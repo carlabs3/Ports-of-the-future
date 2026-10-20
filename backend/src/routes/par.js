@@ -3,13 +3,14 @@ import { Resend } from 'resend'
 import { authMiddleware } from '../middleware/authMiddleware.js'
 import ParIndexResult from '../models/ParIndexResult.js'
 import TeamStrategy from '../models/TeamStrategy.js'
+import Session from '../models/Session.js'
 import { PORTS, PORTS_BY_ID } from '../config/ports/index.js'
 import { EVENTS_BY_CODE, EVENT_CODES } from '../config/events.js'
 import { getPublicQuestionnaire } from '../services/questionnaireService.js'
 import { persistParSubmission, buildParRanking, computeParGroups } from '../services/parSubmissionService.js'
 import { validateMeasureSelection, getPublicMeasures, MEASURE_BUDGET } from '../services/measuresService.js'
-import { computeEffectiveCultureBand } from '../services/cultureService.js'
-import { computePreparedness } from '../services/preparednessService.js'
+import { computeEffectiveCultureBand, computeCultureBand } from '../services/cultureService.js'
+import { computePreparedness, computeExpectedLossesAvoided, computeCoinsThatHelped } from '../services/preparednessService.js'
 import { drawEvent } from '../services/wheelService.js'
 
 const BAND_LABELS = {
@@ -319,6 +320,55 @@ export default function parRouter(io) {
     } catch (err) {
       console.error('PAR outcomes error:', err.message)
       res.status(500).json({ error: 'Error al obtener resultados de la ruleta' })
+    }
+  })
+
+  // Facilitator-only: DEBRIEF — luck vs strategy. For each team: the actual
+  // result (losses avoided from its draw) and the EXPECTED result (plan value
+  // across all events, weighted by exposure), plus coins that helped. Expected
+  // results are sent ONLY in the debrief phase, after all draws. Exposure
+  // weights are used server-side only — just the resulting numbers go out.
+  router.get('/:code/debrief', authMiddleware, async (req, res) => {
+    try {
+      const { code } = req.params
+      const session = await Session.findOne({ code, facilitatorId: req.user.id })
+      if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
+      if (session.phase !== 'debrief') {
+        return res.status(409).json({ error: 'Los resultados esperados solo están disponibles en la fase de Debrief.' })
+      }
+
+      const strategies = await TeamStrategy.find({ sessionCode: code })
+        .select('group portId measures coinsSpent drawnEvent lossesAvoidedPct -_id')
+
+      const teams = await Promise.all(strategies.map(async s => {
+        const port = PORTS_BY_ID[s.portId]
+        const measures = s.measures || []
+        // BASE culture band (from PARI mean); computeExpectedLossesAvoided applies
+        // the #19/#20 bump itself, matching the effective band used at draw time.
+        const baseBand = await computeCultureBand(code, s.group)
+        const expected = computeExpectedLossesAvoided({
+          measures, cultureBand: baseBand, exposureWeights: port?.exposureWeights || {},
+        })
+        const drawn = s.drawnEvent || null
+        return {
+          group:           s.group,
+          portName:        port?.name || null,
+          drawn:           !!drawn,
+          eventCode:       drawn,
+          eventName:       drawn ? (EVENTS_BY_CODE[drawn]?.name || drawn) : null,
+          result:          s.lossesAvoidedPct ?? null, // actual drawn outcome (0–100)
+          expected,                                     // plan's expected (0–100, 2dp)
+          coinsThatHelped: drawn ? computeCoinsThatHelped({ measures, event: drawn }) : 0,
+          coinsSpent:      s.coinsSpent || 0,
+        }
+      }))
+
+      // Sorted by the actual result desc; un-drawn teams (null) go last.
+      teams.sort((a, b) => (b.result ?? -1) - (a.result ?? -1))
+      res.json({ budget: MEASURE_BUDGET, teams })
+    } catch (err) {
+      console.error('PAR debrief error:', err.message)
+      res.status(500).json({ error: 'Error al obtener el debrief' })
     }
   })
 

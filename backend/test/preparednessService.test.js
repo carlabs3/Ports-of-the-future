@@ -1,8 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { computePreparedness, adjustScore, cultureFactor } from '../src/services/preparednessService.js'
+import { computePreparedness, adjustScore, cultureFactor, computeExpectedLossesAvoided, computeCoinsThatHelped } from '../src/services/preparednessService.js'
 import { drawEvent } from '../src/services/wheelService.js'
 import { MEASURES } from '../src/config/measures.js'
+import { PORTS_BY_ID } from '../src/config/ports/index.js'
+
+const round2 = x => Math.round(x * 100) / 100
 
 // The formula tests need measures with KNOWN protection scores for a chosen
 // event. Rather than depend on specific config values, build a synthetic set:
@@ -108,4 +111,42 @@ test('drawEvent never returns a zero-weight event for a port', () => {
     assert.notEqual(code, 'HW')
     assert.notEqual(code, 'WF')
   }
+})
+
+// ── Expected losses-avoided + coins that helped (luck vs strategy) ───────────
+// Exact cases from the B10 spec. cultureBand is the BASE band; the #19 bump to
+// Proactive (×1.1) is applied inside computeExpectedLossesAvoided. Per-event
+// values are unrounded; the weighted expected is rounded to 2 decimals.
+
+test('Nord-Maris #1+#19, base Developing → expected 57.18', () => {
+  const weights = PORTS_BY_ID[1].exposureWeights // SS4 RF1 HW0 WS3 DR1 WF0 SI1
+  const per = (e) => round2(computePreparedness({ measureIds: [1, 19], eventCode: e, cultureBand: 'proactive' }).rawLossesAvoidedPct)
+  assert.equal(per('SS'), 90.64)
+  assert.equal(per('WS'), 47.74)
+  assert.equal(per('RF'), 22.00)
+  assert.equal(per('DR'), 22.00)
+  assert.equal(per('SI'), 22.00)
+  assert.equal(computeExpectedLossesAvoided({ measures: [1, 19], cultureBand: 'developing', exposureWeights: weights }), 57.18)
+  assert.equal(computeCoinsThatHelped({ measures: [1, 19], event: 'SS' }), 6)
+})
+
+test('Boreal #24+#13+#19, base Developing → expected 65.62', () => {
+  const weights = PORTS_BY_ID[7].exposureWeights // SI4 WS3 SS2 RF1
+  const per = (e) => round2(computePreparedness({ measureIds: [24, 13, 19], eventCode: e, cultureBand: 'proactive' }).rawLossesAvoidedPct)
+  assert.equal(per('SI'), 86.01)
+  assert.equal(per('WS'), 82.06)
+  assert.equal(per('SS'), 22.00)
+  assert.equal(per('RF'), 22.00)
+  assert.equal(computeExpectedLossesAvoided({ measures: [24, 13, 19], cultureBand: 'developing', exposureWeights: weights }), 65.62)
+  assert.equal(computeCoinsThatHelped({ measures: [24, 13, 19], event: 'SS' }), 1)
+})
+
+test('computeCoinsThatHelped ignores unknown ids and zero-protection measures', () => {
+  assert.equal(computeCoinsThatHelped({ measures: [24, 13], event: 'WS' }), 3) // only #13 (cost 3)
+  assert.equal(computeCoinsThatHelped({ measures: [999], event: 'SS' }), 0)
+  assert.equal(computeCoinsThatHelped({ measures: [], event: 'SS' }), 0)
+})
+
+test('computeExpectedLossesAvoided: no measures → 0', () => {
+  assert.equal(computeExpectedLossesAvoided({ measures: [], cultureBand: 'developing', exposureWeights: PORTS_BY_ID[1].exposureWeights }), 0)
 })

@@ -1,4 +1,6 @@
 import { MEASURES_BY_ID } from '../config/measures.js'
+import { EVENT_CODES } from '../config/events.js'
+import { applyCultureMeasureBonus } from './cultureService.js'
 
 // Preparedness scoring — pure, server-side, no DB. This is the phase-8 maths.
 //
@@ -49,6 +51,44 @@ export function computePreparedness({ measureIds = [], eventCode, cultureBand = 
   return {
     preparedness:     round1(rawP),
     lossesAvoidedPct: round1(rawP * 10),
+    // Unrounded losses-avoided (P × 10). The display path uses the rounded
+    // value above; the expected-value maths (computeExpectedLossesAvoided) needs
+    // the unrounded one so the weighted sum isn't skewed by per-event rounding.
+    rawLossesAvoidedPct: rawP * 10,
     breakdown,
   }
+}
+
+const round2 = x => Math.round(x * 100) / 100
+
+// (4) Expected losses-avoided for a team across ALL events, weighted by the
+// port's exposure. Reuses computePreparedness (so the culture multiplier and the
+// per-measure formula are not duplicated) and applyCultureMeasureBonus (so the
+// #19/#20 culture bump is applied) — `cultureBand` is the BASE band.
+//
+//   computeExpectedLossesAvoided({ measures, cultureBand, exposureWeights })
+//     = Σ over events e of (weight_e / 10) × lossesAvoidedPct(measures, e, effBand)
+//   where effBand = applyCultureMeasureBonus(cultureBand, measures).
+// Returned rounded to 2 decimals; per-event values are taken UNROUNDED.
+export function computeExpectedLossesAvoided({ measures = [], cultureBand = null, exposureWeights = {} }) {
+  const effectiveBand = applyCultureMeasureBonus(cultureBand, measures)
+  let sum = 0
+  for (const code of EVENT_CODES) {
+    const w = Number(exposureWeights[code]) || 0
+    if (w <= 0) continue
+    const { rawLossesAvoidedPct } = computePreparedness({ measureIds: measures, eventCode: code, cultureBand: effectiveBand })
+    sum += (w / 10) * rawLossesAvoidedPct
+  }
+  return round2(sum)
+}
+
+// (5) Coins that helped against the DRAWN event: the sum of the costs of the
+// measures whose protection score for that event is above 0.
+export function computeCoinsThatHelped({ measures = [], event }) {
+  return (measures || []).reduce((sum, id) => {
+    const m = MEASURES_BY_ID[id]
+    if (!m) return sum
+    const protection = m.protection?.[event] ?? 0
+    return protection > 0 ? sum + (m.cost || 0) : sum
+  }, 0)
 }
