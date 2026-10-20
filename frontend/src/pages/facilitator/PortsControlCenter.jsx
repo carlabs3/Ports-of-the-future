@@ -8,6 +8,7 @@ import {
 import api from '../../utils/api.js'
 import EventWheel from '../../components/EventWheel.jsx'
 import { socket } from '../../utils/socket.js'
+import { COLOR, FONT, FS, FW, LS, HAIRLINE } from '../../styles/tokens.js'
 
 // Read-only PARI observation board. It only reads and displays live PAR data;
 // it never triggers reveals, confirms actions, or writes anything.
@@ -36,12 +37,21 @@ const PORT_SIZE_ORDER = ['small', 'medium', 'large']
 // never derived from the data. Persisted server-side (Session.phase) so a reload
 // or a different laptop resumes on the same phase.
 const PHASES = [
-  { id: 'join',     label: 'Unirse' },
-  { id: 'par',      label: 'PAR' },
-  { id: 'strategy', label: 'Estrategia' },
-  { id: 'wheel',    label: 'Ruleta' },
+  { id: 'join',     label: 'Join' },
+  { id: 'par',      label: 'PAR Index' },
+  { id: 'strategy', label: 'Strategy' },
+  { id: 'wheel',    label: 'Roulette' },
   { id: 'debrief',  label: 'Debrief' },
 ]
+
+// "NOW" strip: one sentence telling the room what to do in the current phase.
+const NOW_COPY = {
+  join:     'Everyone joins on their phone. It takes 30 seconds.',
+  par:      'Answer the 10 questions on your phone. Results update live.',
+  strategy: "Each team reads out its measure numbers. Other teams' choices stay hidden.",
+  wheel:    'One team at a time. Each port has its own wheel.',
+  debrief:  'Which team had the best plan — and which just had the best luck?',
+}
 
 // NOTE: band boundaries live ONLY in the backend (scoringService.getBand).
 // This screen never derives a band from a score — it displays the band the
@@ -87,6 +97,7 @@ export default function PortsControlCenter() {
   const [closing, setClosing] = useState(false)
   const [draft, setDraft]     = useState(false)
   const [starting, setStarting] = useState(false)
+  const [endDialogOpen, setEndDialogOpen] = useState(false) // "End session…" confirmation
 
   // Control-centre phase (facilitator-driven, persisted in Session.phase).
   const [phase, setPhase] = useState('join')
@@ -333,16 +344,17 @@ export default function PortsControlCenter() {
     }
   }
 
-  // Close the session: persists the aggregate PARI summary and notifies participants.
+  // End the session: persists the aggregate PARI summary and notifies
+  // participants. Confirmed via the in-UI dialog (not window.confirm).
   async function closeSession() {
     if (closing || closed) return
-    if (!window.confirm('Close this session? Participants will be notified and the PARI summary will be saved. Results stay visible here.')) return
     setClosing(true)
     try {
       await api.patch(`/api/sessions/${code}/close`)
       setClosed(true)
+      setEndDialogOpen(false)
     } catch {
-      window.alert('Could not close the session. Try again.')
+      window.alert('Could not end the session. Try again.')
     } finally {
       setClosing(false)
     }
@@ -427,52 +439,97 @@ export default function PortsControlCenter() {
     ready:     { dot: '#4ade80', label: 'Ready',     color: '#16a34a' },
   }
 
+  const currentIndex = Math.max(0, PHASES.findIndex(p => p.id === phase))
+  const nextPhase = PHASES[currentIndex + 1]
+
   return (
-    <div style={{ background: '#f5f5f5', minHeight: 'calc(100vh - 52px)', padding: '2rem 1.5rem', fontFamily: 'var(--font-sans)' }}>
-      <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+    <div style={{ background: COLOR.paper, minHeight: 'calc(100vh - 52px)', fontFamily: FONT.sans, color: COLOR.ink }}>
 
-        {/* Session lifecycle bar: draft → start · active → close · closed → banner */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: draft ? 'space-between' : 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-          {draft && (
-            <span style={{ fontSize: 13, color: '#b07a30' }}>
-              Not started yet — participants can't join until you start the session.
-            </span>
-          )}
-          {closed ? (
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a', background: '#eaf7ee', border: '1px solid rgba(74,222,128,0.4)', borderRadius: 999, padding: '6px 14px' }}>
-              ✓ Session closed · results are final
-            </span>
-          ) : draft ? (
-            <button onClick={startSession} disabled={starting}
-              style={{ fontSize: 14, fontWeight: 700, color: '#fff', background: starting ? '#9ab' : '#1B4B7A', border: 'none', borderRadius: 999, padding: '9px 22px', cursor: starting ? 'default' : 'pointer' }}>
-              {starting ? 'Starting...' : '▶ Start session'}
-            </button>
-          ) : (
-            <button onClick={closeSession} disabled={closing}
-              style={{ fontSize: 13, fontWeight: 600, color: closing ? '#bbb' : '#0a0a0a', background: 'transparent', border: '1px solid #0a0a0a', borderRadius: 999, padding: '6px 16px', cursor: closing ? 'default' : 'pointer' }}>
-              {closing ? 'Closing...' : 'Close session'}
-            </button>
-          )}
-        </div>
+      {/* ═══ HEADER — title · phase tabs · code · End session ═══ */}
+      <header style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', padding: '16px 24px', borderBottom: HAIRLINE }}>
+        <h1 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.display, margin: 0, whiteSpace: 'nowrap' }}>
+          Ports of the Future
+        </h1>
 
-        {/* Phase tabs — facilitator picks the phase; only the active panel shows.
-            Manual: the phase is never derived from the data. */}
-        <div style={{ ...card, padding: '0.5rem', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          {PHASES.map(p => {
+        <nav style={{ display: 'flex', gap: 0, flex: '1 1 auto', flexWrap: 'wrap' }}>
+          {PHASES.map((p, i) => {
             const active = phase === p.id
+            const done = i < currentIndex
             return (
               <button key={p.id} onClick={() => changePhase(p.id)}
                 style={{
-                  flex: '1 1 auto', minWidth: 90, padding: '10px 14px', borderRadius: 8,
-                  border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-                  background: active ? '#1B4B7A' : 'transparent',
-                  color: active ? '#fff' : '#666', transition: 'background 0.15s ease',
+                  padding: '10px 16px', border: HAIRLINE, borderLeft: i === 0 ? HAIRLINE : 'none',
+                  borderRadius: 0, cursor: 'pointer', whiteSpace: 'nowrap',
+                  fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: active ? FW.bold : FW.medium,
+                  letterSpacing: LS.tight,
+                  background: active ? COLOR.harbour : COLOR.paper,
+                  color: active ? COLOR.onHarbour : (done ? COLOR.ink60 : COLOR.ink),
                 }}>
-                {p.label}
+                <span style={{ fontFamily: FONT.mono, opacity: 0.7, marginRight: 6 }}>{i + 1}</span>
+                {p.label}{done ? ' ✓' : ''}
               </button>
             )
           })}
+        </nav>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginLeft: 'auto' }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, letterSpacing: '0.1em' }}>{code}</span>
+          {closed ? (
+            <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink, background: COLOR.ice, border: HAIRLINE, padding: '6px 12px' }}>
+              Session ended
+            </span>
+          ) : draft ? (
+            <button onClick={startSession} disabled={starting}
+              style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, borderRadius: 0, padding: '10px 18px', cursor: starting ? 'default' : 'pointer' }}>
+              {starting ? 'Starting…' : 'Start session'}
+            </button>
+          ) : (
+            <button onClick={() => setEndDialogOpen(true)}
+              style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '10px 18px', cursor: 'pointer' }}>
+              End session…
+            </button>
+          )}
         </div>
+      </header>
+
+      {/* ═══ NOW strip ═══ */}
+      <div style={{ background: COLOR.ice, color: COLOR.ink, borderBottom: HAIRLINE, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60 }}>Now</span>
+          <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.medium }}>{NOW_COPY[phase]}</span>
+        </div>
+        {nextPhase && (
+          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono, color: COLOR.ink60, whiteSpace: 'nowrap' }}>
+            Next: {nextPhase.label}
+          </span>
+        )}
+      </div>
+
+      {/* ═══ END SESSION dialog ═══ */}
+      {endDialogOpen && (
+        <div onClick={() => setEndDialogOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(11,27,51,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: COLOR.paper, border: HAIRLINE, maxWidth: 440, width: '100%', padding: 28 }}>
+            <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, margin: '0 0 12px' }}>End this session?</h2>
+            <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, lineHeight: 1.5, margin: '0 0 24px' }}>
+              Participants will be notified and the PAR Index summary will be saved. Results stay visible here. This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setEndDialogOpen(false)}
+                style={{ flex: 1, height: 48, border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={closeSession} disabled={closing}
+                style={{ flex: 1, height: 48, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: closing ? 'default' : 'pointer' }}>
+                {closing ? 'Ending…' : 'End session'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ BODY (full width) — tab panels rebuilt in B6–B10 ═══ */}
+      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
         {/* 1 · JOIN — phase: join. Focal screen: only the QR and the code, large.
             No group chips, no counters, no empty panels. */}
