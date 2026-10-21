@@ -105,24 +105,24 @@ export default function PortsControlCenter() {
   const [portAssignments, setPortAssignments] = useState([]) // [{ group, portId }]
   const [portNameById, setPortNameById]        = useState({}) // portId -> name
 
-  // Phase 7 — measures / strategy entry (facilitator)
+  // Strategy / rounds (v4). strategyByGroup holds the full public round state per
+  // team: { portId, portName, startingBand, cultureLevel, coins, roundStartCoins,
+  // currentRound, roundLocked, roundBudget, portfolio:[{id,name,cost}],
+  // roundBought, roundReturned, rounds:[...] }.
   const [measuresCatalog, setMeasuresCatalog] = useState([]) // [{ id, name, cost }]
-  const [budget, setBudget]                   = useState(6)
-  const [strategyByGroup, setStrategyByGroup] = useState({})  // group -> { measures, coinsSpent, cultureBand, portId }
+  const [roundBudgets, setRoundBudgets]       = useState([6, 8, 10]) // cumulative, display only
+  const [strategyByGroup, setStrategyByGroup] = useState({})
   const [editingGroup, setEditingGroup]       = useState(null) // the team now dictating
-  const [draftMeasures, setDraftMeasures]     = useState([])  // ids being entered
   const [numInput, setNumInput]               = useState('')  // the measure number being added
-  const [addError, setAddError]               = useState('')  // inline validation for Add
-  const [saving, setSaving]                   = useState(false)
-  const [saveError, setSaveError]             = useState('')
+  const [addError, setAddError]               = useState('')  // inline validation for buy/return/lock
+  const [busy, setBusy]                        = useState(false) // a buy/return/lock call in flight
 
-  // Phase 8 — roulette outcomes
-  const [outcomes, setOutcomes] = useState([]) // sorted desc by lossesAvoidedPct
+  // Roulette: one team at a time, full screen. v4 draws spin the CURRENT round.
   const [spinning, setSpinning] = useState(null) // group being spun (cosmetic)
-  // Roulette: one team at a time, full screen.
   const [wheelTeam, setWheelTeam]       = useState(null) // group on the roulette screen
-  const [wheelComp, setWheelComp]       = useState(null) // { portName, exposure, measures, cultureBand }
-  const [wheelOutcome, setWheelOutcome] = useState(null) // draw result once spun
+  const [wheelComp, setWheelComp]       = useState(null) // { portName, exposure, portfolio, cultureLevel, illustrationMotifs, currentRound }
+  const [wheelOutcome, setWheelOutcome] = useState(null) // { eventCode, eventName, exposure, entry:{...} } once spun
+  const [advancing, setAdvancing]       = useState(false) // next-round call in flight
 
   // Debrief: luck vs strategy (expected results, only in the debrief phase).
   const [debrief, setDebrief] = useState(null) // { budget, teams: [...] }
@@ -166,20 +166,13 @@ export default function PortsControlCenter() {
       .catch(() => {})
   }, [code])
 
-  // Fetch per-group strategy state (measures, coins, effective culture band).
+  // Fetch per-team round state (portfolio, coins, round, lock, round snapshots).
   const fetchStrategies = useCallback(() => {
     api.get(`/api/par/${code}/strategies`)
       .then(res => {
-        setBudget(res.data.budget ?? 6)
+        if (Array.isArray(res.data.roundBudgets)) setRoundBudgets(res.data.roundBudgets)
         setStrategyByGroup(Object.fromEntries((res.data.strategies || []).map(s => [s.group, s])))
       })
-      .catch(() => {})
-  }, [code])
-
-  // Fetch roulette outcomes (ranking), sorted desc by the backend.
-  const fetchOutcomes = useCallback(() => {
-    api.get(`/api/par/${code}/outcomes`)
-      .then(res => setOutcomes(res.data.outcomes || []))
       .catch(() => {})
   }, [code])
 
@@ -194,7 +187,6 @@ export default function PortsControlCenter() {
   useEffect(() => {
     fetchResults()
     fetchStrategies()
-    fetchOutcomes()
     api.get(`/api/sessions/${code}/info`)
       .then(res => {
         setGroups(res.data.groups || [])
@@ -214,7 +206,7 @@ export default function PortsControlCenter() {
     api.get('/api/par/questionnaire')
       .then(res => setWorldZoneOptions(res.data?.demographics?.worldZone?.options || []))
       .catch(() => {})
-  }, [code, fetchResults, fetchStrategies, fetchOutcomes])
+  }, [code, fetchResults, fetchStrategies])
 
   // Live updates: join the room and listen for 'par:update'.
   useEffect(() => {
@@ -235,12 +227,20 @@ export default function PortsControlCenter() {
     function onStrategyUpdate(payload) {
       if (payload?.group) setStrategyByGroup(prev => ({ ...prev, [payload.group]: payload }))
     }
-    function onOutcomeUpdate() { fetchOutcomes() }
+    // A spin changed coins + added a round snapshot; re-pull the team state.
+    function onOutcomeUpdate() { fetchStrategies() }
+    // Every team advanced to the next round (+2 coins): re-pull and reset the
+    // roulette screen so it reopens on the first team of the new round.
+    function onRoundsAdvanced() {
+      fetchStrategies()
+      setWheelTeam(null); setWheelComp(null); setWheelOutcome(null)
+    }
     function onPhaseChange({ phase: p }) { if (p) setPhase(p) }
     function onJoined(p) { if (typeof p?.total === 'number') setJoinedCount(p.total) }
     socket.on('par:update', onParUpdate)
     socket.on('strategy:update', onStrategyUpdate)
     socket.on('outcome:update', onOutcomeUpdate)
+    socket.on('rounds:advanced', onRoundsAdvanced)
     socket.on('phase:change', onPhaseChange)
     socket.on('participant:joined', onJoined)
 
@@ -249,10 +249,11 @@ export default function PortsControlCenter() {
       socket.off('par:update', onParUpdate)
       socket.off('strategy:update', onStrategyUpdate)
       socket.off('outcome:update', onOutcomeUpdate)
+      socket.off('rounds:advanced', onRoundsAdvanced)
       socket.off('phase:change', onPhaseChange)
       socket.off('participant:joined', onJoined)
     }
-  }, [code, fetchResults, fetchStrategies, fetchOutcomes])
+  }, [code, fetchResults, fetchStrategies])
 
   // ── PAR tab: combinable filters + filtered aggregates (all client-side) ─────
   const anyFilter = !!(filters.portSize || filters.worldZone || filters.team || filters.band)
@@ -305,8 +306,12 @@ export default function PortsControlCenter() {
   // "N of M answered": people who answered out of people in the room.
   const answeredDenom = Math.max(joinedCount, totalAnswers, 1)
 
-  // Per-group stats — count/avg/band come from the backend aggregate; the
-  // frontend only chooses the traffic-light status from the count.
+  // Has team g spun its CURRENT round? (each team advances together, but read
+  // the team's own currentRound to be safe.)
+  const hasSpunCurrent = (strat) => !!strat && (strat.rounds || []).some(r => r.round === strat.currentRound)
+
+  // Per-team stats — PARI count/avg from the backend aggregate; round state from
+  // the strategy doc. Effective culture level is the backend's cultureLevel.
   const groupStats = useMemo(() => {
     const aggByGroup = new Map(groupAgg.map(a => [a.group, a]))
     const portByGroup = new Map(portAssignments.map(pa => [pa.group, pa.portId]))
@@ -322,25 +327,30 @@ export default function PortsControlCenter() {
         group: g,
         count,
         avg: agg?.avgScore ?? null,
-        // Effective culture band (base + measure bonus) comes from the backend
-        // strategies endpoint — never derived here.
-        cultureBand: strat?.cultureBand ?? null,
-        coinsSpent: strat?.coinsSpent ?? 0,
-        measuresCount: strat?.measures?.length ?? 0,
-        confirmed: !!strat?.confirmed,
+        cultureBand: strat?.cultureLevel ?? null,       // effective band (base + enablers)
+        startingBand: strat?.startingBand ?? null,
+        coins: strat?.coins ?? null,
+        currentRound: strat?.currentRound ?? 1,
+        roundLocked: !!strat?.roundLocked,
+        portfolioCount: strat?.portfolio?.length ?? 0,
         hasStrategy: !!strat,
-        portName: portId != null ? (portNameById[portId] || `Port ${portId}`) : null,
+        spun: hasSpunCurrent(strat),
+        portName: portId != null ? (portNameById[portId] || `Port ${portId}`) : (strat?.portName ?? null),
         status,
       }
     })
   }, [groups, groupAgg, portAssignments, portNameById, strategyByGroup])
 
-  // Wheel gate: every table with a strategy must be confirmed before drawing.
+  // Roulette gate: every team must have LOCKED the current round before drawing.
   const strategyList = Object.values(strategyByGroup)
-  const allConfirmed = strategyList.length > 0 && strategyList.every(s => s.confirmed)
-  const pendingConfirm = strategyList.filter(s => !s.confirmed).map(s => s.group)
-  // Tables that have already spun — their measures can't be unlocked.
-  const drawnGroups = new Set(outcomes.filter(o => o.drawn).map(o => o.group))
+  const allConfirmed = strategyList.length > 0 && strategyList.every(s => s.roundLocked)
+  const pendingConfirm = strategyList.filter(s => !s.roundLocked).map(s => s.group)
+  // Teams that have already spun the current round (can't be unlocked now).
+  const drawnGroups = new Set(strategyList.filter(hasSpunCurrent).map(s => s.group))
+  // The round the whole room is on (teams advance together).
+  const currentRound = strategyList[0]?.currentRound ?? 1
+  // Everyone has spun this round → the round is complete.
+  const roundComplete = strategyList.length > 0 && strategyList.every(hasSpunCurrent)
 
   // NOTE: these two effects MUST stay below the declarations of `allConfirmed`,
   // `groupStats` and `drawnGroups` — the dep array reads `allConfirmed` during
@@ -354,83 +364,90 @@ export default function PortsControlCenter() {
       const first = groupStats.find(g => !drawnGroups.has(g.group))?.group || groupStats[0]?.group
       if (first) openWheel(first)
     }
-  }, [phase, allConfirmed]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, allConfirmed, currentRound]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load the debrief (expected results) when the facilitator enters that phase.
   useEffect(() => {
     if (phase === 'debrief') fetchDebrief()
   }, [phase, fetchDebrief])
 
-  // ── Measure-entry helpers ───────────────────────────────────────────────────
+  // ── Strategy / round helpers (v4) ───────────────────────────────────────────
   const measureById = useMemo(() => new Map(measuresCatalog.map(m => [m.id, m])), [measuresCatalog])
-  const draftCost = useMemo(
-    () => draftMeasures.reduce((s, id) => s + (measureById.get(id)?.cost || 0), 0),
-    [draftMeasures, measureById]
-  )
-  // Any entered measure that raises the culture band (#19 / #20 in config).
-  const draftRaisesCulture = draftMeasures.some(id => measureById.get(id)?.raisesCultureLevel)
+  // The team currently being dictated to.
+  const editingStrat = editingGroup ? strategyByGroup[editingGroup] : null
+  const portfolio = editingStrat?.portfolio || []            // [{ id, name, cost }]
+  const portIds = portfolio.map(m => m.id)
+  // Does this team still need a starting level chosen by hand? Only when it has
+  // no questionnaire answers (count 0) and none is set yet. Teams WITH answers
+  // get their starting level from the PARI mean automatically on lock.
+  const editingCount = groupStats.find(g => g.group === editingGroup)?.count ?? 0
+  const needsStartingLevel = !!editingStrat && editingStrat.startingBand == null && editingCount === 0
+  const canReturn = !!editingStrat && editingStrat.currentRound >= 2 && editingStrat.roundReturned == null && !editingStrat.roundLocked
 
   // Read-aloud sentence for the dictating team, e.g.
-  // "Team D: measures 8, 15 and 19. Six coins. Correct?"
-  const readAloud = editingGroup
-    ? `${editingGroup}: ${draftMeasures.length ? `measure${draftMeasures.length !== 1 ? 's' : ''} ${andList(draftMeasures)}` : 'no measures'}. ${COIN_WORDS[draftCost] ?? draftCost} coin${draftCost !== 1 ? 's' : ''}. Correct?`
+  // "Team D, round 2: measures 8, 15 and 19. Two coins left. Correct?"
+  const readAloud = editingStrat
+    ? `${editingGroup}, round ${editingStrat.currentRound}: ${portIds.length ? `measure${portIds.length !== 1 ? 's' : ''} ${andList(portIds)}` : 'no measures'}. ${COIN_WORDS[editingStrat.coins] ?? editingStrat.coins} coin${editingStrat.coins !== 1 ? 's' : ''} left. Correct?`
     : ''
 
-  // Start dictating a team: load its current measures into the draft.
+  // Start dictating a team.
   function openEditor(group) {
-    setSaveError('')
     setAddError('')
     setNumInput('')
-    setDraftMeasures(strategyByGroup[group]?.measures || [])
     setEditingGroup(group)
   }
-  // Add one measure number (1–25). Inline validation: range, exists, duplicate,
-  // budget. The teams call numbers out one at a time, so this is the entry.
-  function addMeasure() {
-    const n = parseInt(numInput, 10)
+
+  // Apply a strategy mutation (buy/return/lock/unlock/starting-level) and fold the
+  // returned public state back in. Server is authoritative on coins/deck/rounds.
+  async function strategyCall(method, path, body) {
+    setBusy(true)
     setAddError('')
-    if (!Number.isInteger(n) || n < 1 || n > 25) { setAddError('Enter a measure number from 1 to 25.'); return }
-    const m = measureById.get(n)
-    if (!m) { setAddError(`Measure ${n} doesn't exist.`); return }
-    if (draftMeasures.includes(n)) { setAddError(`Measure ${n} is already added.`); return }
-    if (draftCost + m.cost > budget) { setAddError(`Over budget: measure ${n} costs ${m.cost}, only ${budget - draftCost} left.`); return }
-    setDraftMeasures(prev => [...prev, n])
-    setNumInput('')
-  }
-  function removeMeasure(id) {
-    setAddError('')
-    setDraftMeasures(prev => prev.filter(x => x !== id))
-  }
-  function clearDraft() {
-    setAddError('')
-    setNumInput('')
-    setDraftMeasures([])
-  }
-  // Confirm from within the editor: persist the current draft first, THEN lock.
-  // The big read-aloud line above this button is the review step — no browser
-  // confirm() dialog. Locking is reversible via Unlock (unless already drawn).
-  async function saveAndConfirm(group) {
-    setSaving(true)
-    setSaveError('')
     try {
-      await api.put(`/api/par/${code}/strategy/${encodeURIComponent(group)}`, { measures: draftMeasures })
-      const res = await api.patch(`/api/par/${code}/strategy/${encodeURIComponent(group)}/confirm`)
-      setStrategyByGroup(prev => ({ ...prev, [group]: res.data.strategy }))
-      setEditingGroup(null)
+      const res = await api[method](`/api/par/${code}/strategy/${encodeURIComponent(editingGroup)}${path}`, body)
+      if (res.data?.strategy) setStrategyByGroup(prev => ({ ...prev, [editingGroup]: res.data.strategy }))
+      return true
     } catch (err) {
-      setSaveError(err.response?.data?.error || 'Error confirming')
+      setAddError(err.response?.data?.error || 'Something went wrong.')
+      return false
     } finally {
-      setSaving(false)
+      setBusy(false)
     }
   }
 
-  // Unlock (re-open) a table's measures. Backend refuses if it already drew.
-  async function unlockMeasures(group) {
+  // Buy one measure by number. Light client checks for instant feedback; the
+  // server enforces deck membership, duplicates and coins.
+  async function buyMeasure() {
+    const n = parseInt(numInput, 10)
+    setAddError('')
+    if (!Number.isInteger(n) || n < 1 || n > 26) { setAddError('Enter a measure number from 1 to 26.'); return }
+    if (!measureById.get(n)) { setAddError(`Measure ${n} doesn't exist.`); return }
+    if (portIds.includes(n)) { setAddError(`The team already holds measure ${n}.`); return }
+    const ok = await strategyCall('post', '/buy', { measureId: n })
+    if (ok) setNumInput('')
+  }
+  function returnMeasure(id) { strategyCall('post', '/return', { measureId: id }) }
+  function setStartingLevel(band) { strategyCall('patch', '/starting-level', { band }) }
+
+  // Lock the current round. Derives the starting level from PARI if unset; if the
+  // team has no answers and none is chosen, the server 409s and we show it.
+  async function lockRoundFor() {
+    const ok = await strategyCall('patch', '/lock')
+    if (ok) setEditingGroup(null)
+  }
+  // Unlock the current round. Server refuses if it has already spun.
+  async function unlockRoundFor(group) {
+    const prev = editingGroup
+    setEditingGroup(group)
+    setBusy(true)
+    setAddError('')
     try {
       const res = await api.patch(`/api/par/${code}/strategy/${encodeURIComponent(group)}/unlock`)
-      setStrategyByGroup(prev => ({ ...prev, [group]: res.data.strategy }))
+      if (res.data?.strategy) setStrategyByGroup(p => ({ ...p, [group]: res.data.strategy }))
     } catch (err) {
-      window.alert(err.response?.data?.error || 'Could not unlock the measures.')
+      window.alert(err.response?.data?.error || 'Could not unlock this round.')
+      setEditingGroup(prev)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -495,9 +512,21 @@ export default function PortsControlCenter() {
     }
   }
 
-  // Open a team's wheel: fetch its composition (exposure + measures), revealed
-  // only after every team is locked. If the team already drew, also load its
-  // stored outcome so re-selecting it shows the result.
+  // Build the outcome view-model from a stored round snapshot (for re-selecting a
+  // team that already spun this round) using the composition's exposure slices.
+  function outcomeFromEntry(entry, comp) {
+    if (!entry) return null
+    return {
+      eventCode: entry.drawnEvent,
+      eventName: (comp?.exposure || []).find(e => e.code === entry.drawnEvent)?.name || entry.drawnEvent,
+      exposure:  comp?.exposure || [],
+      entry,
+    }
+  }
+
+  // Open a team's wheel: fetch its composition (exposure + portfolio), revealed
+  // only once every team has locked round 1. If the team already spun this round,
+  // rebuild its result from the stored round snapshot.
   async function openWheel(group) {
     setWheelTeam(group)
     setWheelComp(null)
@@ -505,9 +534,10 @@ export default function PortsControlCenter() {
     try {
       const res = await api.get(`/api/par/${code}/strategy/${encodeURIComponent(group)}/wheel`)
       setWheelComp(res.data)
-      if (res.data.drawn) {
-        const o = outcomes.find(x => x.group === group)
-        if (o) setWheelOutcome(o)
+      if (res.data.drawnThisRound) {
+        const strat = strategyByGroup[group]
+        const entry = (strat?.rounds || []).find(r => r.round === res.data.currentRound)
+        setWheelOutcome(outcomeFromEntry(entry, res.data))
       }
     } catch (err) {
       window.alert(err.response?.data?.error || 'Could not open the wheel.')
@@ -515,19 +545,35 @@ export default function PortsControlCenter() {
     }
   }
 
-  // Spin: the backend decides the event (gated on all teams confirmed) and
-  // returns the outcome; the wheel animation is purely cosmetic.
+  // Spin: the backend draws the event for the current round (gated on all teams
+  // locked) and returns the outcome; the wheel animation is purely cosmetic.
   async function spinWheel() {
     if (spinning || !wheelTeam) return
     setSpinning(wheelTeam)
     try {
       const res = await api.post(`/api/par/${code}/strategy/${encodeURIComponent(wheelTeam)}/draw`)
       setWheelOutcome(res.data.outcome)
-      fetchOutcomes()
+      fetchStrategies()
     } catch (err) {
       window.alert(err.response?.data?.error || 'Could not spin the wheel.')
     } finally {
       setTimeout(() => setSpinning(null), 1200)
+    }
+  }
+
+  // Advance every team to the next round (+2 coins). Gated server-side on all
+  // teams having spun the current round.
+  async function nextRound() {
+    if (advancing) return
+    setAdvancing(true)
+    try {
+      await api.post(`/api/par/${code}/next-round`)
+      await fetchStrategies()
+      setWheelTeam(null); setWheelComp(null); setWheelOutcome(null)
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Could not advance to the next round.')
+    } finally {
+      setAdvancing(false)
     }
   }
 
@@ -692,30 +738,38 @@ export default function PortsControlCenter() {
         </div>
         )}
 
-        {/* 2 · STRATEGY — phase: strategy. One team dictates at a time. Other
-            teams' port / score / culture / measures stay hidden. */}
+        {/* 2 · STRATEGY — phase: strategy. One team dictates at a time, round by
+            round. Other teams' port / score / culture / cards stay hidden. */}
         {phase === 'strategy' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Round banner */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', background: COLOR.ice, border: HAIRLINE, padding: '14px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
+              <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight }}>Round {currentRound} of 3</span>
+              <span style={uiLabel}>{roundBudgets[currentRound - 1]}-coin budget{currentRound >= 2 ? ' · one return allowed' : ''}</span>
+            </div>
+            <span style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold }}>
+              {groupStats.filter(g => g.roundLocked).length} of {groupStats.length} locked this round
+            </span>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 340px) 1fr', gap: 20, alignItems: 'start' }}>
 
-            {/* LEFT: team list — one status chip each, nothing else */}
+            {/* LEFT: team list — coins + lock status */}
             <div style={{ border: HAIRLINE, padding: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                <p style={uiLabel}>Teams</p>
-                <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>
-                  {groupStats.filter(g => g.confirmed).length} of {groupStats.length} locked
-                </span>
-              </div>
+              <p style={{ ...uiLabel, marginBottom: 8 }}>Teams</p>
               {groupStats.map(gs => {
                 const dictating = editingGroup === gs.group
                 return (
                   <div key={gs.group} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', borderTop: HAIRLINE }}>
                     <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>{gs.group}</span>
-                    {gs.confirmed ? (
+                    <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>🪙 {gs.coins ?? '—'}</span>
+                    {gs.roundLocked ? (
                       <>
                         <span style={{ ...uiLabel, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, padding: '4px 10px' }}>Locked ✓</span>
-                        {!drawnGroups.has(gs.group) && (
-                          <button onClick={() => unlockMeasures(gs.group)}
+                        {!gs.spun && (
+                          <button onClick={() => unlockRoundFor(gs.group)}
                             style={{ fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: FW.semibold, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: 'pointer' }}>
                             Unlock
                           </button>
@@ -739,99 +793,128 @@ export default function PortsControlCenter() {
 
             {/* RIGHT: dictation panel for the team now dictating */}
             <div style={{ border: HAIRLINE, padding: 28, minHeight: 220 }}>
-              {!editingGroup ? (
+              {!editingStrat ? (
                 <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>
-                  Pick a team on the left to start dictating its measures.
+                  Pick a team on the left to start dictating its cards.
                 </p>
               ) : (
                 <>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
                     <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: 0 }}>{editingGroup}</h2>
-                    <span style={uiLabel}>Now dictating</span>
+                    <span style={uiLabel}>Round {editingStrat.currentRound} · now dictating</span>
                   </div>
 
-                  {/* 6-cell coin meter */}
-                  <p style={uiLabel}>{draftCost} of {budget} coins spent</p>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8, marginBottom: 24 }}>
-                    {Array.from({ length: budget }).map((_, i) => (
-                      <div key={i} style={{ flex: 1, height: 28, border: HAIRLINE, background: i < draftCost ? COLOR.ink : COLOR.ice }} />
-                    ))}
+                  {/* Coins available */}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 20 }}>
+                    <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display }}>{editingStrat.coins}</span>
+                    <span style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60 }}>{editingStrat.coins === 1 ? 'coin to spend' : 'coins to spend'}</span>
                   </div>
 
-                  {/* Number input + Add */}
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <input
-                      type="number" min={1} max={25} inputMode="numeric"
-                      value={numInput}
-                      onChange={e => { setNumInput(e.target.value); setAddError('') }}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addMeasure() } }}
-                      placeholder="Measure # (1–25)"
-                      style={{ flex: 1, border: HAIRLINE, borderRadius: 0, padding: '14px 16px', fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, color: COLOR.ink, background: COLOR.paper, outline: 'none', boxSizing: 'border-box' }}
-                    />
-                    <button onClick={addMeasure}
-                      style={{ height: 'auto', padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
-                      + Add
-                    </button>
-                  </div>
-                  {addError && <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: '#c0392b', margin: '10px 0 0' }}>{addError}</p>}
+                  {/* Starting culture level — only for teams with no questionnaire */}
+                  {needsStartingLevel && (
+                    <div style={{ border: HAIRLINE, background: COLOR.ice, padding: '14px 16px', marginBottom: 20 }}>
+                      <p style={{ ...uiLabel, marginBottom: 10 }}>No questionnaire answers · set the starting level</p>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {BAND_ORDER.map(b => (
+                          <button key={b} onClick={() => setStartingLevel(b)} disabled={busy}
+                            style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, border: HAIRLINE, borderRadius: 0, padding: '8px 12px', cursor: busy ? 'default' : 'pointer', background: COLOR.paper, color: COLOR.ink }}>
+                            {BAND_RAMP[b]?.label || b}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                  {/* Entered measures as rows */}
+                  {/* Buy input */}
+                  {!editingStrat.roundLocked && (
+                    <>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <input
+                          type="number" min={1} max={26} inputMode="numeric"
+                          value={numInput}
+                          onChange={e => { setNumInput(e.target.value); setAddError('') }}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buyMeasure() } }}
+                          placeholder="Measure # (1–26)"
+                          style={{ flex: 1, border: HAIRLINE, borderRadius: 0, padding: '14px 16px', fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, color: COLOR.ink, background: COLOR.paper, outline: 'none', boxSizing: 'border-box' }}
+                        />
+                        <button onClick={buyMeasure} disabled={busy}
+                          style={{ height: 'auto', padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+                          {busy ? '…' : '+ Buy'}
+                        </button>
+                      </div>
+                      {addError && <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: '#c0392b', margin: '10px 0 0' }}>{addError}</p>}
+                    </>
+                  )}
+
+                  {/* Cards held (cumulative) */}
                   <div style={{ marginTop: 20 }}>
-                    {draftMeasures.length === 0 ? (
-                      <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No measures yet.</p>
-                    ) : draftMeasures.map(id => {
-                      const m = measureById.get(id)
+                    <p style={{ ...uiLabel, marginBottom: 4 }}>Cards held</p>
+                    {portfolio.length === 0 ? (
+                      <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '8px 0 0' }}>No cards yet.</p>
+                    ) : portfolio.map(m => {
+                      const boughtThisRound = (editingStrat.roundBought || []).includes(m.id)
                       return (
-                        <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: HAIRLINE }}>
-                          <span style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, minWidth: 28 }}>{id}</span>
-                          <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.body }}>{m?.name || `Measure ${id}`}</span>
-                          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>🪙 {m?.cost ?? '—'}</span>
-                          <button onClick={() => removeMeasure(id)} title="Remove"
-                            style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, width: 32, height: 32, cursor: 'pointer' }}>×</button>
+                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: HAIRLINE }}>
+                          <span style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, minWidth: 28 }}>{m.id}</span>
+                          <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.body }}>{m.name || `Measure ${m.id}`}</span>
+                          {boughtThisRound && <span style={{ ...uiLabel, color: COLOR.ink60 }}>new</span>}
+                          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>🪙 {m.cost ?? '—'}</span>
+                          {canReturn && (
+                            <button onClick={() => returnMeasure(m.id)} disabled={busy} title={`Return for ${Math.floor((m.cost || 0) / 2)} coins`}
+                              style={{ fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: FW.semibold, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: busy ? 'default' : 'pointer' }}>
+                              Return +{Math.floor((m.cost || 0) / 2)}
+                            </button>
+                          )}
                         </div>
                       )
                     })}
                   </div>
 
-                  {/* Culture-band note for #19 / #20 */}
-                  {draftRaisesCulture && (
-                    <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, background: COLOR.ice, border: HAIRLINE, padding: '10px 14px', margin: '20px 0 0' }}>
-                      This raises the team's culture band by one level (measure #19 / #20).
+                  {editingStrat.roundReturned != null && (
+                    <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '12px 0 0' }}>
+                      Returned measure {editingStrat.roundReturned} this round (one return per round).
                     </p>
                   )}
+
+                  {/* Effective culture level */}
+                  <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, background: COLOR.ice, border: HAIRLINE, padding: '10px 14px', margin: '20px 0 0' }}>
+                    Culture level: <strong>{BAND_RAMP[editingStrat.cultureLevel]?.label || '—'}</strong>
+                    {portfolio.some(m => measureById.get(m.id)?.raisesCultureLevel) ? ' — raised by an enabler (#19 / #20)' : ''}
+                  </p>
                 </>
               )}
             </div>
           </div>
 
           {/* BOTTOM ink bar: read-aloud sentence + lock */}
-          {editingGroup && (
+          {editingStrat && (
             <div style={{ background: COLOR.ink, color: COLOR.onInk, padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
               <p style={{ flex: '1 1 320px', fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, lineHeight: 1.3, margin: 0 }}>
                 {readAloud}
               </p>
-              {saveError && <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.signal }}>{saveError}</span>}
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={clearDraft}
+                <button onClick={() => { setEditingGroup(null); setAddError('') }}
                   style={{ height: 48, padding: '0 20px', border: `1px solid ${COLOR.onInk}`, borderRadius: 0, background: 'transparent', color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
-                  Clear
+                  Close
                 </button>
-                <button onClick={() => saveAndConfirm(editingGroup)} disabled={saving || draftCost > budget}
-                  style={{ height: 48, padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold, cursor: (saving || draftCost > budget) ? 'default' : 'pointer', opacity: (saving || draftCost > budget) ? 0.5 : 1 }}>
-                  {saving ? 'Locking…' : `Yes — lock ${editingGroup} →`}
-                </button>
+                {!editingStrat.roundLocked && (
+                  <button onClick={lockRoundFor} disabled={busy}
+                    style={{ height: 48, padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}>
+                    {busy ? 'Locking…' : `Yes — lock ${editingGroup} →`}
+                  </button>
+                )}
               </div>
             </div>
           )}
         </div>
         )}
 
-        {/* 4 · ROULETTE — phase: wheel. One team at a time, full screen. */}
+        {/* 4 · ROULETTE — phase: wheel. One team at a time, round by round. */}
         {phase === 'wheel' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {!allConfirmed ? (
             <div style={{ border: HAIRLINE, padding: '48px 28px', textAlign: 'center' }}>
-              <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight, margin: '0 0 8px' }}>The roulette opens once every team is locked.</p>
+              <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight, margin: '0 0 8px' }}>The roulette opens once every team has locked round {currentRound}.</p>
               {pendingConfirm.length > 0 && <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Waiting on: {pendingConfirm.join(', ')}.</p>}
             </div>
           ) : !wheelTeam || !wheelComp ? (
@@ -840,7 +923,7 @@ export default function PortsControlCenter() {
             <>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
                 <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: 0 }}>{wheelTeam}</h2>
-                <span style={uiLabel}>{wheelComp.portName}</span>
+                <span style={uiLabel}>{wheelComp.portName} · round {wheelComp.currentRound} of 3</span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 460px) 1fr', gap: 32, alignItems: 'start' }}>
@@ -869,11 +952,11 @@ export default function PortsControlCenter() {
                         ))}
                       </div>
 
-                      <p style={uiLabel}>Measures bought</p>
+                      <p style={uiLabel}>Cards held</p>
                       <div style={{ marginTop: 10, marginBottom: 24 }}>
-                        {wheelComp.measures.length === 0 ? (
+                        {(wheelComp.portfolio || []).length === 0 ? (
                           <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>None.</p>
-                        ) : wheelComp.measures.map(id => {
+                        ) : wheelComp.portfolio.map(id => {
                           const m = measureById.get(id)
                           return (
                             <div key={id} style={{ display: 'flex', gap: 12, padding: '7px 0', borderTop: HAIRLINE }}>
@@ -891,50 +974,48 @@ export default function PortsControlCenter() {
                       </button>
                     </>
                   ) : (() => {
-                    const cb = wheelComp.cultureBand
-                    const coinsHelped = (wheelOutcome.breakdown || []).filter(b => b.sOriginal > 0)
-                      .reduce((s, b) => s + (measureById.get(b.measureId)?.cost || 0), 0)
+                    const e = wheelOutcome.entry || {}
+                    const heldCostNow = (wheelComp.portfolio || []).reduce((s, id) => s + (measureById.get(id)?.cost || 0), 0)
+                    const cb = e.cultureLevel
+                    const next = nextTeamToDraw()
                     return (
                       <>
                         <p style={uiLabel}>The wheel drew</p>
                         <h3 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: '6px 0 2px' }}>{EVENT_WORDS[wheelOutcome.eventCode] || wheelOutcome.eventCode}</h3>
-                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '0 0 20px' }}>{wheelOutcome.eventName || wheelOutcome.drawnEvent}</p>
+                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '0 0 20px' }}>{wheelOutcome.eventName || wheelOutcome.eventCode}</p>
 
-                        <div style={{ background: COLOR.harbour, color: COLOR.onHarbour, border: HAIRLINE, padding: '20px 24px', marginBottom: 24 }}>
-                          <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.mega, letterSpacing: LS.display, lineHeight: 0.9 }}>{Math.round(wheelOutcome.lossesAvoidedPct)}%</span>
+                        <div style={{ background: COLOR.harbour, color: COLOR.onHarbour, border: HAIRLINE, padding: '20px 24px', marginBottom: 20 }}>
+                          <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.mega, letterSpacing: LS.display, lineHeight: 0.9 }}>{Math.round(e.lossesAvoidedPct ?? 0)}%</span>
                           <span style={{ fontSize: FS.h3, fontWeight: FW.bold, marginLeft: 10 }}>of losses avoided</span>
                         </div>
 
-                        {/* Measure · Protection · With culture */}
-                        <div style={{ border: HAIRLINE, marginBottom: 16 }}>
-                          <div style={{ display: 'flex', ...uiLabel, padding: '8px 12px', background: COLOR.ice }}>
-                            <span style={{ flex: 1 }}>Measure</span>
-                            <span style={{ flex: '0 0 90px', textAlign: 'right' }}>Protection</span>
-                            <span style={{ flex: '0 0 110px', textAlign: 'right' }}>With culture</span>
-                          </div>
-                          {(wheelOutcome.breakdown || []).length === 0 ? (
-                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, padding: '10px 12px', margin: 0 }}>No measures bought.</p>
-                          ) : wheelOutcome.breakdown.map(b => (
-                            <div key={b.measureId} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', borderTop: HAIRLINE, fontFamily: FONT.sans, fontSize: FS.sm }}>
-                              <span style={{ flex: 1 }}><span style={{ fontFamily: FONT.mono, fontWeight: FW.bold, marginRight: 8 }}>{b.measureId}</span>{b.name}</span>
-                              <span style={{ flex: '0 0 90px', textAlign: 'right', fontFamily: FONT.mono }}>{b.sOriginal}</span>
-                              <span style={{ flex: '0 0 110px', textAlign: 'right', fontFamily: FONT.mono, fontWeight: FW.bold }}>{b.sAdjusted}</span>
+                        {/* Result facts (round) */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                          {[
+                            ['Damage bill', `${e.damageBill ?? '—'}`, 'rounded to the nearest ½'],
+                            ['Strategy score', `${e.strategyScore ?? '—'}`, 'plan vs the best possible'],
+                            ['Expected protection', `${Math.round(e.expectedProtection ?? 0)}%`, 'across every event'],
+                            ['Coins that helped', `${e.coinsThatHelped ?? 0} of ${heldCostNow}`, 'coins on cards that mattered'],
+                          ].map(([label, value, sub]) => (
+                            <div key={label} style={{ border: HAIRLINE, padding: 14 }}>
+                              <p style={uiLabel}>{label}</p>
+                              <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.display, marginTop: 4 }}>{value}</div>
+                              <p style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, margin: '2px 0 0' }}>{sub}</p>
                             </div>
                           ))}
                         </div>
 
-                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, margin: '0 0 6px' }}>
-                          Culture: <strong>{BAND_RAMP[cb]?.label || '—'}</strong> · scores ×{(CULTURE_FACTOR[cb] ?? 1).toFixed(1)}
-                        </p>
                         <p style={{ fontFamily: FONT.sans, fontSize: FS.body, margin: '0 0 24px' }}>
-                          Coins that helped: <strong>{coinsHelped}</strong> of {budget}
+                          Culture level: <strong>{BAND_RAMP[cb]?.label || '—'}</strong> · scores ×{(CULTURE_FACTOR[cb] ?? 1).toFixed(1)}
                         </p>
 
-                        {nextTeamToDraw() && (
-                          <button onClick={() => openWheel(nextTeamToDraw())}
+                        {next ? (
+                          <button onClick={() => openWheel(next)}
                             style={{ width: '100%', height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: 'pointer' }}>
-                            Next: {nextTeamToDraw()} →
+                            Next: {next} →
                           </button>
+                        ) : (
+                          <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Every team has spun round {wheelComp.currentRound}.</p>
                         )}
                       </>
                     )
@@ -944,11 +1025,12 @@ export default function PortsControlCenter() {
             </>
           )}
 
-          {/* Queue strip — one cell per team */}
+          {/* Queue strip — one cell per team (current-round result) */}
           {allConfirmed && groupStats.length > 0 && (
             <div style={{ display: 'flex', gap: 8, borderTop: HAIRLINE, paddingTop: 16, flexWrap: 'wrap' }}>
               {groupStats.map(g => {
-                const o = outcomes.find(x => x.group === g.group)
+                const strat = strategyByGroup[g.group]
+                const entry = (strat?.rounds || []).find(r => r.round === g.currentRound)
                 const isNow = g.group === wheelTeam
                 const done = drawnGroups.has(g.group)
                 const bg = isNow ? COLOR.signal : done ? COLOR.ink : COLOR.paper
@@ -958,11 +1040,31 @@ export default function PortsControlCenter() {
                     style={{ flex: '1 1 90px', border: HAIRLINE, borderRadius: 0, background: bg, color: fg, padding: '10px 8px', cursor: 'pointer', textAlign: 'left' }}>
                     <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.bold }}>{g.group}</div>
                     <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, marginTop: 2 }}>
-                      {done && o?.lossesAvoidedPct != null ? `${Math.round(o.lossesAvoidedPct)}%` : isNow ? 'now' : 'waiting'}
+                      {done && entry?.lossesAvoidedPct != null ? `${Math.round(entry.lossesAvoidedPct)}%` : isNow ? 'now' : 'waiting'}
                     </div>
                   </button>
                 )
               })}
+            </div>
+          )}
+
+          {/* Round advance / finish — once every team has spun this round */}
+          {roundComplete && (
+            <div style={{ background: COLOR.ink, color: COLOR.onInk, padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight }}>
+                Round {currentRound} complete.{currentRound < 3 ? ' Each team gets +2 coins next round.' : ''}
+              </span>
+              {currentRound < 3 ? (
+                <button onClick={nextRound} disabled={advancing}
+                  style={{ height: 48, padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold, cursor: advancing ? 'default' : 'pointer', opacity: advancing ? 0.6 : 1 }}>
+                  {advancing ? 'Advancing…' : `Start round ${currentRound + 1} →`}
+                </button>
+              ) : (
+                <button onClick={() => changePhase('debrief')}
+                  style={{ height: 48, padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold, cursor: 'pointer' }}>
+                  Go to debrief →
+                </button>
+              )}
             </div>
           )}
         </div>
