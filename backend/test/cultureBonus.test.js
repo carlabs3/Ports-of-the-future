@@ -20,8 +20,16 @@ test('base aware + #20 → developing', () => {
   assert.equal(applyCultureMeasureBonus('aware', [M20]), 'developing')
 })
 
-test('base aware + BOTH #19 and #20 → developing (single step, not proactive)', () => {
-  assert.equal(applyCultureMeasureBonus('aware', [M19, M20]), 'developing')
+test('base aware + BOTH #19 and #20 → proactive (v4: one step per enabler)', () => {
+  assert.equal(applyCultureMeasureBonus('aware', [M19, M20]), 'proactive')
+})
+
+test('base reactive + BOTH enablers → developing (two steps)', () => {
+  assert.equal(applyCultureMeasureBonus('reactive', [M19, M20]), 'developing')
+})
+
+test('enablers never go past proactive (developing + both → proactive)', () => {
+  assert.equal(applyCultureMeasureBonus('developing', [M19, M20]), 'proactive')
 })
 
 test('base developing + #19 → proactive', () => {

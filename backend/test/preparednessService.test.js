@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { computePreparedness, adjustScore, cultureFactor, computeExpectedLossesAvoided, computeCoinsThatHelped } from '../src/services/preparednessService.js'
+import { computePreparedness, adjustScore, cultureFactor, computeExpectedLossesAvoided, computeCoinsThatHelped, computeDamageBill } from '../src/services/preparednessService.js'
 import { drawEvent, topExposureEvents } from '../src/services/wheelService.js'
 import { MEASURES } from '../src/config/measures.js'
 import { PORTS_BY_ID } from '../src/config/ports/index.js'
@@ -118,11 +118,34 @@ test('drawEvent never returns a zero-weight event for a port', () => {
 // Proactive (×1.1) is applied inside computeExpectedLossesAvoided. Per-event
 // values are unrounded; the weighted expected is rounded to 2 decimals.
 
-// NOTE: the two B10 worked-example tests (Nord-Maris → 57.18, Boreal → 65.62)
-// were removed here. They encoded a v3 rule where the enablers #19/#20 carried
-// protection 2; v4 enablers have NO protection, so those exact values no longer
-// hold. These functions are superseded by v4 scoring (commit 2) and removed in
-// commit 6; commit 2 brings the authoritative v4 tests (Appendix E + examples).
+// ── v4 expected protection (replaces the v3 B10 cases 57.18 / 65.62) ─────────
+// Same computeExpectedLossesAvoided, now under v4 measures (enablers have no
+// protection) and the v4 culture rule (one step per enabler). cultureBand is the
+// BASE band; the bump is applied inside.
+test('v4 expected protection — Boreal #24+#13+#19, base Aware → 51', () => {
+  const weights = PORTS_BY_ID['boreal'].exposureWeights
+  assert.equal(Math.round(computeExpectedLossesAvoided({ measures: [24, 13, 19], cultureBand: 'aware', exposureWeights: weights })), 51)
+})
+
+test('v4 expected protection — Nord-Maris #1+#19, base Aware → 41', () => {
+  const weights = PORTS_BY_ID['nord-maris'].exposureWeights
+  assert.equal(Math.round(computeExpectedLossesAvoided({ measures: [1, 19], cultureBand: 'aware', exposureWeights: weights })), 41)
+})
+
+// ── Damage bill (D14) — losses × (1 − P/10), nearest 0.5, halves up ──────────
+test('computeDamageBill rounds to the nearest 0.5, halves up', () => {
+  assert.equal(computeDamageBill(3, 7.6), 0.5)  // 3 × 0.24 = 0.72 → 0.5
+  assert.equal(computeDamageBill(4, 0), 4)      // full loss, no protection
+  assert.equal(computeDamageBill(3, 10), 0)     // full protection
+  assert.equal(computeDamageBill(3, 7.5), 1)    // 3 × 0.25 = 0.75 → halves up → 1.0
+  assert.equal(computeDamageBill(4, 5), 2)      // 4 × 0.5 = 2.0
+})
+
+test('computePreparedness exposes rawPreparedness (full precision)', () => {
+  // #1 Coastal defence SS 8 at developing (×1.0) → P exactly 8.
+  const r = computePreparedness({ measureIds: [1], eventCode: 'SS', cultureBand: 'developing' })
+  assert.equal(r.rawPreparedness, 8)
+})
 
 test('computeCoinsThatHelped ignores unknown ids and zero-protection measures', () => {
   assert.equal(computeCoinsThatHelped({ measures: [24, 13], event: 'WS' }), 3) // only #13 (cost 3)

@@ -17,21 +17,20 @@ export function computeCultureBandFromScores(scores) {
   return getBand(avg)
 }
 
-// Pure, testable: raise the base band ONE level if the table bought any
-// culture-raising measure. Buying #19 AND #20 is still a SINGLE step up — not
-// two. Capped at 'proactive'. null base → null. Which measures raise the band
-// is read from config (raisesCultureLevel flag), not hardcoded ids.
+// Pure, testable: raise the base band by ONE level per enabler in the portfolio
+// (v4 D-change: EACH enabler counts, so #19 AND #20 is TWO steps). Capped at
+// 'proactive'. null base → null. Which measures are enablers is read from config
+// (raisesCultureLevel flag), not hardcoded ids.
 export function applyCultureMeasureBonus(baseBand, measureIds = []) {
   if (baseBand == null) return null
   const idx = BAND_ORDER.indexOf(baseBand)
   if (idx === -1) return baseBand // unknown band → pass through unchanged
 
   const raisingIds = new Set(MEASURES.filter(m => m.raisesCultureLevel).map(m => m.id))
-  const raises = (measureIds || []).some(id => raisingIds.has(id))
-  if (!raises) return baseBand
+  const steps = (measureIds || []).filter(id => raisingIds.has(id)).length
 
-  // Single step up, capped at the top band.
-  return BAND_ORDER[Math.min(idx + 1, BAND_ORDER.length - 1)]
+  // One step per enabler, capped at the top band.
+  return BAND_ORDER[Math.min(idx + steps, BAND_ORDER.length - 1)]
 }
 
 // Thin DB wrapper: read the table's PARI scores and derive the BASE band.

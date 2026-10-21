@@ -13,6 +13,7 @@ import contactRouter from './src/routes/contact.js'
 import { registerSocketHandlers } from './src/sockets/sessionSocket.js'
 import { registerParSocketHandlers } from './src/sockets/parSocket.js'
 import { validateConfig } from './src/config/validateConfig.js'
+import { precomputeBestPossible } from './src/services/strategyService.js'
 import User from './src/models/User.js'
 
 dotenv.config()
@@ -20,6 +21,10 @@ dotenv.config()
 // Fail-fast: refuse to start if the domain catalogues are invalid.
 const configSummary = validateConfig()
 console.log(`Config OK — events: ${configSummary.events}, measures: ${configSummary.measures}, ports: ${configSummary.ports}`)
+
+// Precompute the best-possible expected protection (72 values) once at startup.
+const bestCount = precomputeBestPossible()
+console.log(`Best-possible expected protection precomputed — ${bestCount} values`)
 
 // Allowed frontend origins for CORS + Socket.io. FRONTEND_URL may be a single
 // origin or a comma-separated list (e.g. local + the Vercel URL). Falls back to

@@ -51,15 +51,38 @@ export function computePreparedness({ measureIds = [], eventCode, cultureBand = 
   return {
     preparedness:     round1(rawP),
     lossesAvoidedPct: round1(rawP * 10),
-    // Unrounded losses-avoided (P × 10). The display path uses the rounded
-    // value above; the expected-value maths (computeExpectedLossesAvoided) needs
-    // the unrounded one so the weighted sum isn't skewed by per-event rounding.
+    // Unrounded values (full precision). The display path uses the rounded ones;
+    // the expected-value maths and the damage bill need the unrounded ones so
+    // weighted sums / roundings aren't skewed by per-event rounding (D16).
+    rawPreparedness:     rawP,
     rawLossesAvoidedPct: rawP * 10,
     breakdown,
   }
 }
 
 const round2 = x => Math.round(x * 100) / 100
+
+// Damage bill (D14) = event losses × (1 − P/10), rounded to the nearest 0.5 with
+// halves rounding up. A score only; it never removes coins. P is the full-
+// precision preparedness (0–10).
+export function computeDamageBill(lossValue, P) {
+  const raw = (Number(lossValue) || 0) * (1 - (Number(P) || 0) / 10)
+  return Math.round(raw / 0.5) * 0.5 // Math.round takes exact halves up
+}
+
+// Expected protection over ALL the port's events, weighted by exposure, using an
+// EFFECTIVE culture band (already including any enabler bump). Σ (weight/10) ×
+// lossesAvoided(e), per-event values UNROUNDED; result rounded to 2 decimals.
+export function expectedProtectionPct({ measures = [], effectiveBand = null, exposureWeights = {} }) {
+  let sum = 0
+  for (const code of EVENT_CODES) {
+    const w = Number(exposureWeights[code]) || 0
+    if (w <= 0) continue
+    const { rawLossesAvoidedPct } = computePreparedness({ measureIds: measures, eventCode: code, cultureBand: effectiveBand })
+    sum += (w / 10) * rawLossesAvoidedPct
+  }
+  return round2(sum)
+}
 
 // (4) Expected losses-avoided for a team across ALL events, weighted by the
 // port's exposure. Reuses computePreparedness (so the culture multiplier and the
@@ -72,14 +95,7 @@ const round2 = x => Math.round(x * 100) / 100
 // Returned rounded to 2 decimals; per-event values are taken UNROUNDED.
 export function computeExpectedLossesAvoided({ measures = [], cultureBand = null, exposureWeights = {} }) {
   const effectiveBand = applyCultureMeasureBonus(cultureBand, measures)
-  let sum = 0
-  for (const code of EVENT_CODES) {
-    const w = Number(exposureWeights[code]) || 0
-    if (w <= 0) continue
-    const { rawLossesAvoidedPct } = computePreparedness({ measureIds: measures, eventCode: code, cultureBand: effectiveBand })
-    sum += (w / 10) * rawLossesAvoidedPct
-  }
-  return round2(sum)
+  return expectedProtectionPct({ measures, effectiveBand, exposureWeights })
 }
 
 // (5) Coins that helped against the DRAWN event: the sum of the costs of the
