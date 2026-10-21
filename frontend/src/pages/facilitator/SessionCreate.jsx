@@ -4,7 +4,7 @@ import api from '../../utils/api.js'
 import { COLOR, FONT, FS, FW, LS, HAIRLINE } from '../../styles/tokens.js'
 
 const MIN_TEAMS = 2
-const MAX_TEAMS = 8
+const MAX_TEAMS = 6 // D13: at most 6 tables, one per port
 
 // Preview of the generated team names (the server generates the same list).
 const teamNames = (count) => Array.from({ length: count }, (_, i) => `Team ${String.fromCharCode(65 + i)}`)

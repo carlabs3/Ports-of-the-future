@@ -1,13 +1,11 @@
 // Port catalogue entry (workshop v4, Appendix A). One file per port.
-// PUBLIC fields: id, name, colour, climateZone, coastalSetting, size,
-// governance, deck. SECRET: exposureWeights (10 slices) — MUST sum to 10 and
-// must NEVER be served to any client before that table's round-1 spin.
-// `colour` is a placeholder hex, defined here only so it can be swapped in one
-// place. `deck` = the measure ids this port may buy (6 shared + port-specific).
+// PUBLIC fields: id, name, climateZone, coastalSetting, size, governance, deck.
+// SECRET: exposureWeights (10 slices) — MUST sum to 10 and must NEVER be served
+// to any client before that table's round-1 spin. (D17: ports have no colour.)
+// `deck` = the measure ids this port may buy (6 shared + port-specific).
 export default {
   id: 'nord-maris',
   name: 'Nord-Maris',
-  colour: '#2F5D8A',
   climateZone: 'Temperate',
   coastalSetting: 'Artificial / engineered coastline',
   size: 'Large',

@@ -34,7 +34,6 @@ export default function parRouter(io) {
     res.json(PORTS.map(p => ({
       id:             p.id,
       name:           p.name,
-      colour:         p.colour,
       climateZone:    p.climateZone,
       coastalSetting: p.coastalSetting,
       size:           p.size,

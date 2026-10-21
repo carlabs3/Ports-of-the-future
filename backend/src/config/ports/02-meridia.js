@@ -2,7 +2,6 @@
 export default {
   id: 'meridia',
   name: 'Meridia',
-  colour: '#D9822B',
   climateZone: 'Mediterranean',
   coastalSetting: 'Bay or lagoon',
   size: 'Medium',

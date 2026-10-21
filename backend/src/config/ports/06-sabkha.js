@@ -2,7 +2,6 @@
 export default {
   id: 'sabkha',
   name: 'Sabkha',
-  colour: '#C2A14A',
   climateZone: 'Arid / desert',
   coastalSetting: 'Artificial / engineered coastline',
   size: 'Large',

@@ -2,7 +2,6 @@
 export default {
   id: 'boreal',
   name: 'Boreal',
-  colour: '#6A7FA8',
   climateZone: 'Cold / sub-arctic',
   coastalSetting: 'Open coast',
   size: 'Small',

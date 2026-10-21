@@ -2,7 +2,6 @@
 export default {
   id: 'riu-verd',
   name: 'Riu Verd',
-  colour: '#3E8E5A',
   climateZone: 'Mediterranean (inland)',
   coastalSetting: 'Estuary or river',
   size: 'Medium',

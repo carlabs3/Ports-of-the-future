@@ -2,7 +2,6 @@
 export default {
   id: 'coralia',
   name: 'Coralia',
-  colour: '#1F9AA0',
   climateZone: 'Tropical',
   coastalSetting: 'Bay or lagoon (behind a coral reef)',
   size: 'Medium',

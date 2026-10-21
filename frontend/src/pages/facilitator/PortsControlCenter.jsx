@@ -368,7 +368,7 @@ export default function PortsControlCenter() {
     [draftMeasures, measureById]
   )
   // Any entered measure that raises the culture band (#19 / #20 in config).
-  const draftRaisesCulture = draftMeasures.some(id => measureById.get(id)?.raisesCultureBand)
+  const draftRaisesCulture = draftMeasures.some(id => measureById.get(id)?.raisesCultureLevel)
 
   // Read-aloud sentence for the dictating team, e.g.
   // "Team D: measures 8, 15 and 19. Six coins. Correct?"
