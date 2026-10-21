@@ -5,7 +5,7 @@ import api from '../../utils/api.js'
 import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
 import PortIllustration from '../../components/PortIllustration.jsx'
 import { socket } from '../../utils/socket.js'
-import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP } from '../../styles/tokens.js'
+import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP, AREA_COLOR } from '../../styles/tokens.js'
 
 // Culture multiplier by band (display only — the backend applies it in scoring).
 const CULTURE_FACTOR = { reactive: 0.8, aware: 0.9, developing: 1.0, proactive: 1.1 }
@@ -38,7 +38,7 @@ const PORT_SIZE_ORDER = ['small', 'medium', 'large']
 // or a different laptop resumes on the same phase.
 const PHASES = [
   { id: 'join',     label: 'Join' },
-  { id: 'par',      label: 'PAR Index' },
+  { id: 'par',      label: 'Results' },
   { id: 'strategy', label: 'Strategy' },
   { id: 'wheel',    label: 'Roulette' },
   { id: 'debrief',  label: 'Debrief' },
@@ -266,23 +266,27 @@ export default function PortsControlCenter() {
 
   const totalAnswers = rows.length         // all submissions this session
   const shownCount   = filteredRows.length // after filters
-  // Anonymity floor: never show numbers/charts for fewer than 3 answers, so a
-  // Team + size + zone combination can't isolate one person on the projector.
-  const enoughToShow = shownCount >= 3
+  const hasData      = shownCount > 0
 
   const fScores  = filteredRows.map(r => r.score)
   const fAverage = fScores.length ? Math.round(mean(fScores)) : 0
   const fMin     = fScores.length ? Math.min(...fScores) : 0
   const fMax     = fScores.length ? Math.max(...fScores) : 0
 
-  // Average per area (0–20) over the filtered set, and the weakest area.
+  // Average per area (0–20, one decimal) over the filtered set. Weakest and
+  // strongest are decided from the DISPLAYED values; ties mark every area at the
+  // low (or high); if all five are equal, mark none.
   const areaMeans = AREA_ORDER.map(id => ({
     id, label: AREA_LABELS[id],
     value: filteredRows.length ? Math.round(mean(filteredRows.map(r => r.areas?.[id] ?? 0)) * 10) / 10 : 0,
   }))
-  const weakestAreaId = areaMeans.reduce((min, a) => (a.value < min.value ? a : min), areaMeans[0]).id
+  const areaMin = Math.min(...areaMeans.map(a => a.value))
+  const areaMax = Math.max(...areaMeans.map(a => a.value))
+  const areaAllEqual = areaMin === areaMax
+  const weakestIds   = new Set(areaAllEqual ? [] : areaMeans.filter(a => a.value === areaMin).map(a => a.id))
+  const strongestIds = new Set(areaAllEqual ? [] : areaMeans.filter(a => a.value === areaMax).map(a => a.id))
 
-  // Histogram: 10-point bins (0–9 … 90–100) over the filtered set.
+  // Histogram: ten bins 0–9 … 90–99 (a score of 100 goes in the last bin).
   const histBins = Array.from({ length: 10 }, (_, i) => ({ label: `${i * 10}–${i * 10 + 9}`, count: 0 }))
   for (const sc of fScores) histBins[Math.min(9, Math.floor(sc / 10))].count += 1
   const histMax = Math.max(1, ...histBins.map(b => b.count))
@@ -542,10 +546,10 @@ export default function PortsControlCenter() {
   const nextPhase = PHASES[currentIndex + 1]
 
   return (
-    <div style={{ background: COLOR.paper, minHeight: '100vh', fontFamily: FONT.sans, color: COLOR.ink }}>
+    <div className="cc-screen" style={{ background: COLOR.paper, fontFamily: FONT.sans, color: COLOR.ink }}>
 
       {/* ═══ HEADER — title · phase tabs · code · End session ═══ */}
-      <header style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', padding: '16px 24px', borderBottom: HAIRLINE }}>
+      <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', padding: '16px 24px', borderBottom: HAIRLINE }}>
         <h1 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.display, margin: 0, whiteSpace: 'nowrap' }}>
           Ports of the Future
         </h1>
@@ -587,7 +591,7 @@ export default function PortsControlCenter() {
       </header>
 
       {/* ═══ NOW strip ═══ */}
-      <div style={{ background: COLOR.ice, color: COLOR.ink, borderBottom: HAIRLINE, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ flexShrink: 0, background: COLOR.ice, color: COLOR.ink, borderBottom: HAIRLINE, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
           <span style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60 }}>Now</span>
           <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.medium }}>{NOW_COPY[phase]}</span>
@@ -606,7 +610,7 @@ export default function PortsControlCenter() {
           <div onClick={e => e.stopPropagation()} style={{ background: COLOR.paper, border: HAIRLINE, maxWidth: 440, width: '100%', padding: 28 }}>
             <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, margin: '0 0 12px' }}>End this session?</h2>
             <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, lineHeight: 1.5, margin: '0 0 24px' }}>
-              Participants will be notified and the PAR Index summary will be saved. Results stay visible here. This cannot be undone.
+              Participants will be notified and the results summary will be saved. Results stay visible here. This cannot be undone.
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setEndDialogOpen(false)}
@@ -622,11 +626,18 @@ export default function PortsControlCenter() {
         </div>
       )}
 
-      {/* ═══ BODY (full width) — tab panels rebuilt in B6–B10 ═══ */}
-      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {/* ═══ BODY — fills the remaining height. The Results tab lays itself out
+          to fit exactly (overflow hidden); the other tabs scroll internally so
+          the page itself never scrolls. ═══ */}
+      <div style={{
+        flex: 1, minHeight: 0,
+        ...(phase === 'par'
+          ? { overflow: 'hidden' }
+          : { overflow: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '1rem' }),
+      }}>
 
         {/* 1 · JOIN — phase: join. Big QR + code in a sky block, live counter,
-            "Start PAR Index →". No team list. */}
+            "Start questionnaire →". No team list. */}
         {phase === 'join' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {/* Sky block: QR + short URL + very large code */}
@@ -673,7 +684,7 @@ export default function PortsControlCenter() {
               ) : (
                 <button onClick={() => changePhase('par')}
                   style={{ height: 56, padding: '0 28px', border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: 'pointer' }}>
-                  Start PAR Index →
+                  Start questionnaire →
                 </button>
               )}
             </div>
@@ -1039,125 +1050,133 @@ export default function PortsControlCenter() {
         )}
 
         {/* 3 · RESULTADOS PARI (agregado) — phase: par / debrief */}
+        {/* 2 · RESULTS — phase: par. One projected screen, no scroll. */}
         {phase === 'par' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-          {/* Filter bar */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, borderBottom: HAIRLINE, paddingBottom: 16 }}>
+          {/* Filter row (60px) */}
+          <div style={{ flexShrink: 0, height: 60, display: 'flex', alignItems: 'center', gap: 12, padding: '0 24px', borderBottom: HAIRLINE }}>
             <span style={uiLabel}>Filter</span>
             <FilterSelect value={filters.portSize}  onChange={v => setFilters(f => ({ ...f, portSize: v }))}  placeholder="All sizes" options={PORT_SIZE_ORDER.map(s => ({ value: s, label: PORT_SIZE_LABELS[s] }))} />
             <FilterSelect value={filters.worldZone} onChange={v => setFilters(f => ({ ...f, worldZone: v }))} placeholder="All zones" options={worldZoneOptions.map(z => ({ value: z.optionId, label: z.label }))} />
             <FilterSelect value={filters.team}      onChange={v => setFilters(f => ({ ...f, team: v }))}      placeholder="All teams" options={groups.map(g => ({ value: g, label: g }))} />
             <FilterSelect value={filters.band}      onChange={v => setFilters(f => ({ ...f, band: v }))}      placeholder="All bands" options={BAND_ORDER.map(b => ({ value: b, label: BAND_RAMP[b].label }))} />
-            {anyFilter && (
-              <>
-                <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60 }}>Showing {shownCount} of {totalAnswers} answers</span>
-                <button onClick={() => setFilters({ portSize: '', worldZone: '', team: '', band: '' })}
-                  style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '8px 14px', cursor: 'pointer' }}>
-                  Clear filters
-                </button>
-              </>
-            )}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+              {anyFilter ? (
+                <>
+                  <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>Showing {shownCount} of {totalAnswers} answers</span>
+                  <button onClick={() => setFilters({ portSize: '', worldZone: '', team: '', band: '' })}
+                    style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                    Clear filters
+                  </button>
+                </>
+              ) : (
+                <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, color: COLOR.ink60 }}>{totalAnswers} of {answeredDenom} answered</span>
+              )}
+            </div>
           </div>
 
-          {totalAnswers === 0 ? (
-            <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No results yet. Waiting for submissions…</p>
-          ) : !enoughToShow ? (
-            <div style={{ border: HAIRLINE, padding: '40px 28px', textAlign: 'center' }}>
-              <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, color: COLOR.ink, margin: '0 0 8px' }}>
-                Too few answers to show (minimum 3)
-              </p>
-              <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>
-                {anyFilter ? 'This filter combination could identify individuals.' : 'Waiting for more submissions.'}
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Top: room average (sky) + area bars */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-                {/* Left sky block */}
-                <div style={{ background: COLOR.sky, color: COLOR.ink, border: HAIRLINE, padding: 28 }}>
-                  <p style={uiLabel}>Room average</p>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 8 }}>
-                    <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.mega, letterSpacing: LS.display, lineHeight: 0.9 }}>{fAverage}</span>
-                    <span style={{ fontSize: FS.h3, fontWeight: FW.bold }}>/100</span>
-                  </div>
-                  <p style={{ fontFamily: FONT.sans, fontSize: FS.body, margin: '14px 0 0' }}>Lowest {fMin} · Highest {fMax}</p>
-                  <p style={{ ...uiLabel, marginTop: 24 }}>{shownCount} of {answeredDenom} answered</p>
-                  <div style={{ height: 10, background: COLOR.paper, border: HAIRLINE, marginTop: 6 }}>
-                    <div style={{ height: '100%', width: `${Math.min(100, (shownCount / answeredDenom) * 100)}%`, background: COLOR.ink }} />
+          {/* Main area — two equal columns, fills remaining height */}
+          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: '16px 24px 40px' }}>
+
+            {/* LEFT column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0 }}>
+
+              {/* Room average box */}
+              <div style={{ flexShrink: 0, background: COLOR.sky, color: COLOR.ink, border: HAIRLINE, padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
+                <div>
+                  <p style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink, margin: 0 }}>Room average</p>
+                  {hasData ? (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                      <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 128, letterSpacing: '-0.07em', lineHeight: 0.85 }}>{fAverage}</span>
+                      <span style={{ fontSize: 28, fontWeight: 600 }}>/100</span>
+                    </div>
+                  ) : (
+                    <p style={{ fontFamily: FONT.sans, fontSize: 28, fontWeight: 600, margin: '10px 0 0' }}>Waiting for the first answer…</p>
+                  )}
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 24, fontWeight: 600 }}>Lowest {hasData ? fMin : '—'} · Highest {hasData ? fMax : '—'}</div>
+                  {hasData && sizeSummary.length > 0 && (
+                    <div style={{ fontSize: 18, fontWeight: 500, marginTop: 6 }}>
+                      {sizeSummary.map(ps => `${ps.label} ${ps.avg} (${ps.count})`).join(' · ')}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Average by area */}
+              <div style={{ flex: 1, minHeight: 0, border: HAIRLINE, padding: '12px 18px', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                  <span style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink }}>Average by area (out of 20)</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <span style={{ fontFamily: FONT.mono, fontSize: 13, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, padding: '1px 7px' }}>▼ Weakest</span>
+                    <span style={{ fontFamily: FONT.mono, fontSize: 13, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, padding: '1px 7px' }}>▲ Strongest</span>
                   </div>
                 </div>
-
-                {/* Right: area bars /20, weakest in signal */}
-                <div style={{ border: HAIRLINE, padding: 28 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
-                    <p style={uiLabel}>Average by area (out of 20)</p>
-                    <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink, background: COLOR.signal, border: HAIRLINE, padding: '2px 8px' }}>
-                      Weakest: {AREA_LABELS[weakestAreaId]}
-                    </span>
-                  </div>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                   {areaMeans.map(a => {
-                    const weak = a.id === weakestAreaId
+                    const weak = weakestIds.has(a.id), strong = strongestIds.has(a.id)
                     return (
-                      <div key={a.id} style={{ padding: '8px 0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: weak ? FW.bold : FW.regular }}>{a.label}</span>
-                          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>{a.value}/20</span>
+                      <div key={a.id} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                          <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                            <span style={{ fontSize: 22, fontWeight: (weak || strong) ? 800 : 500 }}>{a.label}</span>
+                            {weak && <span style={{ fontFamily: FONT.mono, fontSize: 12, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, padding: '0 5px' }}>▼</span>}
+                            {strong && <span style={{ fontFamily: FONT.mono, fontSize: 12, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, padding: '0 5px' }}>▲</span>}
+                          </span>
+                          <span style={{ fontFamily: FONT.mono, fontSize: 20, fontWeight: 700 }}>{a.value}/20</span>
                         </div>
-                        <div style={{ height: 14, background: COLOR.ice, border: HAIRLINE, position: 'relative' }}>
-                          <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${(a.value / 20) * 100}%`, background: weak ? COLOR.signal : COLOR.harbour }} />
+                        <div style={{ height: 22, background: COLOR.paper, border: HAIRLINE, position: 'relative' }}>
+                          <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${(a.value / 20) * 100}%`, background: AREA_COLOR[a.id], borderRight: a.value > 0 ? HAIRLINE : 'none' }} />
                         </div>
                       </div>
                     )
                   })}
                 </div>
               </div>
+            </div>
 
-              {/* Histogram — 10-point bins, upright labels */}
-              <div style={{ border: HAIRLINE, padding: 28 }}>
-                <p style={uiLabel}>Distribution of individual scores</p>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, marginTop: 20 }}>
+            {/* RIGHT column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0 }}>
+
+              {/* Distribution of individual scores */}
+              <div style={{ flex: 1, minHeight: 0, border: HAIRLINE, padding: '12px 18px', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+                  <span style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink }}>Distribution of individual scores</span>
+                  <span style={{ fontSize: 15, color: COLOR.ink60 }}>People per score range</span>
+                </div>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', gap: 6 }}>
                   {histBins.map(b => (
-                    <div key={b.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, height: '100%' }}>
-                      <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end' }}>
-                        <div style={{ width: '100%', height: `${(b.count / histMax) * 100}%`, background: COLOR.harbour, border: b.count ? HAIRLINE : 'none' }} />
+                    <div key={b.label} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <span style={{ fontFamily: FONT.mono, fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{b.count}</span>
+                        <div style={{ width: '72%', height: `${(b.count / histMax) * 82}%`, background: COLOR.harbour, border: b.count > 0 ? HAIRLINE : 'none' }} />
                       </div>
-                      <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>{b.count}</span>
-                      <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60 }}>{b.label}</span>
+                      <span style={{ fontFamily: FONT.mono, fontSize: 13, color: COLOR.ink60, marginTop: 6 }}>{b.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Band distribution — one stacked bar, band ramp */}
-              <div style={{ border: HAIRLINE, padding: 28 }}>
-                <p style={uiLabel}>Band distribution</p>
-                <div style={{ display: 'flex', border: HAIRLINE, marginTop: 16, minHeight: 56 }}>
-                  {bandCounts.filter(b => b.count > 0).map((b, i) => {
-                    const ramp = BAND_RAMP[b.band]
-                    return (
-                      <div key={b.band} title={`${ramp.label}: ${b.count}`}
-                        style={{ flex: b.count, borderLeft: i === 0 ? 'none' : HAIRLINE, background: ramp.bg, color: ramp.text, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '8px 6px' }}>
-                        <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold }}>{b.count}</span>
-                        <span style={{ fontFamily: FONT.sans, fontSize: FS.micro }}>{ramp.label}</span>
+              {/* Band distribution — four equal cells, always */}
+              <div style={{ flexShrink: 0, display: 'flex', border: HAIRLINE }}>
+                {bandCounts.map((b, i) => {
+                  const ramp = BAND_RAMP[b.band]
+                  const pct = hasData ? Math.round((b.count / shownCount) * 100) : null
+                  return (
+                    <div key={b.band} style={{ flex: 1, background: ramp.bg, color: ramp.text, borderLeft: i === 0 ? 'none' : HAIRLINE, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '12px 14px' }}>
+                      <div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: 18, fontWeight: 800 }}>{ramp.label}</div>
+                        <div style={{ fontFamily: FONT.mono, fontSize: 14 }}>{pct == null ? '—' : `${pct}%`}</div>
                       </div>
-                    )
-                  })}
-                </div>
+                      <div style={{ fontSize: 44, fontWeight: 800, lineHeight: 1 }}>{b.count}</div>
+                    </div>
+                  )
+                })}
               </div>
-
-              {/* By port size summary line */}
-              {sizeSummary.length > 0 && (
-                <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink, margin: 0 }}>
-                  <span style={{ ...uiLabel, marginRight: 12 }}>By port size</span>
-                  {sizeSummary.map((ps, i) => (
-                    <span key={ps.size}>{i > 0 ? '    ·    ' : ''}{ps.label} {ps.avg}/100 ({ps.count})</span>
-                  ))}
-                </p>
-              )}
-            </>
-          )}
+            </div>
+          </div>
         </div>
         )}
 

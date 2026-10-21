@@ -86,6 +86,16 @@ a {
 /* The old Home-page styles (.hero-*, .join-*, .how-steps, .stats) were removed
    with the landing redesign (L3); the landing lives in styles/landing.css. */
 
+/* Control-centre root: exactly one window height, never scrolls the page.
+   Two height declarations so browsers without dvh fall back to vh. */
+.cc-screen {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* ── Utility ─────────────────────────────────────────────────────────────── */
 .sr-only {
   position: absolute;

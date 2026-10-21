@@ -76,3 +76,13 @@ export const BAND_RAMP = {
   proactive:  { label: 'Proactive',  bg: COLOR.ink,     text: COLOR.onInk,     border: `1px solid ${COLOR.ink}` },
 }
 export const BAND_ORDER = ['reactive', 'aware', 'developing', 'proactive']
+
+// One colour per PAR area (the ONLY place these are defined). Values reference
+// the CSS variables, like COLOR above.
+export const AREA_COLOR = {
+  governance:   COLOR.ink,
+  organisation: COLOR.harbour,
+  budget:       COLOR.sky,
+  measures:     COLOR.signal,
+  preparedness: COLOR.ice,
+}
