@@ -1,0 +1,107 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { precomputeBestPossible } from '../src/services/strategyService.js'
+import { buyCard, returnCard, lockRound, unlockRound, recordSpin, advanceRound } from '../src/services/roundsService.js'
+
+precomputeBestPossible()
+
+function fresh(portId = 'boreal', startingBand = 'aware') {
+  return { portId, startingBand, portfolio: [], coins: 6, roundStartCoins: 6, currentRound: 1, roundLocked: false, roundBought: [], roundReturned: null, rounds: [] }
+}
+
+test('full 3-round playthrough for Boreal, including a return — every number', () => {
+  const s = fresh()
+
+  // ── Round 1: buy 24 (2) + 13 (3) + 19 (1) = 6 coins, spin SI ──────────────
+  for (const id of [24, 13, 19]) assert.equal(buyCard(s, id).ok, true)
+  assert.equal(s.coins, 0)
+  assert.deepEqual(s.portfolio, [24, 13, 19])
+  assert.equal(lockRound(s).ok, true)
+  const r1 = recordSpin(s, 'SI').entry
+  assert.deepEqual([r1.coinsStart, r1.coinsSpent, r1.refund, r1.coinsLeft], [6, 6, 0, 0])
+  assert.equal(r1.lossesAvoidedPct, 76)     // P = 7.6
+  assert.equal(r1.damageBill, 0.5)          // 3 × 0.24 = 0.72 → 0.5
+  assert.equal(r1.expectedProtection, 51.4) // displays 51
+  assert.equal(r1.strategyScore, 88)        // 51 / best 58
+  assert.equal(r1.coinsThatHelped, 5)       // #24 (2) + #13 (3); #19 none
+  assert.equal(r1.cultureLevel, 'developing') // Aware + 1 enabler
+  assert.equal(advanceRound(s).ok, true)
+  assert.equal(s.coins, 2)                  // 0 + 2
+
+  // ── Round 2: return 13 (refund 1), buy 17 (2), spin WS ────────────────────
+  assert.equal(returnCard(s, 13).refund, 1) // floor(3/2)
+  assert.equal(s.coins, 3)
+  assert.deepEqual(s.portfolio, [24, 19])
+  assert.equal(buyCard(s, 17).ok, true)
+  assert.equal(s.coins, 1)
+  assert.equal(lockRound(s).ok, true)
+  const r2 = recordSpin(s, 'WS').entry
+  assert.deepEqual([r2.coinsStart, r2.coinsSpent, r2.refund, r2.coinsLeft], [2, 2, 1, 1])
+  assert.deepEqual(r2.bought, [17])
+  assert.equal(r2.returned, 13)
+  assert.equal(r2.lossesAvoidedPct, 30)     // P = 3.0 (#17 WS 3)
+  assert.equal(r2.damageBill, 3)            // 4 × 0.7 = 2.8 → 3.0
+  assert.equal(r2.expectedProtection, 46.4)
+  assert.equal(r2.strategyScore, 69)        // 46 / best 67
+  assert.equal(r2.coinsThatHelped, 2)       // #17 only
+  assert.equal(advanceRound(s).ok, true)
+  assert.equal(s.coins, 3)                  // 1 + 2
+
+  // ── Round 3: buy 6 (3), spin SS ───────────────────────────────────────────
+  assert.equal(buyCard(s, 6).ok, true)
+  assert.equal(s.coins, 0)
+  assert.equal(lockRound(s).ok, true)
+  const r3 = recordSpin(s, 'SS').entry
+  assert.deepEqual([r3.coinsStart, r3.coinsSpent, r3.refund, r3.coinsLeft], [3, 3, 0, 0])
+  assert.equal(r3.lossesAvoidedPct, 44)     // P = 4.4 (#17 SS2 + #6 SS3)
+  assert.equal(r3.damageBill, 2)            // 4 × 0.56 = 2.24 → 2.0
+  assert.equal(r3.expectedProtection, 62.48)
+  assert.equal(r3.strategyScore, 82)        // 62 / best 76
+  assert.equal(r3.coinsThatHelped, 5)       // #17 (2) + #6 (3)
+
+  assert.deepEqual(s.portfolio, [24, 19, 17, 6])
+  assert.equal(s.rounds.length, 3)
+  assert.equal(advanceRound(s).ok, false)   // no round 4
+})
+
+test('purchase is rejected for over-budget, not-in-deck, duplicate', () => {
+  const s = fresh('boreal', 'aware') // boreal deck has no #2; coins 6
+  assert.equal(buyCard(s, 1).ok, true)                   // #1 (cost 5), in boreal deck
+  assert.equal(s.coins, 1)
+  assert.equal(buyCard(s, 1).ok, false)                  // duplicate
+  assert.match(buyCard(s, 1).error, /already holds/)
+  assert.equal(buyCard(s, 2).ok, false)                  // #2 not in boreal deck
+  assert.match(buyCard(s, 2).error, /not in this port/)
+  assert.equal(buyCard(s, 12).ok, false)                 // #12 cost 4 > 1 left
+  assert.match(buyCard(s, 12).error, /Not enough coins/)
+})
+
+test('returns: none in round 1, at most one per round', () => {
+  const s = fresh()
+  buyCard(s, 24)
+  assert.equal(returnCard(s, 24).ok, false)              // round 1: no returns
+  assert.match(returnCard(s, 24).error, /rounds 2 and 3/)
+  lockRound(s); recordSpin(s, 'SI'); advanceRound(s)     // → round 2
+  assert.equal(returnCard(s, 24).ok, true)
+  assert.equal(returnCard(s, 19).ok, false)              // second return blocked
+  assert.match(returnCard(s, 19).error, /one card/)
+})
+
+test('locking needs a starting level; cannot unlock after the spin', () => {
+  const s = fresh('boreal', null)                        // no starting level
+  assert.equal(lockRound(s).ok, false)
+  assert.match(lockRound(s).error, /starting culture level/)
+  s.startingBand = 'aware'
+  assert.equal(lockRound(s).ok, true)
+  assert.equal(unlockRound(s).ok, true)                  // before spin: fine
+  lockRound(s); recordSpin(s, 'SI')
+  assert.equal(unlockRound(s).ok, false)                 // after spin: 409-equivalent
+  assert.match(unlockRound(s).error, /already been spun/)
+})
+
+test('cannot advance before the current round is spun', () => {
+  const s = fresh()
+  buyCard(s, 24); lockRound(s)
+  assert.equal(advanceRound(s).ok, false)
+  assert.match(advanceRound(s).error, /not been spun/)
+})

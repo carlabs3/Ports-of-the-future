@@ -1,24 +1,46 @@
 import { Schema, model } from 'mongoose'
 
-// Per-table strategy record for the "Ports of the Future" phase-2 dynamic.
-// SEPARATE from the legacy TeamActions (footprint pipeline) — do not conflate.
-// In phase 6 it is created with portId (and cultureBand computed from PARI);
-// measures / coinsSpent are filled in phase 7.
+// Per-team game record (workshop v4). Three rounds, one spin each.
+//   portfolio    = the cards the team currently holds (cumulative across rounds)
+//   coins        = coins available to spend right now
+//   startingBand = the game-start culture level (from PARI mean, or chosen by the
+//                  facilitator if the team has no PARI). Fixed for the game; the
+//                  strategy-score denominator uses it. The EFFECTIVE level each
+//                  round is startingBand + one step per enabler in the portfolio.
+//   rounds[]     = one snapshot per spin (see fields below).
+const roundSchema = new Schema({
+  round:             Number,
+  bought:            { type: [Number], default: [] },
+  returned:          { type: Number, default: null },
+  coinsStart:        Number,
+  coinsSpent:        Number,
+  refund:            Number,
+  coinsLeft:         Number,
+  drawnEvent:        { type: String, default: null },  // event code, e.g. 'SS'
+  rawLossesAvoidedPct: Number,                         // full precision
+  lossesAvoidedPct:  Number,                           // displayed (0–100, 1 dp)
+  damageBill:        Number,                            // D14
+  expectedProtection: Number,                          // %
+  strategyScore:     Number,                           // whole %
+  coinsThatHelped:   Number,
+  cultureLevel:      String,                           // effective band that applied
+}, { _id: false })
+
 const teamStrategySchema = new Schema({
-  sessionCode: { type: String, required: true },
-  group:       { type: String, required: true },
-  portId:      { type: String, required: true }, // string slug (v4, e.g. 'nord-maris')
-  // Base culture band derived from the table's mean PARI (see cultureService).
-  cultureBand: { type: String, enum: ['reactive', 'aware', 'developing', 'proactive', null], default: null },
-  measures:    { type: [Number], default: [] }, // phase 7
-  coinsSpent:  { type: Number, default: 0 },     // phase 7
-  // Locks the table's measures. Once true, measures can't be edited and the
-  // table counts toward the "all tables confirmed" gate before the wheel.
-  confirmed:   { type: Boolean, default: false },
-  // Phase 8 — roulette outcome (snapshot at the moment the wheel was spun).
-  drawnEvent:       { type: String, default: null }, // event code, e.g. 'SS'
-  preparedness:     { type: Number, default: null }, // 0–10
-  lossesAvoidedPct: { type: Number, default: null }, // 0–100
+  sessionCode:     { type: String, required: true },
+  group:           { type: String, required: true },
+  portId:          { type: String, required: true }, // string slug (e.g. 'nord-maris')
+
+  startingBand:    { type: String, enum: ['reactive', 'aware', 'developing', 'proactive', null], default: null },
+  portfolio:       { type: [Number], default: [] },
+  coins:           { type: Number, default: 6 },
+  roundStartCoins: { type: Number, default: 6 },
+  currentRound:    { type: Number, default: 1 },
+  roundLocked:     { type: Boolean, default: false },
+  roundBought:     { type: [Number], default: [] },
+  roundReturned:   { type: Number, default: null },
+
+  rounds:          { type: [roundSchema], default: [] },
 }, { timestamps: true })
 
 teamStrategySchema.index({ sessionCode: 1, group: 1 }, { unique: true })

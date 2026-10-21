@@ -5,13 +5,15 @@ import ParIndexResult from '../models/ParIndexResult.js'
 import TeamStrategy from '../models/TeamStrategy.js'
 import Session from '../models/Session.js'
 import { PORTS, PORTS_BY_ID } from '../config/ports/index.js'
+import { MEASURES_BY_ID } from '../config/measures.js'
 import { EVENTS_BY_CODE, EVENT_CODES } from '../config/events.js'
 import { getPublicQuestionnaire } from '../services/questionnaireService.js'
 import { persistParSubmission, buildParRanking, computeParGroups } from '../services/parSubmissionService.js'
-import { validateMeasureSelection, getPublicMeasures, MEASURE_BUDGET } from '../services/measuresService.js'
-import { computeEffectiveCultureBand, computeCultureBand } from '../services/cultureService.js'
-import { computePreparedness, computeExpectedLossesAvoided, computeCoinsThatHelped } from '../services/preparednessService.js'
+import { getPublicMeasures } from '../services/measuresService.js'
+import { computeCultureBand, applyCultureMeasureBonus, BAND_ORDER } from '../services/cultureService.js'
 import { drawEvent, topExposureEvents } from '../services/wheelService.js'
+import { buyCard, returnCard, lockRound, unlockRound, recordSpin, advanceRound, ROUND_BUDGET } from '../services/roundsService.js'
+import { computeFinalRanking } from '../services/strategyService.js'
 
 const BAND_LABELS = {
   reactive:   'Reactive',
@@ -48,335 +50,265 @@ export default function parRouter(io) {
     res.json(getPublicMeasures())
   })
 
-  // Facilitator-only: per-group strategy state for the control centre. The
-  // effective culture band is recomputed live (current PARI base + measure
-  // bonus) so it never goes stale as new PARs arrive.
+  // ── v4 rounds: helpers ──────────────────────────────────────────────────────
+  // Facilitator-facing team state. NEVER includes exposure weights or the
+  // best-strategy combinations — only the team's own cards, coins and results.
+  function publicStrategy(doc) {
+    const port = PORTS_BY_ID[doc.portId]
+    return {
+      group:           doc.group,
+      portId:          doc.portId,
+      portName:        port?.name || null,
+      startingBand:    doc.startingBand,
+      cultureLevel:    applyCultureMeasureBonus(doc.startingBand, doc.portfolio),
+      coins:           doc.coins,
+      roundStartCoins: doc.roundStartCoins,
+      currentRound:    doc.currentRound,
+      roundLocked:     doc.roundLocked,
+      roundBudget:     ROUND_BUDGET[(doc.currentRound || 1) - 1],
+      portfolio:       doc.portfolio.map(id => ({ id, name: MEASURES_BY_ID[id]?.name || `Measure ${id}`, cost: MEASURES_BY_ID[id]?.cost ?? null })),
+      roundBought:     [...doc.roundBought],
+      roundReturned:   doc.roundReturned,
+      rounds:          doc.rounds.map(r => (r.toObject ? r.toObject() : r)),
+    }
+  }
+
+  // "Every team has locked round 1" — the point from which a team's wheel may be
+  // revealed (its composition + B11 motifs), for the team being drawn only.
+  const allLockedRound1 = (strategies) =>
+    strategies.length > 0 && strategies.every(s => s.rounds.some(r => r.round === 1) || (s.currentRound === 1 && s.roundLocked))
+
+  // Run a pure round-logic mutation on a team's doc, save + broadcast on success.
+  async function mutateStrategy(code, group, res, fn, badStatus = 400) {
+    const doc = await TeamStrategy.findOne({ sessionCode: code, group })
+    if (!doc) return res.status(404).json({ error: 'Team strategy not found' })
+    const r = fn(doc)
+    if (!r.ok) return res.status(badStatus).json({ error: r.error })
+    await doc.save()
+    const payload = publicStrategy(doc)
+    io.to(code).emit('strategy:update', payload)
+    return res.json({ ok: true, strategy: payload, ...(r.refund != null ? { refund: r.refund } : {}) })
+  }
+
+  // Facilitator-only: full round state for every team (control centre + reconnect).
   router.get('/:code/strategies', authMiddleware, async (req, res) => {
     try {
       const strategies = await TeamStrategy.find({ sessionCode: req.params.code })
-        .select('group portId measures coinsSpent confirmed -_id')
-      const out = await Promise.all(strategies.map(async s => ({
-        group:       s.group,
-        portId:      s.portId,
-        measures:    s.measures || [],
-        coinsSpent:  s.coinsSpent || 0,
-        coinsRemaining: MEASURE_BUDGET - (s.coinsSpent || 0),
-        confirmed:   !!s.confirmed,
-        cultureBand: await computeEffectiveCultureBand(req.params.code, s.group, s.measures || []),
-      })))
-      res.json({ budget: MEASURE_BUDGET, strategies: out })
+      res.json({ roundBudgets: ROUND_BUDGET, strategies: strategies.map(publicStrategy) })
     } catch (err) {
       console.error('PAR strategies error:', err.message)
-      res.status(500).json({ error: 'Error al obtener estrategias' })
+      res.status(500).json({ error: 'Could not load team strategies' })
     }
   })
 
-  // Facilitator-only: save a table's bought measures (budget = 6 coins).
-  router.put('/:code/strategy/:group', authMiddleware, async (req, res) => {
-    try {
-      const { code, group } = req.params
-      const { measures } = req.body
-
-      // Locked once confirmed — measures can't be edited afterwards.
-      const existing = await TeamStrategy.findOne({ sessionCode: code, group })
-      if (!existing) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
-      if (existing.confirmed) {
-        return res.status(409).json({ error: 'Las medidas de esta mesa están confirmadas y bloqueadas.' })
-      }
-
-      const check = validateMeasureSelection(measures || [])
-      if (!check.ok) return res.status(400).json({ error: check.error, budget: MEASURE_BUDGET })
-
-      const cultureBand = await computeEffectiveCultureBand(code, group, measures || [])
-
-      const updated = await TeamStrategy.findOneAndUpdate(
-        { sessionCode: code, group },
-        { measures: measures || [], coinsSpent: check.cost, cultureBand },
-        { new: true }
-      )
-
-      const payload = {
-        group:          updated.group,
-        portId:         updated.portId,
-        measures:       updated.measures,
-        coinsSpent:     updated.coinsSpent,
-        coinsRemaining: MEASURE_BUDGET - updated.coinsSpent,
-        cultureBand:    updated.cultureBand,
-        confirmed:      updated.confirmed,
-      }
-
-      // Live tablero update, same style as par:update.
-      io.to(code).emit('strategy:update', payload)
-
-      res.json({ ok: true, strategy: payload })
-    } catch (err) {
-      console.error('PAR strategy save error:', err.message)
-      res.status(500).json({ error: 'Error al guardar estrategia' })
+  // Facilitator-only: set a team's STARTING culture level (for a team with no
+  // PARI answers). Allowed only before round 1 is locked.
+  router.patch('/:code/strategy/:group/starting-level', authMiddleware, async (req, res) => {
+    const { code, group } = req.params
+    const { band } = req.body
+    if (!BAND_ORDER.includes(band)) return res.status(400).json({ error: 'Invalid culture level' })
+    const doc = await TeamStrategy.findOne({ sessionCode: code, group })
+    if (!doc) return res.status(404).json({ error: 'Team strategy not found' })
+    if (doc.roundLocked || doc.rounds.length > 0) {
+      return res.status(409).json({ error: 'The starting level is fixed once round 1 is locked.' })
     }
+    doc.startingBand = band
+    await doc.save()
+    const payload = publicStrategy(doc)
+    io.to(code).emit('strategy:update', payload)
+    res.json({ ok: true, strategy: payload })
   })
 
-  // Facilitator-only: confirm (lock) a table's measures. After this the table's
-  // measures can't be edited, and it counts toward the wheel gate.
-  router.patch('/:code/strategy/:group/confirm', authMiddleware, async (req, res) => {
-    try {
-      const { code, group } = req.params
-      const updated = await TeamStrategy.findOneAndUpdate(
-        { sessionCode: code, group },
-        { confirmed: true },
-        { new: true }
-      )
-      if (!updated) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+  // Facilitator-only: buy / return a card this round; lock / unlock the round.
+  router.post('/:code/strategy/:group/buy', authMiddleware, (req, res) =>
+    mutateStrategy(req.params.code, req.params.group, res, doc => buyCard(doc, Number(req.body.measureId))))
 
-      const payload = {
-        group:          updated.group,
-        portId:         updated.portId,
-        measures:       updated.measures,
-        coinsSpent:     updated.coinsSpent,
-        coinsRemaining: MEASURE_BUDGET - updated.coinsSpent,
-        cultureBand:    updated.cultureBand,
-        confirmed:      updated.confirmed,
-      }
-      io.to(code).emit('strategy:update', payload)
-      res.json({ ok: true, strategy: payload })
-    } catch (err) {
-      console.error('PAR strategy confirm error:', err.message)
-      res.status(500).json({ error: 'Error al confirmar medidas' })
+  router.post('/:code/strategy/:group/return', authMiddleware, (req, res) =>
+    mutateStrategy(req.params.code, req.params.group, res, doc => returnCard(doc, Number(req.body.measureId))))
+
+  router.patch('/:code/strategy/:group/unlock', authMiddleware, (req, res) =>
+    mutateStrategy(req.params.code, req.params.group, res, doc => unlockRound(doc), 409))
+
+  // Lock: derive the starting level from PARI first (if not already set), then lock.
+  router.patch('/:code/strategy/:group/lock', authMiddleware, async (req, res) => {
+    const { code, group } = req.params
+    const doc = await TeamStrategy.findOne({ sessionCode: code, group })
+    if (!doc) return res.status(404).json({ error: 'Team strategy not found' })
+    if (doc.startingBand == null) {
+      const base = await computeCultureBand(code, group) // PARI mean → band, or null
+      if (base) doc.startingBand = base
     }
+    const r = lockRound(doc) // 409 if still no starting level
+    if (!r.ok) return res.status(409).json({ error: r.error })
+    await doc.save()
+    const payload = publicStrategy(doc)
+    io.to(code).emit('strategy:update', payload)
+    res.json({ ok: true, strategy: payload })
   })
 
-  // Facilitator-only: unlock (re-open) a table's measures. Reverts confirmed to
-  // false so measures can be edited again — which also makes the wheel gate fail
-  // until it's re-confirmed. SAFEGUARD: refuse if the table has already drawn
-  // (drawnEvent present); by then it knows its exposure weights, so re-editing
-  // measures with the result known would be the exact leak the gate prevents.
-  router.patch('/:code/strategy/:group/unlock', authMiddleware, async (req, res) => {
-    try {
-      const { code, group } = req.params
-      const strategy = await TeamStrategy.findOne({ sessionCode: code, group })
-      if (!strategy) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
-      if (strategy.drawnEvent) {
-        return res.status(409).json({
-          error: 'No se puede desbloquear una mesa que ya ha girado la ruleta: conoce su exposición y podría editar medidas con el resultado conocido.',
-        })
-      }
-
-      strategy.confirmed = false
-      await strategy.save()
-
-      const payload = {
-        group:          strategy.group,
-        portId:         strategy.portId,
-        measures:       strategy.measures,
-        coinsSpent:     strategy.coinsSpent,
-        coinsRemaining: MEASURE_BUDGET - strategy.coinsSpent,
-        cultureBand:    strategy.cultureBand,
-        confirmed:      strategy.confirmed,
-      }
-      io.to(code).emit('strategy:update', payload)
-      res.json({ ok: true, strategy: payload })
-    } catch (err) {
-      console.error('PAR strategy unlock error:', err.message)
-      res.status(500).json({ error: 'Error al desbloquear medidas' })
-    }
-  })
-
-  // Facilitator-only: wheel composition for ONE team, revealed only after every
-  // table is locked (same gate as the draw). Returns the exposure weights so the
-  // client can render the wheel + "what this wheel holds" legend BEFORE spinning.
-  // Does NOT draw — no event is chosen and nothing is persisted.
+  // Facilitator-only: wheel composition for ONE team — revealed only once EVERY
+  // team has locked round 1, and returned only for the requested team. This is
+  // what lets the "What this wheel holds" legend show before the spin.
   router.get('/:code/strategy/:group/wheel', authMiddleware, async (req, res) => {
     try {
       const { code, group } = req.params
-      const strategy = await TeamStrategy.findOne({ sessionCode: code, group })
-      if (!strategy) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+      const doc = await TeamStrategy.findOne({ sessionCode: code, group })
+      if (!doc) return res.status(404).json({ error: 'Team strategy not found' })
 
-      // Same gate as the draw: exposure weights are only revealed once every
-      // table is locked, so no measure decision can still be contaminated.
-      const all = await TeamStrategy.find({ sessionCode: code }).select('group confirmed -_id')
-      const pending = all.filter(s => !s.confirmed).map(s => s.group)
-      if (all.length === 0 || pending.length > 0) {
-        return res.status(409).json({
-          error: `Todas las mesas deben confirmar sus medidas antes de abrir la ruleta. Pendientes: ${pending.join(', ') || '—'}`,
-          pending,
-        })
+      const all = await TeamStrategy.find({ sessionCode: code })
+      if (!allLockedRound1(all)) {
+        return res.status(409).json({ error: 'Every team must lock round 1 before any wheel is shown.' })
       }
 
-      const port = PORTS_BY_ID[strategy.portId]
-      const exposure = EVENT_CODES.map(c => ({
-        code: c,
-        name: EVENTS_BY_CODE[c]?.name || c,
-        weight: port?.exposureWeights?.[c] || 0,
-      }))
-      const cultureBand = await computeEffectiveCultureBand(code, group, strategy.measures || [])
+      const port = PORTS_BY_ID[doc.portId]
+      const exposure = EVENT_CODES.map(c => ({ code: c, name: EVENTS_BY_CODE[c]?.name || c, weight: port?.exposureWeights?.[c] || 0 }))
+      const spun = doc.rounds.find(r => r.round === doc.currentRound)
       res.json({
         group,
-        portName:   port?.name || null,
+        portName:           port?.name || null,
         exposure,                        // [{ code, name, weight }] — weights sum 10
-        measures:   strategy.measures || [],
-        cultureBand,
-        // Two highest-exposure events → illustration motifs (safe here: all
-        // teams are locked, so exposure is already revealed for this team).
+        portfolio:          doc.portfolio,
+        cultureLevel:       applyCultureMeasureBonus(doc.startingBand, doc.portfolio),
         illustrationMotifs: topExposureEvents(port?.exposureWeights || {}),
-        drawn:      !!strategy.drawnEvent,
-        eventCode:  strategy.drawnEvent || null,
+        currentRound:       doc.currentRound,
+        drawnThisRound:     !!spun,
+        eventCode:          spun?.drawnEvent || null,
       })
     } catch (err) {
       console.error('PAR wheel error:', err.message)
-      res.status(500).json({ error: 'Error al obtener la ruleta' })
+      res.status(500).json({ error: 'Could not load the wheel' })
     }
   })
 
-  // Facilitator-only: spin the roulette for a table. Draws an event from the
-  // port's SECRET exposure weights, computes preparedness with the table's
-  // measures + effective culture band, and stores the outcome snapshot.
-  // GATE: rejects (409) unless EVERY table in the session is confirmed — this is
-  // what makes revealing the exposure weights (below) safe.
+  // Facilitator-only: spin the current round for a team. GATE: every team must
+  // have LOCKED the current round first (Option A). Draws from the port's secret
+  // weights, records the round snapshot (P, losses avoided, damage, expected,
+  // strategy score, coins that helped), and returns the result + exposure slices.
   router.post('/:code/strategy/:group/draw', authMiddleware, async (req, res) => {
     try {
       const { code, group } = req.params
-      const strategy = await TeamStrategy.findOne({ sessionCode: code, group })
-      if (!strategy) return res.status(404).json({ error: 'Estrategia de mesa no encontrada' })
+      const doc = await TeamStrategy.findOne({ sessionCode: code, group })
+      if (!doc) return res.status(404).json({ error: 'Team strategy not found' })
 
-      // GATE: every table in the session must be confirmed before any draw. This
-      // is what makes revealing the exposure weights safe (no decision left to
-      // contaminate). Reject otherwise.
-      const allStrategies = await TeamStrategy.find({ sessionCode: code }).select('group confirmed -_id')
-      const pending = allStrategies.filter(s => !s.confirmed).map(s => s.group)
-      if (allStrategies.length === 0 || pending.length > 0) {
-        return res.status(409).json({
-          error: `Todas las mesas deben confirmar sus medidas antes de girar la ruleta. Pendientes: ${pending.join(', ') || '—'}`,
-          pending,
-        })
+      const all = await TeamStrategy.find({ sessionCode: code })
+      const pending = all.filter(s => !s.roundLocked).map(s => s.group)
+      if (all.length === 0 || pending.length > 0) {
+        return res.status(409).json({ error: `Every team must lock this round before any spin. Pending: ${pending.join(', ') || '—'}`, pending })
       }
 
-      const eventCode = drawEvent(strategy.portId)
-      if (!eventCode) return res.status(400).json({ error: 'No se pudo sortear el evento (puerto sin pesos)' })
+      const eventCode = drawEvent(doc.portId)
+      if (!eventCode) return res.status(400).json({ error: 'Could not draw an event (port has no weights).' })
 
-      // Recompute the effective culture band live so the outcome uses fresh state.
-      const cultureBand = await computeEffectiveCultureBand(code, group, strategy.measures || [])
-      const { preparedness, lossesAvoidedPct, breakdown } = computePreparedness({
-        measureIds: strategy.measures || [], eventCode, cultureBand,
-      })
+      const r = recordSpin(doc, eventCode)
+      if (!r.ok) return res.status(409).json({ error: r.error })
+      await doc.save()
 
-      strategy.drawnEvent = eventCode
-      strategy.preparedness = preparedness
-      strategy.lossesAvoidedPct = lossesAvoidedPct
-      await strategy.save()
-
-      const event = EVENTS_BY_CODE[eventCode]
-      const port = PORTS_BY_ID[strategy.portId]
-      // Exposure weights are revealed HERE ONLY (wheel phase, all tables locked)
-      // so the client can draw proportional wheel slices. Never sent earlier.
-      const exposure = EVENT_CODES.map(c => ({
-        code: c,
-        name: EVENTS_BY_CODE[c]?.name || c,
-        weight: port?.exposureWeights?.[c] || 0,
-      }))
+      const port = PORTS_BY_ID[doc.portId]
+      const exposure = EVENT_CODES.map(c => ({ code: c, name: EVENTS_BY_CODE[c]?.name || c, weight: port?.exposureWeights?.[c] || 0 }))
       const payload = {
         group,
-        portName:    port?.name || null,
+        portName:  port?.name || null,
+        round:     r.entry.round,
         eventCode,
-        eventName:   event?.name || eventCode,
-        exposure,    // [{ code, name, weight }] — 7 slices, weights sum 10
-        cultureBand,
-        preparedness,
-        lossesAvoidedPct,
-        breakdown, // per-measure sᵢ (debrief)
+        eventName: EVENTS_BY_CODE[eventCode]?.name || eventCode,
+        exposure,
+        illustrationMotifs: topExposureEvents(port?.exposureWeights || {}),
+        entry:     r.entry, // losses avoided, damage, expected, strategy score, coins that helped
       }
-
-      io.to(code).emit('outcome:update', payload)
+      io.to(code).emit('outcome:update', { group, round: r.entry.round })
+      io.to(code).emit('strategy:update', publicStrategy(doc))
       res.json({ ok: true, outcome: payload })
     } catch (err) {
       console.error('PAR draw error:', err.message)
-      res.status(500).json({ error: 'Error al sortear el evento' })
+      res.status(500).json({ error: 'Could not spin the wheel' })
     }
   })
 
-  // Facilitator-only: per-table outcomes for the ranking, ordered by
-  // lossesAvoidedPct desc. Includes the drawn event NAME and per-measure
-  // breakdown (debrief) — never exposure weights or the raw protection matrix.
-  router.get('/:code/outcomes', authMiddleware, async (req, res) => {
+  // Facilitator-only: advance ALL teams to the next round (+2 coins). GATE: every
+  // team must have spun the current round.
+  router.post('/:code/next-round', authMiddleware, async (req, res) => {
     try {
       const { code } = req.params
-      const strategies = await TeamStrategy.find({ sessionCode: code })
-        .select('group portId measures drawnEvent preparedness lossesAvoidedPct -_id')
-
-      const outcomes = await Promise.all(strategies.map(async s => {
-        const drawn = s.drawnEvent || null
-        let breakdown = []
-        if (drawn) {
-          const cultureBand = await computeEffectiveCultureBand(code, s.group, s.measures || [])
-          breakdown = computePreparedness({ measureIds: s.measures || [], eventCode: drawn, cultureBand }).breakdown
-        }
-        return {
-          group:            s.group,
-          portName:         PORTS_BY_ID[s.portId]?.name || null,
-          drawn:            !!drawn,
-          eventCode:        drawn,
-          drawnEvent:       drawn ? (EVENTS_BY_CODE[drawn]?.name || drawn) : null,
-          preparedness:     s.preparedness ?? null,
-          lossesAvoidedPct: s.lossesAvoidedPct ?? null,
-          breakdown,
-        }
-      }))
-
-      // Sort by lossesAvoidedPct desc; un-drawn tables (null) go last.
-      outcomes.sort((a, b) => (b.lossesAvoidedPct ?? -1) - (a.lossesAvoidedPct ?? -1))
-      res.json({ outcomes })
+      const all = await TeamStrategy.find({ sessionCode: code })
+      const notSpun = all.filter(s => !s.rounds.some(r => r.round === s.currentRound)).map(s => s.group)
+      if (all.length === 0 || notSpun.length > 0) {
+        return res.status(409).json({ error: `Every team must spin before the next round. Pending: ${notSpun.join(', ') || '—'}`, pending: notSpun })
+      }
+      for (const doc of all) { advanceRound(doc); await doc.save() }
+      const round = all[0].currentRound
+      io.to(code).emit('rounds:advanced', { round })
+      res.json({ ok: true, round })
     } catch (err) {
-      console.error('PAR outcomes error:', err.message)
-      res.status(500).json({ error: 'Error al obtener resultados de la ruleta' })
+      console.error('PAR next-round error:', err.message)
+      res.status(500).json({ error: 'Could not advance the round' })
     }
   })
 
-  // Facilitator-only: DEBRIEF — luck vs strategy. For each team: the actual
-  // result (losses avoided from its draw) and the EXPECTED result (plan value
-  // across all events, weighted by exposure), plus coins that helped. Expected
-  // results are sent ONLY in the debrief phase, after all draws. Exposure
-  // weights are used server-side only — just the resulting numbers go out.
+  // Facilitator-only: per-team round snapshots (ranking / debrief source). No
+  // exposure weights, no best-strategy combinations.
+  router.get('/:code/outcomes', authMiddleware, async (req, res) => {
+    try {
+      const strategies = await TeamStrategy.find({ sessionCode: req.params.code })
+      const teams = strategies.map(s => ({
+        group:    s.group,
+        portName: PORTS_BY_ID[s.portId]?.name || null,
+        rounds:   s.rounds.map(r => (r.toObject ? r.toObject() : r)),
+      }))
+      res.json({ teams })
+    } catch (err) {
+      console.error('PAR outcomes error:', err.message)
+      res.status(500).json({ error: 'Could not load outcomes' })
+    }
+  })
+
+  // Facilitator-only: DEBRIEF — luck vs strategy over the three rounds. Final
+  // rank is the mean of the three strategy scores (skill); total damage across
+  // rounds is the luck line. Per round: event, losses avoided, damage bill,
+  // expected protection, strategy score, coins that helped. Exposure weights are
+  // used server-side only — just the resulting numbers go out. (Frontend B10
+  // adaptation lands in Commit 6; this is the data source.)
   router.get('/:code/debrief', authMiddleware, async (req, res) => {
     try {
       const { code } = req.params
       const session = await Session.findOne({ code, facilitatorId: req.user.id })
-      if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
+      if (!session) return res.status(404).json({ error: 'Session not found' })
       if (session.phase !== 'debrief') {
-        return res.status(409).json({ error: 'Los resultados esperados solo están disponibles en la fase de Debrief.' })
+        return res.status(409).json({ error: 'The debrief is only available in the debrief phase.' })
       }
 
       const strategies = await TeamStrategy.find({ sessionCode: code })
-        .select('group portId measures coinsSpent drawnEvent lossesAvoidedPct -_id')
 
-      const teams = await Promise.all(strategies.map(async s => {
+      const ranking = computeFinalRanking(strategies.map(s => ({
+        group:          s.group,
+        portId:         s.portId,
+        strategyScores: s.rounds.map(r => r.strategyScore).filter(v => v != null),
+        damages:        s.rounds.map(r => r.damageBill),
+      })))
+      const rankByGroup = Object.fromEntries(ranking.map(r => [r.group, r]))
+
+      const teams = strategies.map(s => {
         const port = PORTS_BY_ID[s.portId]
-        const measures = s.measures || []
-        // BASE culture band (from PARI mean); computeExpectedLossesAvoided applies
-        // the #19/#20 bump itself, matching the effective band used at draw time.
-        const baseBand = await computeCultureBand(code, s.group)
-        const expected = computeExpectedLossesAvoided({
-          measures, cultureBand: baseBand, exposureWeights: port?.exposureWeights || {},
-        })
-        const drawn = s.drawnEvent || null
+        const row = rankByGroup[s.group] || {}
         return {
-          group:           s.group,
-          portName:        port?.name || null,
-          drawn:           !!drawn,
-          eventCode:       drawn,
-          eventName:       drawn ? (EVENTS_BY_CODE[drawn]?.name || drawn) : null,
-          result:          s.lossesAvoidedPct ?? null, // actual drawn outcome (0–100)
-          expected,                                     // plan's expected (0–100, 2dp)
-          coinsThatHelped: drawn ? computeCoinsThatHelped({ measures, event: drawn }) : 0,
-          coinsSpent:      s.coinsSpent || 0,
-          // Two highest-exposure events → illustration motifs (debrief only).
+          group:        s.group,
+          portName:     port?.name || null,
+          rank:         row.rank ?? null,
+          finalScore:   row.finalScore ?? 0,     // mean of the 3 strategy scores (skill)
+          totalDamage:  row.totalDamage ?? 0,    // sum of the 3 damage bills (luck)
+          portfolio:    s.portfolio.map(id => ({ id, name: MEASURES_BY_ID[id]?.name || `Measure ${id}`, cost: MEASURES_BY_ID[id]?.cost ?? null })),
+          rounds:       s.rounds.map(r => {
+            const o = r.toObject ? r.toObject() : r
+            return { ...o, eventName: o.drawnEvent ? (EVENTS_BY_CODE[o.drawnEvent]?.name || o.drawnEvent) : null }
+          }),
           illustrationMotifs: topExposureEvents(port?.exposureWeights || {}),
         }
-      }))
+      })
 
-      // Sorted by the actual result desc; un-drawn teams (null) go last.
-      teams.sort((a, b) => (b.result ?? -1) - (a.result ?? -1))
-      res.json({ budget: MEASURE_BUDGET, teams })
+      teams.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
+      res.json({ roundBudgets: ROUND_BUDGET, teams })
     } catch (err) {
       console.error('PAR debrief error:', err.message)
-      res.status(500).json({ error: 'Error al obtener el debrief' })
+      res.status(500).json({ error: 'Could not load the debrief' })
     }
   })
 

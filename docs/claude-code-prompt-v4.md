@@ -184,10 +184,13 @@ Browser check: 3 rounds with 6 test teams, entirely from the control center.
   - coastal setting.
   World zone is removed, and the options are in appendix D. Five questions do not fit on one phone screen, so split them into two screens: team and port size first, then the other three. All options are served from `parQuestionnaire.js`, as today.
 - Save the four profile fields with each PARI result. The 10 scored questions do not change.
-- **PAR Index tab (B7):**
+- **PAR Index tab (B7, as it stands after R1):**
   - The filters become: port size, governance model, climate zone, coastal setting, team, band.
-  - They still combine, the anonymity rule (fewer than 3 answers, show nothing) stays, and so do "Showing N of M answers" and "Clear filters".
-  - Keep everything else in B7 as built.
+  - They still combine, and "Showing N of M answers" and "Clear filters" stay.
+  - There is **no** minimum-group suppression: R1 removed the min-3 "Too few
+    answers" rule on purpose and that decision stands. Commit 5 only changes the
+    filter set; it does not reinstate the rule.
+  - Keep everything else on the tab as built in R1.
 
 ### Commit 6 · Debrief tab (B10, adapted)
 

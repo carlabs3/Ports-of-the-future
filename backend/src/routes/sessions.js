@@ -64,7 +64,8 @@ export default function sessionsRouter(io) {
         configVersion: 'v4',
       })
 
-      // Create one TeamStrategy per group (measures empty, cultureBand null now).
+      // Create one TeamStrategy per group. v4 defaults apply: portfolio empty,
+      // coins 6, round 1, startingBand null until PARI/lock.
       await TeamStrategy.insertMany(
         portAssignments.map(pa => ({ sessionCode: code, group: pa.group, portId: pa.portId }))
       )
@@ -75,21 +76,28 @@ export default function sessionsRouter(io) {
     }
   })
 
-  // Facilitator: re-roll the random port assignment. Allowed ONLY before the
-  // Strategy phase (join/par) — once teams start locking measures against their
-  // port, re-shuffling would be unfair, so this returns 409 from 'strategy' on.
-  // Ports stay hidden on the projected screen until the Roulette tab regardless.
-  const SHUFFLE_BLOCKED_PHASES = ['strategy', 'wheel', 'debrief']
+  // Facilitator: re-roll the random port assignment. Allowed ONLY until a team
+  // commits to its port — once ANY team has bought a card, re-shuffling is
+  // blocked (409). v4 decks are port-specific, so reshuffling after a buy would
+  // orphan cards that don't exist in the new port's deck. Ports stay hidden on
+  // the projected screen until the Roulette tab regardless.
   router.post('/:code/shuffle-ports', async (req, res) => {
     try {
       const { code } = req.params
       const session = await Session.findOne({ code, facilitatorId: req.user.id })
-      if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
+      if (!session) return res.status(404).json({ error: 'Session not found' })
 
-      if (SHUFFLE_BLOCKED_PHASES.includes(session.phase)) {
+      const committed = await TeamStrategy.findOne({
+        sessionCode: code,
+        $or: [
+          { 'portfolio.0': { $exists: true } },
+          { roundLocked: true },
+          { 'rounds.0': { $exists: true } },
+        ],
+      }).select('group -_id')
+      if (committed) {
         return res.status(409).json({
-          error: 'Ports can no longer be shuffled: the Strategy phase has started.',
-          phase: session.phase,
+          error: 'Ports can no longer be shuffled: a team has already committed to its port.',
         })
       }
 
@@ -97,8 +105,8 @@ export default function sessionsRouter(io) {
       session.portAssignments = portAssignments
       await session.save()
 
-      // Re-point each team's strategy at its new port (measures stay untouched;
-      // in join/par they are still empty and no draw has happened).
+      // Re-point each team's strategy at its new port. The gate above guarantees
+      // every portfolio is still empty, so no bought card is orphaned.
       await Promise.all(portAssignments.map(pa =>
         TeamStrategy.updateOne({ sessionCode: code, group: pa.group }, { portId: pa.portId })
       ))
