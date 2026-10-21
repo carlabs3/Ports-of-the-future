@@ -1107,12 +1107,8 @@ export default function PortsControlCenter() {
 
               {/* Average by area */}
               <div style={{ flex: 1, minHeight: 0, border: HAIRLINE, padding: '12px 18px', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                <div style={{ flexShrink: 0, marginBottom: 6 }}>
                   <span style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink }}>Average by area (out of 20)</span>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <span style={{ fontFamily: FONT.mono, fontSize: 13, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, padding: '1px 7px' }}>▼ Weakest</span>
-                    <span style={{ fontFamily: FONT.mono, fontSize: 13, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, padding: '1px 7px' }}>▲ Strongest</span>
-                  </div>
                 </div>
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                   {areaMeans.map(a => {
@@ -1120,10 +1116,10 @@ export default function PortsControlCenter() {
                     return (
                       <div key={a.id} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                          <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <span style={{ fontSize: 22, fontWeight: (weak || strong) ? 800 : 500 }}>{a.label}</span>
-                            {weak && <span style={{ fontFamily: FONT.mono, fontSize: 12, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, padding: '0 5px' }}>▼</span>}
-                            {strong && <span style={{ fontFamily: FONT.mono, fontSize: 12, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, padding: '0 5px' }}>▲</span>}
+                            {weak && <span style={{ fontFamily: FONT.mono, fontSize: 14, fontWeight: 700, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, padding: '3px 8px' }}>▼ Weakest</span>}
+                            {strong && <span style={{ fontFamily: FONT.mono, fontSize: 14, fontWeight: 700, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, padding: '3px 8px' }}>▲ Strongest</span>}
                           </span>
                           <span style={{ fontFamily: FONT.mono, fontSize: 20, fontWeight: 700 }}>{a.value}/20</span>
                         </div>
@@ -1140,8 +1136,8 @@ export default function PortsControlCenter() {
             {/* RIGHT column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0 }}>
 
-              {/* Distribution of individual scores */}
-              <div style={{ flex: 1, minHeight: 0, border: HAIRLINE, padding: '12px 18px', display: 'flex', flexDirection: 'column' }}>
+              {/* Distribution of individual scores — takes the rest of the height */}
+              <div style={{ flex: 7, minHeight: 0, border: HAIRLINE, padding: '12px 18px', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
                   <span style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink }}>Distribution of individual scores</span>
                   <span style={{ fontSize: 15, color: COLOR.ink60 }}>People per score range</span>
@@ -1159,18 +1155,18 @@ export default function PortsControlCenter() {
                 </div>
               </div>
 
-              {/* Band distribution — four equal cells, always */}
-              <div style={{ flexShrink: 0, display: 'flex', border: HAIRLINE }}>
+              {/* Band distribution — four equal cells, always; ~30% of the column */}
+              <div style={{ flex: 3, minHeight: 0, display: 'flex', border: HAIRLINE }}>
                 {bandCounts.map((b, i) => {
                   const ramp = BAND_RAMP[b.band]
                   const pct = hasData ? Math.round((b.count / shownCount) * 100) : null
                   return (
-                    <div key={b.band} style={{ flex: 1, background: ramp.bg, color: ramp.text, borderLeft: i === 0 ? 'none' : HAIRLINE, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '12px 14px' }}>
-                      <div>
-                        <div style={{ fontFamily: FONT.sans, fontSize: 18, fontWeight: 800 }}>{ramp.label}</div>
-                        <div style={{ fontFamily: FONT.mono, fontSize: 14 }}>{pct == null ? '—' : `${pct}%`}</div>
+                    <div key={b.band} style={{ flex: 1, minWidth: 0, background: ramp.bg, color: ramp.text, borderLeft: i === 0 ? 'none' : HAIRLINE, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '12px 14px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontFamily: FONT.sans, fontSize: 24, fontWeight: 800, whiteSpace: 'nowrap' }}>{ramp.label}</div>
+                        <div style={{ fontFamily: FONT.mono, fontSize: 18 }}>{pct == null ? '—' : `${pct}%`}</div>
                       </div>
-                      <div style={{ fontSize: 44, fontWeight: 800, lineHeight: 1 }}>{b.count}</div>
+                      <div style={{ fontSize: 72, fontWeight: 800, lineHeight: 1 }}>{b.count}</div>
                     </div>
                   )
                 })}
