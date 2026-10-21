@@ -1083,23 +1083,24 @@ export default function PortsControlCenter() {
         </div>
         )}
 
-        {/* 5 · DEBRIEF — phase: debrief. Luck vs strategy. */}
+        {/* 5 · DEBRIEF — phase: debrief. Luck vs strategy over three rounds. */}
         {phase === 'debrief' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {(() => {
             const teams = debrief?.teams || []
-            const bud = debrief?.budget ?? 6
             if (teams.length === 0) {
-              return <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No debrief data yet. Draw the wheel for every team first.</p>
+              return <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No debrief data yet. Play all three rounds first.</p>
             }
-            const rint = v => Math.round(v)
-            const drawn = teams.filter(t => t.drawn && t.result != null)
-            const roomAvg = drawn.length ? Math.round(drawn.reduce((s, t) => s + t.result, 0) / drawn.length) : 0
+            const rint = v => Math.round(v || 0)
+            // Facts across the room (all teams, all rounds).
+            const scored = teams.filter(t => (t.rounds || []).length > 0)
+            const roomAvgScore = scored.length ? Math.round(scored.reduce((s, t) => s + (t.finalScore || 0), 0) / scored.length) : 0
             let bestPlan = null
-            for (const t of teams) if (!bestPlan || t.expected > bestPlan.expected) bestPlan = t
-            let hardest = null, hardestDiff = Infinity
-            for (const t of drawn) { const d = rint(t.result) - rint(t.expected); if (d < hardestDiff) { hardestDiff = d; hardest = t } }
-            const coinsWasted = drawn.reduce((s, t) => s + Math.max(0, t.coinsSpent - t.coinsThatHelped), 0)
+            for (const t of teams) if (!bestPlan || (t.finalScore || 0) > (bestPlan.finalScore || 0)) bestPlan = t
+            let hardest = null
+            for (const t of teams) if (!hardest || (t.totalDamage || 0) > (hardest.totalDamage || 0)) hardest = t
+            const coinsNoHelp = teams.reduce((s, t) =>
+              s + (t.rounds || []).reduce((rs, r) => rs + Math.max(0, (r.heldCost || 0) - (r.coinsThatHelped || 0)), 0), 0)
 
             const fact = (label, value, sub) => (
               <div style={{ border: HAIRLINE, padding: 18 }}>
@@ -1114,49 +1115,62 @@ export default function PortsControlCenter() {
                 {/* Legend */}
                 <div style={{ border: HAIRLINE, background: COLOR.ice, padding: '14px 18px' }}>
                   <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink, margin: 0, lineHeight: 1.5 }}>
-                    The <strong style={{ color: COLOR.harbour }}>bar</strong> is the result — losses avoided when the wheel hit.
-                    The <strong>▏marker</strong> is the expected result from the plan. Past the marker = luckier than the plan; short of it = unluckier.
+                    Each round's <strong style={{ color: COLOR.harbour }}>bar</strong> is losses avoided when the wheel hit; the <strong>▏marker</strong> is the plan's expected protection. Past the marker = lucky, short of it = unlucky.
+                    The <strong>final score</strong> is the average of the three strategy scores (skill); <strong>total damage</strong> is the luck.
                   </p>
                 </div>
 
-                {/* One row per team, sorted by result (backend) */}
+                {/* One row per team, sorted by final strategy score (backend rank) */}
                 <div style={{ border: HAIRLINE }}>
-                  {teams.map(t => {
-                    const resInt = t.result != null ? rint(t.result) : null
-                    const expInt = rint(t.expected)
-                    const diff = resInt != null ? resInt - expInt : null
-                    const luck = diff == null ? '—'
-                      : Math.abs(diff) <= 5 ? '≈ as expected'
-                        : diff > 0 ? `▲ ${diff} lucky` : `▼ ${-diff} unlucky`
-                    return (
-                      <div key={t.group} style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '16px 18px', borderTop: HAIRLINE }}>
-                        {t.illustrationMotifs?.length > 0 && (
-                          <PortIllustration motifs={t.illustrationMotifs} size={116} style={{ flexShrink: 0 }} />
-                        )}
-                        <div style={{ flex: '0 0 180px' }}>
-                          <div style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold }}>{t.group} · {t.portName || '—'}</div>
-                          <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60 }}>{t.eventName || 'not drawn'}</div>
-                        </div>
-                        <div style={{ flex: 1, position: 'relative', height: 24, background: COLOR.ice, border: HAIRLINE }}>
-                          {resInt != null && <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${resInt}%`, background: COLOR.harbour }} />}
-                          <div title={`Expected ${expInt}%`} style={{ position: 'absolute', top: -3, bottom: -3, left: `${expInt}%`, width: 2, background: COLOR.ink }} />
-                        </div>
-                        <div style={{ flex: '0 0 180px', textAlign: 'right' }}>
-                          <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.display, lineHeight: 1 }}>{resInt != null ? `${resInt}%` : '—'}</div>
-                          <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, marginTop: 2 }}>{luck}</div>
-                          <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, marginTop: 2 }}>Coins that helped {t.coinsThatHelped} / {bud}</div>
-                        </div>
+                  {teams.map(t => (
+                    <div key={t.group} style={{ display: 'flex', alignItems: 'stretch', gap: 18, padding: '16px 18px', borderTop: HAIRLINE }}>
+                      {t.illustrationMotifs?.length > 0 && (
+                        <PortIllustration motifs={t.illustrationMotifs} size={96} style={{ flexShrink: 0, alignSelf: 'center' }} />
+                      )}
+                      <div style={{ flex: '0 0 170px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60 }}>#{t.rank ?? '—'}</div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold }}>{t.group}</div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60 }}>{t.portName || '—'}</div>
                       </div>
-                    )
-                  })}
+
+                      {/* Three round bars */}
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6 }}>
+                        {(t.rounds || []).map(r => {
+                          const res = rint(r.lossesAvoidedPct), exp = rint(r.expectedProtection)
+                          const diff = res - exp
+                          const luck = Math.abs(diff) <= 5 ? '≈ as expected' : diff > 0 ? `▲ ${diff} lucky` : `▼ ${-diff} unlucky`
+                          return (
+                            <div key={r.round} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ flex: '0 0 148px', fontFamily: FONT.sans, fontSize: FS.sm, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <span style={{ fontFamily: FONT.mono, fontWeight: FW.bold, marginRight: 6 }}>R{r.round}</span>{r.eventName || r.drawnEvent}
+                              </span>
+                              <div style={{ flex: 1, position: 'relative', height: 18, background: COLOR.ice, border: HAIRLINE }}>
+                                <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${res}%`, background: COLOR.harbour }} />
+                                <div title={`Expected ${exp}%`} style={{ position: 'absolute', top: -2, bottom: -2, left: `${exp}%`, width: 2, background: COLOR.ink }} />
+                              </div>
+                              <span style={{ flex: '0 0 44px', textAlign: 'right', fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>{res}%</span>
+                              <span style={{ flex: '0 0 96px', fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: FW.semibold, color: COLOR.ink60 }}>{luck}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Final score + total damage */}
+                      <div style={{ flex: '0 0 150px', textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, lineHeight: 1 }}>{rint(t.finalScore)}</div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold }}>final score</div>
+                        <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, marginTop: 4 }}>Total damage {t.totalDamage ?? 0}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Four facts */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                  {fact('Room average', `${roomAvg}%`, 'results across the room')}
-                  {fact('Best plan on average', bestPlan?.group || '—', bestPlan ? `expected ${rint(bestPlan.expected)}%` : '')}
-                  {fact('Hardest luck', hardest?.group || '—', hardest ? `${hardestDiff > 0 ? '+' : ''}${hardestDiff} vs expected` : '')}
-                  {fact("Coins that didn't help", coinsWasted, 'across the room')}
+                  {fact('Average strategy score', `${roomAvgScore}`, 'across the room')}
+                  {fact('Best plan', bestPlan?.group || '—', bestPlan ? `final score ${rint(bestPlan.finalScore)}` : '')}
+                  {fact('Hardest luck', hardest?.group || '—', hardest ? `total damage ${hardest.totalDamage ?? 0}` : '')}
+                  {fact("Coins that didn't help", coinsNoHelp, 'across all three rounds')}
                 </div>
               </>
             )

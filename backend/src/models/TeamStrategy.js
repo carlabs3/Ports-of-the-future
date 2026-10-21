@@ -23,6 +23,7 @@ const roundSchema = new Schema({
   expectedProtection: Number,                          // %
   strategyScore:     Number,                           // whole %
   coinsThatHelped:   Number,
+  heldCost:          Number,                           // total cost of cards held this round
   cultureLevel:      String,                           // effective band that applied
 }, { _id: false })
 

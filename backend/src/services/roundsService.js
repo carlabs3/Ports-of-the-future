@@ -70,6 +70,9 @@ export function recordSpin(state, event) {
   const budget = ROUND_BUDGET[state.currentRound - 1]
   const coinsSpent = state.roundBought.reduce((s, id) => s + (MEASURES_BY_ID[id]?.cost || 0), 0)
   const refund = state.roundReturned != null ? Math.floor((MEASURES_BY_ID[state.roundReturned]?.cost || 0) / 2) : 0
+  // Total coins invested in the cards held this round — the denominator for
+  // "coins that helped N of M" and the debrief's "coins that didn't help".
+  const heldCost = state.portfolio.reduce((s, id) => s + (MEASURES_BY_ID[id]?.cost || 0), 0)
   const entry = {
     round:               state.currentRound,
     bought:              [...state.roundBought],
@@ -85,6 +88,7 @@ export function recordSpin(state, event) {
     expectedProtection:  expected,
     strategyScore:       computeStrategyScore({ expectedProtection: expected, portId: state.portId, startingBand: state.startingBand, budget }),
     coinsThatHelped:     computeCoinsThatHelped({ measures: state.portfolio, event }),
+    heldCost,
     cultureLevel:        effBand,
   }
   state.rounds.push(entry)
