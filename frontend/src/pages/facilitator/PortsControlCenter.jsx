@@ -99,7 +99,7 @@ export default function PortsControlCenter() {
   const { code } = useParams()
 
   const [individual, setIndividual] = useState([]) // [{ group, score, band, areas }]
-  const [rows, setRows]             = useState([])  // aligned w/ demographics: + portSize, worldZone
+  const [rows, setRows]             = useState([])  // aligned w/ demographics: + portSize, governance, climateZone, coastalSetting
   const [groups, setGroups]         = useState([])  // declared session groups
   const [groupAgg, setGroupAgg]     = useState([])  // backend per-group: { group, count, avgScore, band, cultureBand }
   const [portAssignments, setPortAssignments] = useState([]) // [{ group, portId }]
@@ -142,9 +142,10 @@ export default function PortsControlCenter() {
   const [shuffling, setShuffling]     = useState(false)
   const [shuffleMsg, setShuffleMsg]   = useState('')
 
-  // PAR tab: combinable filters + world-zone labels (for the filter dropdown).
-  const [filters, setFilters] = useState({ portSize: '', worldZone: '', team: '', band: '' })
-  const [worldZoneOptions, setWorldZoneOptions] = useState([]) // [{ optionId, label }]
+  // PAR tab: combinable filters (v4 profile fields) + their labels for the
+  // dropdowns. No minimum-group suppression (R1 removed it; it stays removed).
+  const [filters, setFilters] = useState({ portSize: '', governance: '', climateZone: '', coastalSetting: '', team: '', band: '' })
+  const [demoOptions, setDemoOptions] = useState({ portSize: [], governance: [], climateZone: [], coastalSetting: [] }) // each: [{ optionId, label }]
 
   const joinUrl  = `${window.location.origin}/?code=${code}`
   const shortUrl = window.location.host // shown without the ?code= query string
@@ -159,8 +160,10 @@ export default function PortsControlCenter() {
         setGroupAgg(res.data.groups || [])
         setRows(ind.map((r, i) => ({
           ...r,
-          portSize:  dem[i]?.portSize  || '',
-          worldZone: dem[i]?.worldZone || '',
+          portSize:       dem[i]?.portSize       || '',
+          governance:     dem[i]?.governance     || '',
+          climateZone:    dem[i]?.climateZone    || '',
+          coastalSetting: dem[i]?.coastalSetting || '',
         })))
       })
       .catch(() => {})
@@ -204,7 +207,15 @@ export default function PortsControlCenter() {
       .catch(() => {})
     // World-zone labels for the PAR filter dropdown (ids live in the data).
     api.get('/api/par/questionnaire')
-      .then(res => setWorldZoneOptions(res.data?.demographics?.worldZone?.options || []))
+      .then(res => {
+        const d = res.data?.demographics || {}
+        setDemoOptions({
+          portSize:       d.portSize?.options       || [],
+          governance:     d.governance?.options     || [],
+          climateZone:    d.climateZone?.options    || [],
+          coastalSetting: d.coastalSetting?.options || [],
+        })
+      })
       .catch(() => {})
   }, [code, fetchResults, fetchStrategies])
 
@@ -256,13 +267,15 @@ export default function PortsControlCenter() {
   }, [code, fetchResults, fetchStrategies])
 
   // ── PAR tab: combinable filters + filtered aggregates (all client-side) ─────
-  const anyFilter = !!(filters.portSize || filters.worldZone || filters.team || filters.band)
+  const anyFilter = !!(filters.portSize || filters.governance || filters.climateZone || filters.coastalSetting || filters.team || filters.band)
 
   const filteredRows = useMemo(() => rows.filter(r =>
-    (!filters.portSize  || r.portSize  === filters.portSize) &&
-    (!filters.worldZone || r.worldZone === filters.worldZone) &&
-    (!filters.team      || r.group     === filters.team) &&
-    (!filters.band      || r.band      === filters.band)
+    (!filters.portSize       || r.portSize       === filters.portSize) &&
+    (!filters.governance     || r.governance     === filters.governance) &&
+    (!filters.climateZone    || r.climateZone    === filters.climateZone) &&
+    (!filters.coastalSetting || r.coastalSetting === filters.coastalSetting) &&
+    (!filters.team           || r.group          === filters.team) &&
+    (!filters.band           || r.band           === filters.band)
   ), [rows, filters])
 
   const totalAnswers = rows.length         // all submissions this session
@@ -1156,18 +1169,20 @@ export default function PortsControlCenter() {
         {phase === 'par' && (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-          {/* Filter row (60px) */}
-          <div style={{ flexShrink: 0, height: 60, display: 'flex', alignItems: 'center', gap: 12, padding: '0 24px', borderBottom: HAIRLINE }}>
+          {/* Filter row — six combinable filters, no minimum-group suppression */}
+          <div style={{ flexShrink: 0, minHeight: 60, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 24px', borderBottom: HAIRLINE, flexWrap: 'wrap' }}>
             <span style={uiLabel}>Filter</span>
-            <FilterSelect value={filters.portSize}  onChange={v => setFilters(f => ({ ...f, portSize: v }))}  placeholder="All sizes" options={PORT_SIZE_ORDER.map(s => ({ value: s, label: PORT_SIZE_LABELS[s] }))} />
-            <FilterSelect value={filters.worldZone} onChange={v => setFilters(f => ({ ...f, worldZone: v }))} placeholder="All zones" options={worldZoneOptions.map(z => ({ value: z.optionId, label: z.label }))} />
-            <FilterSelect value={filters.team}      onChange={v => setFilters(f => ({ ...f, team: v }))}      placeholder="All teams" options={groups.map(g => ({ value: g, label: g }))} />
-            <FilterSelect value={filters.band}      onChange={v => setFilters(f => ({ ...f, band: v }))}      placeholder="All bands" options={BAND_ORDER.map(b => ({ value: b, label: BAND_RAMP[b].label }))} />
+            <FilterSelect value={filters.portSize}       onChange={v => setFilters(f => ({ ...f, portSize: v }))}       placeholder="All sizes"      options={demoOptions.portSize.map(o => ({ value: o.optionId, label: o.label }))} />
+            <FilterSelect value={filters.governance}     onChange={v => setFilters(f => ({ ...f, governance: v }))}     placeholder="All governance" options={demoOptions.governance.map(o => ({ value: o.optionId, label: o.label }))} />
+            <FilterSelect value={filters.climateZone}    onChange={v => setFilters(f => ({ ...f, climateZone: v }))}    placeholder="All climates"   options={demoOptions.climateZone.map(o => ({ value: o.optionId, label: o.label }))} />
+            <FilterSelect value={filters.coastalSetting} onChange={v => setFilters(f => ({ ...f, coastalSetting: v }))} placeholder="All coasts"     options={demoOptions.coastalSetting.map(o => ({ value: o.optionId, label: o.label }))} />
+            <FilterSelect value={filters.team}           onChange={v => setFilters(f => ({ ...f, team: v }))}           placeholder="All teams"      options={groups.map(g => ({ value: g, label: g }))} />
+            <FilterSelect value={filters.band}           onChange={v => setFilters(f => ({ ...f, band: v }))}           placeholder="All bands"      options={BAND_ORDER.map(b => ({ value: b, label: BAND_RAMP[b].label }))} />
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
               {anyFilter ? (
                 <>
                   <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>Showing {shownCount} of {totalAnswers} answers</span>
-                  <button onClick={() => setFilters({ portSize: '', worldZone: '', team: '', band: '' })}
+                  <button onClick={() => setFilters({ portSize: '', governance: '', climateZone: '', coastalSetting: '', team: '', band: '' })}
                     style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                     Clear filters
                   </button>

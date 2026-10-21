@@ -8,9 +8,14 @@ const parIndexResultSchema = new Schema({
   participantId: { type: Schema.Types.ObjectId, ref: 'Participant' },
   group:         { type: String, required: true },
 
-  // Q0 demographics — not scored
-  portSize:      { type: String, default: '' },
-  worldZone:     { type: String, default: '' },
+  // Q0 demographics — not scored (v4: world zone replaced by governance,
+  // climate zone and coastal setting). Values are option ids from the
+  // questionnaire config. Legacy docs may still carry `worldZone`; nothing reads
+  // it now.
+  portSize:       { type: String, default: '' },
+  governance:     { type: String, default: '' },
+  climateZone:    { type: String, default: '' },
+  coastalSetting: { type: String, default: '' },
 
   // Computed server-side by computeParIndex
   score:         { type: Number, required: true }, // 0–100

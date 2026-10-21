@@ -57,18 +57,32 @@ test('portSize options carry a non-empty description', () => {
   }
 })
 
-test('worldZone exposes the 7 confirmed zones with optionId + label', () => {
+test('world zone is removed from the demographics (v4)', () => {
   const q = getPublicQuestionnaire()
-  const opts = q.demographics.worldZone.options
-  assert.ok(Array.isArray(opts))
-  assert.equal(opts.length, 7)
-  const labels = opts.map(o => o.label)
-  assert.deepEqual(labels, [
-    'Europe', 'Africa', 'Middle East', 'Asia', 'Oceania',
-    'North America', 'Latin America & Caribbean',
+  assert.equal(q.demographics.worldZone, undefined)
+})
+
+test('v4 profile fields: governance, climate zone, coastal setting', () => {
+  const q = getPublicQuestionnaire()
+  // Governance: 5 options incl. Landlord/Public/Private/Tool/Other, each with an
+  // optionId; the first four carry descriptions, "Other" needs none.
+  const gov = q.demographics.governance.options
+  assert.deepEqual(gov.map(o => o.label), ['Landlord port', 'Public port', 'Private port', 'Tool port', 'Other'])
+  for (const o of gov) assert.ok(o.optionId?.length > 0, 'empty governance optionId')
+  assert.ok(gov.find(o => o.optionId === 'landlord').description.length > 0)
+  assert.equal(gov.find(o => o.optionId === 'other').description, undefined)
+
+  // Climate zone: 5 options, labels only.
+  const cz = q.demographics.climateZone.options
+  assert.deepEqual(cz.map(o => o.label), [
+    'Tropical / subtropical', 'Arid / desert', 'Mediterranean', 'Temperate', 'Cold / polar / sub-arctic',
   ])
-  for (const opt of opts) {
-    assert.equal(typeof opt.optionId, 'string')
-    assert.ok(opt.optionId.length > 0, 'empty worldZone optionId')
-  }
+  for (const o of cz) assert.ok(o.optionId?.length > 0, 'empty climateZone optionId')
+
+  // Coastal setting: 4 options, labels only.
+  const cs = q.demographics.coastalSetting.options
+  assert.deepEqual(cs.map(o => o.label), [
+    'Open coast', 'Estuary or river', 'Bay or lagoon', 'Artificial / engineered coastline',
+  ])
+  for (const o of cs) assert.ok(o.optionId?.length > 0, 'empty coastalSetting optionId')
 })

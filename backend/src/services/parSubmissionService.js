@@ -6,7 +6,7 @@ import { computeParIndex, getBand } from './scoringService.js'
 // layer can reuse it without the sockets depending on the routes.
 
 // Persist a submission idempotently and return the computed result.
-export async function persistParSubmission({ submissionId, sessionCode, group, portSize, worldZone, answers, participantId }) {
+export async function persistParSubmission({ submissionId, sessionCode, group, portSize, governance, climateZone, coastalSetting, answers, participantId }) {
   const result = computeParIndex(answers)
 
   const resolvedId = submissionId || `${sessionCode}_${group}`
@@ -16,7 +16,9 @@ export async function persistParSubmission({ submissionId, sessionCode, group, p
     sessionCode,
     group,
     portSize: portSize || '',
-    worldZone: worldZone || '',
+    governance: governance || '',
+    climateZone: climateZone || '',
+    coastalSetting: coastalSetting || '',
     answers: answers || {},
     score: result.score,
     band: result.band,

@@ -321,13 +321,17 @@ export default function parRouter(io) {
   router.get('/:code/results', authMiddleware, async (req, res) => {
     try {
       const docs = await ParIndexResult.find({ sessionCode: req.params.code })
-        .select('group score band areas portSize worldZone -_id')
+        .select('group score band areas portSize governance climateZone coastalSetting -_id')
         .sort({ score: -1 })
       const individual = docs.map(d => ({
         group: d.group, score: d.score, band: d.band, areas: d.areas,
       }))
       const demographics = docs.map(d => ({
-        group: d.group, portSize: d.portSize || '', worldZone: d.worldZone || '',
+        group: d.group,
+        portSize: d.portSize || '',
+        governance: d.governance || '',
+        climateZone: d.climateZone || '',
+        coastalSetting: d.coastalSetting || '',
       }))
       res.json({ individual, demographics, groups: computeParGroups(individual) })
     } catch (err) {
@@ -339,13 +343,13 @@ export default function parRouter(io) {
   // Public: submit answers, compute the PAR Index server-side.
   router.post('/submit', async (req, res) => {
     try {
-      const { submissionId, sessionCode, group, portSize, worldZone, answers } = req.body
+      const { submissionId, sessionCode, group, portSize, governance, climateZone, coastalSetting, answers } = req.body
       if (!sessionCode || !group || !answers) {
         return res.status(400).json({ error: 'Faltan datos' })
       }
 
       const result = await persistParSubmission({
-        submissionId, sessionCode, group, portSize, worldZone, answers,
+        submissionId, sessionCode, group, portSize, governance, climateZone, coastalSetting, answers,
       })
 
       io.to(sessionCode).emit('par:update', await buildParRanking(sessionCode))

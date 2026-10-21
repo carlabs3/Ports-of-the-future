@@ -37,17 +37,13 @@ export function getPublicQuestionnaire() {
     }),
   }))
 
-  // Q0 demographics — not scored, returned as-is (worldZone may be empty).
-  const demographics = {
-    portSize: {
-      text: DEMOGRAPHICS.portSize.text,
-      options: toPublicOptions(DEMOGRAPHICS.portSize.options),
-    },
-    worldZone: {
-      text: DEMOGRAPHICS.worldZone.text,
-      options: toPublicOptions(DEMOGRAPHICS.worldZone.options),
-    },
-  }
+  // Q0 demographics — not scored (v4: port size, governance, climate, coastal).
+  const demographics = Object.fromEntries(
+    Object.entries(DEMOGRAPHICS).map(([key, def]) => [
+      key,
+      { text: def.text, options: toPublicOptions(def.options) },
+    ])
+  )
 
   return { areas, demographics }
 }

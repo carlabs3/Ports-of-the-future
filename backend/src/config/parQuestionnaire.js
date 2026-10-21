@@ -130,19 +130,39 @@ export const DEMOGRAPHICS = {
       large:  { label: 'Large',  description: 'over 2 million TEU a year; a major international gateway.' },
     },
   },
-  worldZone: {
-    text: 'In which world zone is your port located?',
+  // v4 (appendix D): world zone removed; governance model, climate zone and
+  // coastal setting added. All describe the respondent's real port, for
+  // segmentation only — never scored.
+  governance: {
+    text: 'What is your port\'s governance model?',
     scored: false,
-    // Authoritative zone taxonomy (confirmed with the client). Array shape, so
-    // each option carries its own stable id.
+    options: {
+      landlord: { label: 'Landlord port', description: 'authority owns land and infrastructure; private companies operate terminals with their own equipment and staff.' },
+      public:   { label: 'Public port',   description: 'fully owned and operated by a public authority.' },
+      private:  { label: 'Private port',  description: 'fully privately owned and operated.' },
+      tool:     { label: 'Tool port',     description: 'publicly owned, including equipment; private companies provide the labour.' },
+      other:    { label: 'Other' },
+    },
+  },
+  climateZone: {
+    text: 'What is your port\'s climate zone?',
+    scored: false,
     options: [
-      { id: 'europe',          label: 'Europe' },
-      { id: 'africa',          label: 'Africa' },
-      { id: 'middle-east',     label: 'Middle East' },
-      { id: 'asia',            label: 'Asia' },
-      { id: 'oceania',         label: 'Oceania' },
-      { id: 'north-america',   label: 'North America' },
-      { id: 'latam-caribbean', label: 'Latin America & Caribbean' },
+      { id: 'tropical',      label: 'Tropical / subtropical' },
+      { id: 'arid',          label: 'Arid / desert' },
+      { id: 'mediterranean', label: 'Mediterranean' },
+      { id: 'temperate',     label: 'Temperate' },
+      { id: 'cold',          label: 'Cold / polar / sub-arctic' },
+    ],
+  },
+  coastalSetting: {
+    text: 'What is your port\'s coastal setting?',
+    scored: false,
+    options: [
+      { id: 'open-coast',  label: 'Open coast' },
+      { id: 'estuary',     label: 'Estuary or river' },
+      { id: 'bay',         label: 'Bay or lagoon' },
+      { id: 'artificial',  label: 'Artificial / engineered coastline' },
     ],
   },
 }

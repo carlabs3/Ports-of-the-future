@@ -4,7 +4,7 @@ import { persistParSubmission, buildParRanking } from '../services/parSubmission
 // sessionSocket handlers — this file does NOT touch sessionSocket.js.
 export function registerParSocketHandlers(io) {
   io.on('connection', (socket) => {
-    socket.on('par:submit', async ({ submissionId, sessionCode, group, portSize, worldZone, answers }) => {
+    socket.on('par:submit', async ({ submissionId, sessionCode, group, portSize, governance, climateZone, coastalSetting, answers }) => {
       try {
         if (!sessionCode || !group || !answers) {
           socket.emit('error', { message: 'Faltan datos del PAR Index' })
@@ -12,7 +12,7 @@ export function registerParSocketHandlers(io) {
         }
 
         const result = await persistParSubmission({
-          submissionId, sessionCode, group, portSize, worldZone, answers,
+          submissionId, sessionCode, group, portSize, governance, climateZone, coastalSetting, answers,
         })
 
         // Broadcast the full session ranking to everyone in the room.

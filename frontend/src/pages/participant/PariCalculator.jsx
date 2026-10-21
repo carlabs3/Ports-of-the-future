@@ -10,8 +10,9 @@ import { COLOR, FONT, FS, FW, LS, HAIRLINE } from '../../styles/tokens.js'
 // questionnaire (texts + labels only) from the backend and submits the chosen
 // optionIds; the PAR Index is computed exclusively server-side.
 //
-// Flow: "Before you start" (team + port size + world zone — not scored) →
-// a flat walk over the 10 scored questions → submit. Team selection lives here
+// Flow: "Before you start" — two screens (team + port size, then governance,
+// climate zone and coastal setting — not scored) → a flat walk over the 10
+// scored questions → submit. Team selection lives here
 // now (it moved off the join screen); choosing it is the moment the participant
 // "joins" (session:join emitted), and it is written into the device marker so a
 // reload restores the group.
@@ -66,6 +67,33 @@ function SelectRow({ label, description, selected, onSelect, last }) {
   )
 }
 
+const SECTION_LABEL = {
+  fontFamily: FONT.mono, fontSize: FS.label, fontWeight: FW.medium, letterSpacing: LS.mono,
+  textTransform: 'uppercase', color: COLOR.ink60, margin: '0 0 12px',
+}
+
+// A single "Before you start" question rendered as a stack of SelectRows.
+function ProfileQuestion({ def, fallbackText, value, onSelect, helper }) {
+  if (!def?.options?.length) return null
+  return (
+    <div style={{ marginBottom: 36 }}>
+      <p style={SECTION_LABEL}>{def.text || fallbackText}</p>
+      <div>
+        {def.options.map((opt, i, arr) => (
+          <SelectRow key={opt.optionId}
+            label={opt.label}
+            description={opt.description}
+            selected={value === opt.optionId}
+            onSelect={() => onSelect(opt.optionId)}
+            last={i === arr.length - 1}
+          />
+        ))}
+      </div>
+      {helper && <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '10px 0 0' }}>{helper}</p>}
+    </div>
+  )
+}
+
 export default function PariCalculator() {
   const { code } = useParams()
   const navigate = useNavigate()
@@ -83,10 +111,14 @@ export default function PariCalculator() {
   const [phase, setPhase]         = useState('start')
   const [stepIndex, setStepIndex] = useState(0)
 
-  // "Before you start" (Q0) — not scored, sent as separate payload fields.
-  const [team, setTeam]           = useState('')
-  const [portSize, setPortSize]   = useState('')
-  const [worldZone, setWorldZone] = useState('')
+  // "Before you start" (Q0) — not scored, sent as separate payload fields. v4:
+  // world zone replaced by governance model, climate zone and coastal setting,
+  // split across two screens (team + size, then the other three).
+  const [team, setTeam]                     = useState('')
+  const [portSize, setPortSize]             = useState('')
+  const [governance, setGovernance]         = useState('')
+  const [climateZone, setClimateZone]       = useState('')
+  const [coastalSetting, setCoastalSetting] = useState('')
 
   // Scored answers: { questionId: optionId }
   const [answers, setAnswers]     = useState({})
@@ -140,12 +172,14 @@ export default function PariCalculator() {
     const saved = localStorage.getItem(PROGRESS_KEY)
     if (!saved) return
     try {
-      const { phase: p, stepIndex: si, team: t, portSize: ps, worldZone: wz, answers: a } = JSON.parse(saved)
+      const { phase: p, stepIndex: si, team: t, portSize: ps, governance: gv, climateZone: cz, coastalSetting: cs, answers: a } = JSON.parse(saved)
       if (p) setPhase(p === 'demographics' ? 'start' : p) // back-compat with old key
       if (typeof si === 'number') setStepIndex(si)
       if (t) setTeam(t)
       if (ps) setPortSize(ps)
-      if (wz) setWorldZone(wz)
+      if (gv) setGovernance(gv)
+      if (cz) setClimateZone(cz)
+      if (cs) setCoastalSetting(cs)
       if (a) setAnswers(a)
     } catch {
       localStorage.removeItem(PROGRESS_KEY)
@@ -154,8 +188,8 @@ export default function PariCalculator() {
 
   // ── Save progress on every change ──────────────────────────────────────────
   useEffect(() => {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ phase, stepIndex, team, portSize, worldZone, answers }))
-  }, [phase, stepIndex, team, portSize, worldZone, answers]) // eslint-disable-line react-hooks/exhaustive-deps
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ phase, stepIndex, team, portSize, governance, climateZone, coastalSetting, answers }))
+  }, [phase, stepIndex, team, portSize, governance, climateZone, coastalSetting, answers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Loading / error states ─────────────────────────────────────────────────
   if (!hasParticipant) return null
@@ -181,7 +215,6 @@ export default function PariCalculator() {
 
   const areas = questionnaire.areas || []
   const demo  = questionnaire.demographics || {}
-  const hasWorldZone = Array.isArray(demo.worldZone?.options) && demo.worldZone.options.length > 0
 
   // Flat list of the 10 questions with their owning area (for progress labels).
   const flatQuestions = areas.flatMap((area, ai) =>
@@ -200,7 +233,9 @@ export default function PariCalculator() {
       sessionCode: code,
       group,
       portSize,
-      worldZone,
+      governance,
+      climateZone,
+      coastalSetting,
       answers,
     }
 
@@ -232,35 +267,16 @@ export default function PariCalculator() {
     navigate(`/session/${code}/par-result`, { state: result || undefined })
   }
 
-  // ── Before you start (Q0: team + port size + world zone) ───────────────────
+  // ── Before you start, screen 1 (team + port size) ─────────────────────────
   if (phase === 'start') {
-    const canContinue = team !== '' && portSize !== '' && (!hasWorldZone || worldZone !== '')
-
-    function startQuestionnaire() {
-      if (!canContinue) return
-      // Commit the team: update the device marker and join (emits session:join).
-      try {
-        const markerKey = `ports_participant_${code}`
-        const marker = JSON.parse(localStorage.getItem(markerKey) || '{}')
-        localStorage.setItem(markerKey, JSON.stringify({ ...marker, code, group: team }))
-      } catch {}
-      joinSession(code, 'Anonymous', team)
-      setPhase('questions')
-      setStepIndex(0)
-    }
-
-    const sectionLabel = {
-      fontFamily: FONT.mono, fontSize: FS.label, fontWeight: FW.medium, letterSpacing: LS.mono,
-      textTransform: 'uppercase', color: COLOR.ink60, margin: '0 0 12px',
-    }
-
+    const canContinue = team !== '' && portSize !== ''
     return (
       <div style={{ minHeight: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', fontFamily: FONT.sans }}>
         {/* Sky header */}
         <div style={{ background: COLOR.sky, color: COLOR.ink, padding: '32px 20px 28px', borderBottom: HAIRLINE }}>
           <div style={{ maxWidth: 560, margin: '0 auto', width: '100%' }}>
             <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', margin: '0 0 10px' }}>
-              Before you start
+              Before you start · 1 of 2
             </p>
             <h1 style={{ fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.display, lineHeight: 1.05, margin: 0 }}>
               Tell us about your port
@@ -271,7 +287,7 @@ export default function PariCalculator() {
         <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '28px 20px 140px', flex: 1 }}>
           {/* Your team */}
           <div style={{ marginBottom: 36 }}>
-            <p style={sectionLabel}>Your team</p>
+            <p style={SECTION_LABEL}>Your team</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
               {groups.map(g => {
                 const sel = team === g
@@ -290,48 +306,67 @@ export default function PariCalculator() {
           </div>
 
           {/* Your port size */}
-          <div style={{ marginBottom: 36 }}>
-            <p style={sectionLabel}>{demo.portSize?.text || 'Your port size'}</p>
-            <div>
-              {(demo.portSize?.options || []).map((opt, i, arr) => (
-                <SelectRow key={opt.optionId}
-                  label={opt.label}
-                  description={opt.description}
-                  selected={portSize === opt.optionId}
-                  onSelect={() => setPortSize(opt.optionId)}
-                  last={i === arr.length - 1}
-                />
-              ))}
-            </div>
-            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '10px 0 0' }}>
-              Not sure? Pick the closest.
-            </p>
-          </div>
-
-          {/* World zone */}
-          {hasWorldZone && (
-            <div style={{ marginBottom: 8 }}>
-              <p style={sectionLabel}>{demo.worldZone?.text || 'World zone'}</p>
-              <div>
-                {demo.worldZone.options.map((opt, i, arr) => (
-                  <SelectRow key={opt.optionId}
-                    label={opt.label}
-                    selected={worldZone === opt.optionId}
-                    onSelect={() => setWorldZone(opt.optionId)}
-                    last={i === arr.length - 1}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          <ProfileQuestion def={demo.portSize} fallbackText="Your port size" value={portSize} onSelect={setPortSize} helper="Not sure? Pick the closest." />
         </div>
 
         {/* Footer */}
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px 24px', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
-          <button onClick={startQuestionnaire} disabled={!canContinue}
+          <button onClick={() => { if (canContinue) setPhase('profile') }} disabled={!canContinue}
             style={{ display: 'block', width: '100%', maxWidth: 560, margin: '0 auto', height: 56, border: HAIRLINE, borderRadius: 0, background: canContinue ? COLOR.ink : COLOR.paper, color: canContinue ? COLOR.onInk : COLOR.ink40, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: canContinue ? 'pointer' : 'not-allowed' }}>
-            Start the questionnaire →
+            Continue →
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Before you start, screen 2 (governance + climate + coastal) ────────────
+  if (phase === 'profile') {
+    const canContinue = governance !== '' && climateZone !== '' && coastalSetting !== ''
+
+    function startQuestionnaire() {
+      if (!canContinue) return
+      // Commit the team: update the device marker and join (emits session:join).
+      try {
+        const markerKey = `ports_participant_${code}`
+        const marker = JSON.parse(localStorage.getItem(markerKey) || '{}')
+        localStorage.setItem(markerKey, JSON.stringify({ ...marker, code, group: team }))
+      } catch {}
+      joinSession(code, 'Anonymous', team)
+      setPhase('questions')
+      setStepIndex(0)
+    }
+
+    return (
+      <div style={{ minHeight: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', fontFamily: FONT.sans }}>
+        {/* Sky header */}
+        <div style={{ background: COLOR.sky, color: COLOR.ink, padding: '32px 20px 28px', borderBottom: HAIRLINE }}>
+          <div style={{ maxWidth: 560, margin: '0 auto', width: '100%' }}>
+            <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', margin: '0 0 10px' }}>
+              Before you start · 2 of 2
+            </p>
+            <h1 style={{ fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.display, lineHeight: 1.05, margin: 0 }}>
+              A little more about your port
+            </h1>
+          </div>
+        </div>
+
+        <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '28px 20px 140px', flex: 1 }}>
+          <ProfileQuestion def={demo.governance}     fallbackText="Governance model" value={governance}     onSelect={setGovernance} />
+          <ProfileQuestion def={demo.climateZone}    fallbackText="Climate zone"     value={climateZone}    onSelect={setClimateZone} />
+          <ProfileQuestion def={demo.coastalSetting} fallbackText="Coastal setting"  value={coastalSetting} onSelect={setCoastalSetting} />
+        </div>
+
+        {/* Footer: back + start */}
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px 24px', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
+          <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', display: 'flex', gap: 10 }}>
+            <button onClick={() => setPhase('start')}
+              style={{ width: 56, height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontSize: FS.h3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
+            <button onClick={startQuestionnaire} disabled={!canContinue}
+              style={{ flex: 1, height: 56, border: HAIRLINE, borderRadius: 0, background: canContinue ? COLOR.ink : COLOR.paper, color: canContinue ? COLOR.onInk : COLOR.ink40, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: canContinue ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              Start the questionnaire →
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -352,7 +387,7 @@ export default function PariCalculator() {
     setStepIndex(i => i + 1)
   }
   function handlePrev() {
-    if (stepIndex === 0) { setPhase('start'); return }
+    if (stepIndex === 0) { setPhase('profile'); return }
     setStepIndex(i => i - 1)
   }
 

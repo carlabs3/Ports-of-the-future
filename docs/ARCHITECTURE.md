@@ -84,11 +84,13 @@ the facilitator selects), persisted on `Session.phase`, and broadcast as
 - **Participant** — `sessionCode`, `group`, `socketId`. *(Age/gender were removed
   — see Migration notes.)*
 - **ParIndexResult** — one questionnaire submission: `sessionCode`, idempotent
-  `submissionId`, `group`, `portSize`, `worldZone`, computed `score`/`band`/
-  `areas`, and the chosen `answers`.
-- **TeamStrategy** — per team: `portId`, base `cultureBand`, bought `measures`,
-  `coinsSpent`, `confirmed` (lock), and the draw snapshot `drawnEvent` /
-  `preparedness` / `lossesAvoidedPct`.
+  `submissionId`, `group`, the v4 profile fields `portSize` / `governance` /
+  `climateZone` / `coastalSetting`, computed `score`/`band`/`areas`, and the
+  chosen `answers`.
+- **TeamStrategy** (v4) — per team over three rounds: `portId`, `startingBand`,
+  cumulative `portfolio`, `coins`, `currentRound`, `roundLocked`, and a
+  `rounds[]` snapshot per spin (event, losses avoided, damage bill, expected
+  protection, strategy score, coins that helped, effective culture level).
 
 ## REST API
 
@@ -180,8 +182,9 @@ fail-fasts on boot if any of these is malformed.
   participant screens (they have their own headers).
 - **Control centre** (`pages/facilitator/PortsControlCenter.jsx`): full-width
   projected board with the 5 phase tabs, a NOW strip, and an End-session dialog.
-- **Participant flow**: Join (code only) → "Before you start" (team + port size +
-  world zone) → 10 questions → result → end. Submissions use **three-layer
+- **Participant flow**: Join (code only) → "Before you start" (two screens: team
+  + port size, then governance model, climate zone and coastal setting) → 10
+  questions → result → end. Submissions use **three-layer
   resilience**: socket `par:submit` → HTTP `fetch(keepalive)` → `localStorage`
   pending retry. Progress + the result survive a reload.
 
