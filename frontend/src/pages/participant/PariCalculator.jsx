@@ -322,7 +322,14 @@ export default function PariCalculator() {
 
   // ── Before you start, screen 2 (governance + climate + coastal) ────────────
   if (phase === 'profile') {
-    const canContinue = governance !== '' && climateZone !== '' && coastalSetting !== ''
+    // The three screen-2 questions MUST arrive with options. If any is missing
+    // (e.g. an older backend that doesn't serve the v4 profile fields), we must
+    // NOT render an empty step with a dead "Start" button — show an error and a
+    // way to retry instead. `hasOptions` tolerates both config shapes.
+    const hasOptions = (d) => Array.isArray(d?.options) && d.options.length > 0
+    const profileDefs = [demo.governance, demo.climateZone, demo.coastalSetting]
+    const profileReady = profileDefs.every(hasOptions)
+    const canContinue = profileReady && governance !== '' && climateZone !== '' && coastalSetting !== ''
 
     function startQuestionnaire() {
       if (!canContinue) return
@@ -352,9 +359,27 @@ export default function PariCalculator() {
         </div>
 
         <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '28px 20px 140px', flex: 1 }}>
-          <ProfileQuestion def={demo.governance}     fallbackText="Governance model" value={governance}     onSelect={setGovernance} />
-          <ProfileQuestion def={demo.climateZone}    fallbackText="Climate zone"     value={climateZone}    onSelect={setClimateZone} />
-          <ProfileQuestion def={demo.coastalSetting} fallbackText="Coastal setting"  value={coastalSetting} onSelect={setCoastalSetting} />
+          {profileReady ? (
+            <>
+              <ProfileQuestion def={demo.governance}     fallbackText="Governance model" value={governance}     onSelect={setGovernance} />
+              <ProfileQuestion def={demo.climateZone}    fallbackText="Climate zone"     value={climateZone}    onSelect={setClimateZone} />
+              <ProfileQuestion def={demo.coastalSetting} fallbackText="Coastal setting"  value={coastalSetting} onSelect={setCoastalSetting} />
+            </>
+          ) : (
+            <div style={{ border: HAIRLINE, padding: '28px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '2rem', marginBottom: 12 }}>📡</div>
+              <p style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, color: COLOR.ink, margin: '0 0 6px' }}>
+                We couldn't load these questions.
+              </p>
+              <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '0 0 20px', lineHeight: 1.5 }}>
+                Please check your connection and try again.
+              </p>
+              <button onClick={() => setReloadTick(t => t + 1)}
+                style={{ background: COLOR.ink, color: COLOR.onInk, border: HAIRLINE, borderRadius: 0, padding: '14px 28px', fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
+                Retry
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer: back + start */}
@@ -364,7 +389,7 @@ export default function PariCalculator() {
               style={{ width: 56, height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontSize: FS.h3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
             <button onClick={startQuestionnaire} disabled={!canContinue}
               style={{ flex: 1, height: 56, border: HAIRLINE, borderRadius: 0, background: canContinue ? COLOR.ink : COLOR.paper, color: canContinue ? COLOR.onInk : COLOR.ink40, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: canContinue ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              Start the questionnaire →
+              {profileReady ? 'Start the questionnaire →' : 'Questions unavailable'}
             </button>
           </div>
         </div>

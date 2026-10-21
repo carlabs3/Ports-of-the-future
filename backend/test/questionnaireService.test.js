@@ -62,6 +62,23 @@ test('world zone is removed from the demographics (v4)', () => {
   assert.equal(q.demographics.worldZone, undefined)
 })
 
+test('Before-you-start screen 2 is never empty: governance, climate, coastal each have options', () => {
+  // Regression guard for the blocker where screen 2 rendered no questions: the
+  // participant "Before you start · 2 of 2" screen reads these three keys. If any
+  // comes back without options, screen 2 would be an empty step with a dead
+  // "Start" button, so this MUST fail loudly instead.
+  const q = getPublicQuestionnaire()
+  for (const key of ['governance', 'climateZone', 'coastalSetting']) {
+    const def = q.demographics[key]
+    assert.ok(def, `screen 2 question "${key}" is missing from the questionnaire`)
+    assert.ok(Array.isArray(def.options) && def.options.length > 0, `screen 2 question "${key}" has no options`)
+    for (const opt of def.options) {
+      assert.ok(typeof opt.optionId === 'string' && opt.optionId.length > 0, `"${key}" option missing optionId`)
+      assert.ok(typeof opt.label === 'string' && opt.label.length > 0, `"${key}" option missing label`)
+    }
+  }
+})
+
 test('v4 profile fields: governance, climate zone, coastal setting', () => {
   const q = getPublicQuestionnaire()
   // Governance: 5 options incl. Landlord/Public/Private/Tool/Other, each with an
