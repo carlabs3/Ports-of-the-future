@@ -24,9 +24,9 @@ export function validateMeasureSelection(measureIds = []) {
   return { ok: true, cost }
 }
 
-// Public catalogue: id, name, cost, and the (non-secret) raisesCultureBand flag
-// so the strategy UI can flag #19/#20. protection scores stay SECRET until the
-// phase-8 scoring — explicit field copy, never spread the measure object.
+// Public catalogue: id, name, cost, and the (non-secret) raisesCultureLevel flag
+// so the strategy UI can flag the enablers (#19/#20). protection scores stay
+// SECRET until scoring — explicit field copy, never spread the measure object.
 export function getPublicMeasures() {
-  return MEASURES.map(m => ({ id: m.id, name: m.name, cost: m.cost, raisesCultureBand: !!m.raisesCultureBand }))
+  return MEASURES.map(m => ({ id: m.id, name: m.name, cost: m.cost, raisesCultureLevel: !!m.raisesCultureLevel }))
 }

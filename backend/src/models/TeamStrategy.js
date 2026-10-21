@@ -7,7 +7,7 @@ import { Schema, model } from 'mongoose'
 const teamStrategySchema = new Schema({
   sessionCode: { type: String, required: true },
   group:       { type: String, required: true },
-  portId:      { type: Number, required: true },
+  portId:      { type: String, required: true }, // string slug (v4, e.g. 'nord-maris')
   // Base culture band derived from the table's mean PARI (see cultureService).
   cultureBand: { type: String, enum: ['reactive', 'aware', 'developing', 'proactive', null], default: null },
   measures:    { type: [Number], default: [] }, // phase 7

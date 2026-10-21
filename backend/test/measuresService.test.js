@@ -2,21 +2,21 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { getPublicMeasures, costOfMeasures, validateMeasureSelection, MEASURE_BUDGET } from '../src/services/measuresService.js'
 
-test('getPublicMeasures exposes id/name/cost/raisesCultureBand only — never protection', () => {
+test('getPublicMeasures exposes id/name/cost/raisesCultureLevel only — never protection', () => {
   const pub = getPublicMeasures()
-  assert.equal(pub.length, 25)
+  assert.equal(pub.length, 26)
   for (const m of pub) {
     assert.equal(typeof m.id, 'number')
     assert.equal(typeof m.name, 'string')
     assert.equal(typeof m.cost, 'number')
-    assert.equal(typeof m.raisesCultureBand, 'boolean')
+    assert.equal(typeof m.raisesCultureLevel, 'boolean')
     // SECURITY: protection scores must never be in the public payload.
     assert.ok(!('protection' in m), `measure ${m.id} leaked protection`)
   }
 })
 
-test('only #19 and #20 raise the culture band in the public payload', () => {
-  const raising = getPublicMeasures().filter(m => m.raisesCultureBand).map(m => m.id).sort((a, b) => a - b)
+test('only #19 and #20 raise the culture level in the public payload', () => {
+  const raising = getPublicMeasures().filter(m => m.raisesCultureLevel).map(m => m.id).sort((a, b) => a - b)
   assert.deepEqual(raising, [19, 20])
 })
 

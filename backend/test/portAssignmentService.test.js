@@ -8,15 +8,15 @@ import { PORTS } from '../src/config/ports/index.js'
 test('generateTeamNames produces Team A … in order', () => {
   assert.deepEqual(generateTeamNames(2), ['Team A', 'Team B'])
   assert.deepEqual(generateTeamNames(MAX_TEAMS), [
-    'Team A', 'Team B', 'Team C', 'Team D', 'Team E', 'Team F', 'Team G', 'Team H',
+    'Team A', 'Team B', 'Team C', 'Team D', 'Team E', 'Team F',
   ])
 })
 
-test('validateTeamCount enforces the 2–8 range and integers', () => {
+test('validateTeamCount enforces the 2–6 range and integers (D13)', () => {
   assert.equal(validateTeamCount(MIN_TEAMS).ok, true)
   assert.equal(validateTeamCount(MAX_TEAMS).ok, true)
   assert.equal(validateTeamCount(1).ok, false)
-  assert.equal(validateTeamCount(9).ok, false)
+  assert.equal(validateTeamCount(7).ok, false)
   assert.equal(validateTeamCount(2.5).ok, false)
   assert.equal(validateTeamCount('3').ok, false)
 })

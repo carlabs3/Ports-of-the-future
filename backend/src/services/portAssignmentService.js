@@ -8,7 +8,7 @@ import { PORTS } from '../config/ports/index.js'
 // Roulette tab.
 
 export const MIN_TEAMS = 2
-export const MAX_TEAMS = 8
+export const MAX_TEAMS = 6 // D13: at most 6 tables, one per port, no repeats
 
 // Team A, Team B, … for a count in [MIN_TEAMS, MAX_TEAMS]. Letters A–H.
 export function generateTeamNames(count) {

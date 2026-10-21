@@ -94,21 +94,21 @@ test('cultureBand null → factor 1.0', () => {
 })
 
 // ── Roulette ─────────────────────────────────────────────────────────────────
-// Nord-Maris (portId 1): SS4 RF1 HW0 WS3 DR1 WF0 SI1 → cumulative on
-// [SS,RF,HW,WS,DR,WF,SI]: SS[0,4) RF[4,5) WS[5,8) DR[8,9) SI[9,10). HW/WF = 0.
+// Nord-Maris (v4): SS4 RF1 HW1 WS3 DR0 WF0 SI1 → cumulative on
+// [SS,RF,HW,WS,DR,WF,SI]: SS[0,4) RF[4,5) HW[5,6) WS[6,9) SI[9,10). DR/WF = 0.
 test('drawEvent respects weights with a deterministic rng', () => {
-  assert.equal(drawEvent(1, () => 0),     'SS') // r=0
-  assert.equal(drawEvent(1, () => 0.45),  'RF') // r=4.5
-  assert.equal(drawEvent(1, () => 0.70),  'WS') // r=7.0
-  assert.equal(drawEvent(1, () => 0.85),  'DR') // r=8.5
-  assert.equal(drawEvent(1, () => 0.95),  'SI') // r=9.5
+  assert.equal(drawEvent('nord-maris', () => 0),     'SS') // r=0
+  assert.equal(drawEvent('nord-maris', () => 0.45),  'RF') // r=4.5
+  assert.equal(drawEvent('nord-maris', () => 0.55),  'HW') // r=5.5
+  assert.equal(drawEvent('nord-maris', () => 0.70),  'WS') // r=7.0
+  assert.equal(drawEvent('nord-maris', () => 0.95),  'SI') // r=9.5
 })
 
 test('drawEvent never returns a zero-weight event for a port', () => {
-  // Nord-Maris has HW=0 and WF=0 — sweep rng across [0,1) and assert never drawn.
+  // Nord-Maris (v4) has DR=0 and WF=0 — sweep rng across [0,1) and assert never drawn.
   for (let i = 0; i < 1000; i++) {
-    const code = drawEvent(1, () => i / 1000)
-    assert.notEqual(code, 'HW')
+    const code = drawEvent('nord-maris', () => i / 1000)
+    assert.notEqual(code, 'DR')
     assert.notEqual(code, 'WF')
   }
 })
@@ -118,28 +118,11 @@ test('drawEvent never returns a zero-weight event for a port', () => {
 // Proactive (×1.1) is applied inside computeExpectedLossesAvoided. Per-event
 // values are unrounded; the weighted expected is rounded to 2 decimals.
 
-test('Nord-Maris #1+#19, base Developing → expected 57.18', () => {
-  const weights = PORTS_BY_ID[1].exposureWeights // SS4 RF1 HW0 WS3 DR1 WF0 SI1
-  const per = (e) => round2(computePreparedness({ measureIds: [1, 19], eventCode: e, cultureBand: 'proactive' }).rawLossesAvoidedPct)
-  assert.equal(per('SS'), 90.64)
-  assert.equal(per('WS'), 47.74)
-  assert.equal(per('RF'), 22.00)
-  assert.equal(per('DR'), 22.00)
-  assert.equal(per('SI'), 22.00)
-  assert.equal(computeExpectedLossesAvoided({ measures: [1, 19], cultureBand: 'developing', exposureWeights: weights }), 57.18)
-  assert.equal(computeCoinsThatHelped({ measures: [1, 19], event: 'SS' }), 6)
-})
-
-test('Boreal #24+#13+#19, base Developing → expected 65.62', () => {
-  const weights = PORTS_BY_ID[7].exposureWeights // SI4 WS3 SS2 RF1
-  const per = (e) => round2(computePreparedness({ measureIds: [24, 13, 19], eventCode: e, cultureBand: 'proactive' }).rawLossesAvoidedPct)
-  assert.equal(per('SI'), 86.01)
-  assert.equal(per('WS'), 82.06)
-  assert.equal(per('SS'), 22.00)
-  assert.equal(per('RF'), 22.00)
-  assert.equal(computeExpectedLossesAvoided({ measures: [24, 13, 19], cultureBand: 'developing', exposureWeights: weights }), 65.62)
-  assert.equal(computeCoinsThatHelped({ measures: [24, 13, 19], event: 'SS' }), 1)
-})
+// NOTE: the two B10 worked-example tests (Nord-Maris → 57.18, Boreal → 65.62)
+// were removed here. They encoded a v3 rule where the enablers #19/#20 carried
+// protection 2; v4 enablers have NO protection, so those exact values no longer
+// hold. These functions are superseded by v4 scoring (commit 2) and removed in
+// commit 6; commit 2 brings the authoritative v4 tests (Appendix E + examples).
 
 test('computeCoinsThatHelped ignores unknown ids and zero-protection measures', () => {
   assert.equal(computeCoinsThatHelped({ measures: [24, 13], event: 'WS' }), 3) // only #13 (cost 3)
@@ -148,15 +131,15 @@ test('computeCoinsThatHelped ignores unknown ids and zero-protection measures', 
 })
 
 test('computeExpectedLossesAvoided: no measures → 0', () => {
-  assert.equal(computeExpectedLossesAvoided({ measures: [], cultureBand: 'developing', exposureWeights: PORTS_BY_ID[1].exposureWeights }), 0)
+  assert.equal(computeExpectedLossesAvoided({ measures: [], cultureBand: 'developing', exposureWeights: { SS: 4, RF: 1, HW: 1, WS: 3, DR: 0, WF: 0, SI: 1 } }), 0)
 })
 
 // ── Illustration motifs: the two highest-exposure events ─────────────────────
 test('topExposureEvents returns the two highest-weight events, ties by order', () => {
-  // Nord-Maris: SS4 WS3 RF1 DR1 SI1 → top 2 = SS, WS
-  assert.deepEqual(topExposureEvents(PORTS_BY_ID[1].exposureWeights), ['SS', 'WS'])
+  // Nord-Maris (v4): SS4 WS3 … → top 2 = SS, WS
+  assert.deepEqual(topExposureEvents(PORTS_BY_ID['nord-maris'].exposureWeights), ['SS', 'WS'])
   // Boreal: SI4 WS3 SS2 RF1 → top 2 = SI, WS
-  assert.deepEqual(topExposureEvents(PORTS_BY_ID[7].exposureWeights), ['SI', 'WS'])
+  assert.deepEqual(topExposureEvents(PORTS_BY_ID['boreal'].exposureWeights), ['SI', 'WS'])
   // zero-weight events are excluded; empty → []
   assert.deepEqual(topExposureEvents({ SS: 0, RF: 0 }), [])
   // tie on weight breaks by canonical EVENT_CODES order (SS before RF)

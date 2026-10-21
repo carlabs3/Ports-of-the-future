@@ -14,7 +14,7 @@ export default function sessionsRouter(io) {
   // Public: info needed by join/waiting screens (groups, name, status, resultsRevealed)
   router.get('/:code/info', async (req, res) => {
     try {
-      const session = await Session.findOne({ code: req.params.code }, 'code name groups portAssignments status phase currentStep resultsRevealed step3Revealed winnersRevealed')
+      const session = await Session.findOne({ code: req.params.code }, 'code name groups portAssignments status phase currentStep resultsRevealed step3Revealed winnersRevealed configVersion')
       // Note: 'draft' and 'closed' statuses are intentionally included
       if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
       res.json({
@@ -28,6 +28,10 @@ export default function sessionsRouter(io) {
         resultsRevealed: session.resultsRevealed,
         step3Revealed:   session.step3Revealed,
         winnersRevealed: session.winnersRevealed,
+        configVersion:   session.configVersion || null,
+        // Legacy (pre-v4) sessions are test data — flag so the UI can say the
+        // session was created with an older version of the workshop.
+        isLegacy:        session.configVersion !== 'v4',
       })
     } catch {
       res.status(500).json({ error: 'Error al obtener sesión' })
@@ -57,6 +61,7 @@ export default function sessionsRouter(io) {
         name: name || '',
         groups,
         portAssignments,
+        configVersion: 'v4',
       })
 
       // Create one TeamStrategy per group (measures empty, cultureBand null now).

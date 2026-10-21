@@ -8,6 +8,49 @@ measures on a budget, faces a weather "roulette", and debriefs luck vs strategy.
 This document describes the app **as built**. It supersedes the old CO2-Sprint
 README.
 
+## Workshop v4 decisions (D11–D17)
+
+The workshop moved to **v4**. Decisions, each replacing earlier ones:
+
+- **D11 · Three rounds** — each table plays 3 rounds, one wheel spin per round.
+  Replaces the v3 "no second spin".
+- **D12 · No table devices** — no per-table screen/iPad; everything (port, cards,
+  coins, wheel, results) is shown on the projected control centre and the
+  facilitator enters all purchases/returns. Confirms the earlier "remove the team
+  screen" decision.
+- **D13 · Max 6 tables**, one port each, no repeats — ports assigned as a random
+  permutation of the 6. Teams stay named Team A, Team B … Replaces "max 8 tables".
+- **D14 · Damage bill** = event losses × (1 − P/10), rounded to the nearest 0.5
+  (halves up). A score only; it never removes coins.
+- **D15 · Card returns** — in rounds 2 and 3 a table may return ≤ 1 card/round for
+  `floor(cost/2)` coins; enablers can be returned (lowering the culture level); a
+  returned card may be re-bought later.
+- **D16 · Rounding** — full precision internally; P shown to 1 decimal; percentages
+  as whole numbers (halves up).
+- **D17 · Port colours** — each port has a placeholder `colour` hex, defined in
+  config only, used as its team accent.
+
+Rollout: config + `validateConfig` (commit 1, done) → scoring (2) → rounds/coins
+(3) → control-centre flow (4) → PARI profile/filters (5) → results/debrief (6) →
+colours (7). Sections below that still describe v3 behaviour (single-round draw,
+"luck vs strategy" debrief, world-zone profile) are updated as those commits land.
+
+## Config (v4)
+
+- **6 ports** (`config/ports/*`), `id` a **string slug** (`nord-maris`, `meridia`,
+  `riu-verd`, `boreal`, `coralia`, `sabkha`), each with `name`, `colour`,
+  `climateZone`, `coastalSetting`, `size`, `governance`, `deck` (13–15 measure ids,
+  always including the 6 shared cards 8/10/14/19/20/23), and secret
+  `exposureWeights` (sum 10).
+- **26 measures** (`config/measures.js`); #19/#20 are enablers with no protection
+  and `raisesCultureLevel: true`.
+- **7 events** (`config/events.js`), names per Appendix C.
+- `validateConfig()` fail-fasts at boot on: weights≠10, deck size 13–15, missing
+  shared card, unknown deck card, measure count≠26, cost∉[1,5], score∉[0,10],
+  enabler-with-protection, and the enabler flag.
+- New sessions store `configVersion: 'v4'`; older sessions are flagged `isLegacy`
+  on `/info` and must not crash the server (ports simply don't resolve).
+
 ## Stack & layout
 
 Monorepo:

@@ -28,14 +28,18 @@ export default function parRouter(io) {
     res.json(getPublicQuestionnaire())
   })
 
-  // Facilitator-only: port catalogue for session creation. PUBLIC fields only
-  // (id, name, meta) — exposureWeights and other secrets are never exposed.
-  // Explicit field copy, NOT a spread of the port object.
+  // Facilitator-only: port catalogue. PUBLIC fields only — exposureWeights is
+  // SECRET and never exposed. Explicit field copy, NOT a spread of the port.
   router.get('/ports', authMiddleware, (_req, res) => {
     res.json(PORTS.map(p => ({
-      id:   p.id,
-      name: p.name,
-      meta: { zone: p.meta?.zone, size: p.meta?.size, description: p.meta?.description },
+      id:             p.id,
+      name:           p.name,
+      colour:         p.colour,
+      climateZone:    p.climateZone,
+      coastalSetting: p.coastalSetting,
+      size:           p.size,
+      governance:     p.governance,
+      deck:           p.deck,
     })))
   })
 

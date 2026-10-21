@@ -20,13 +20,13 @@ export function computeCultureBandFromScores(scores) {
 // Pure, testable: raise the base band ONE level if the table bought any
 // culture-raising measure. Buying #19 AND #20 is still a SINGLE step up — not
 // two. Capped at 'proactive'. null base → null. Which measures raise the band
-// is read from config (raisesCultureBand flag), not hardcoded ids.
+// is read from config (raisesCultureLevel flag), not hardcoded ids.
 export function applyCultureMeasureBonus(baseBand, measureIds = []) {
   if (baseBand == null) return null
   const idx = BAND_ORDER.indexOf(baseBand)
   if (idx === -1) return baseBand // unknown band → pass through unchanged
 
-  const raisingIds = new Set(MEASURES.filter(m => m.raisesCultureBand).map(m => m.id))
+  const raisingIds = new Set(MEASURES.filter(m => m.raisesCultureLevel).map(m => m.id))
   const raises = (measureIds || []).some(id => raisingIds.has(id))
   if (!raises) return baseBand
 

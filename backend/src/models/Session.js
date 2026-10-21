@@ -5,9 +5,12 @@ const sessionSchema = new Schema({
   facilitatorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, default: '' },
   groups: [String],
-  // Phase 6 (Ports of the Future): which port each group defends. Additive —
-  // legacy sessions simply have an empty array.
-  portAssignments: [{ group: String, portId: Number }],
+  // Which port each group defends. portId is a string slug (v4, e.g.
+  // 'nord-maris'). Legacy v3 sessions stored a numeric portId.
+  portAssignments: [{ group: String, portId: String }],
+  // Workshop content version this session was created with. v4 sessions set
+  // 'v4'; older (test) sessions have it undefined and are flagged as legacy.
+  configVersion: { type: String, default: null },
   status: { type: String, enum: ['draft', 'waiting', 'active', 'actions', 'closed'], default: 'draft' },
   // Facilitator-driven control-centre phase (Ports of the Future). Manual only —
   // never derived from data. Independent of `currentStep`/STEP_MAP (legacy).

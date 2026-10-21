@@ -10,13 +10,13 @@
 export const EVENT_CODES = ['SS', 'RF', 'HW', 'WS', 'DR', 'WF', 'SI']
 
 export const EVENTS = [
-  { code: 'SS', name: 'Storm surge / coastal flooding',   lossValue: 4 },
-  { code: 'RF', name: 'Heavy rainfall / river flooding',  lossValue: 4 },
-  { code: 'HW', name: 'Heatwave',                          lossValue: 3 },
-  { code: 'WS', name: 'Wind storm',                        lossValue: 4 },
-  { code: 'DR', name: 'Drought / low water',               lossValue: 3 },
-  { code: 'WF', name: 'Wildfire — hinterland',             lossValue: 3 },
-  { code: 'SI', name: 'Snow/ice storm & cold snap',        lossValue: 3 },
+  { code: 'SS', name: 'Storm surge & coastal flooding', lossValue: 4 },
+  { code: 'RF', name: 'Heavy rain & river flooding',    lossValue: 4 },
+  { code: 'HW', name: 'Heatwave',                        lossValue: 3 },
+  { code: 'WS', name: 'Windstorm & cyclone',            lossValue: 4 },
+  { code: 'DR', name: 'Drought & water scarcity',       lossValue: 3 },
+  { code: 'WF', name: 'Wildfire',                        lossValue: 3 },
+  { code: 'SI', name: 'Snow, ice & cold snap',          lossValue: 3 },
 ]
 
 // Indexable by code.
