@@ -360,6 +360,10 @@ export default function PortsControlCenter() {
   // the team's own currentRound to be safe.)
   const hasSpunCurrent = (strat) => !!strat && (strat.rounds || []).some(r => r.round === strat.currentRound)
 
+  // Measure catalogue lookup (declared before groupStats, which reads it to find
+  // enabler cards #19/#20 for the culture bump).
+  const measureById = useMemo(() => new Map(measuresCatalog.map(m => [m.id, m])), [measuresCatalog])
+
   // Per-team stats — PARI count/avg from the backend aggregate; round state from
   // the strategy doc. Effective culture level is the backend's cultureLevel.
   const groupStats = useMemo(() => {
@@ -373,11 +377,26 @@ export default function PortsControlCenter() {
       const count = agg?.count ?? 0
       const status = count === 0 ? 'empty' : count === 1 ? 'receiving' : 'ready'
       const portId = portByGroup.get(g)
+      // Culture level from the team's PAR answers, raised one step per enabler
+      // card (#19/#20) it holds. The backend gives the effective level once a
+      // starting band is fixed (at lock); before that we take the PARI aggregate
+      // band and apply the enabler bump here so the list is live as cards change.
+      const parBand = strat?.startingBand || agg?.cultureBand || null
+      const enablerCount = (strat?.portfolio || []).filter(m => measureById.get(m.id)?.raisesCultureLevel).length
+      let cultureBand = strat?.cultureLevel ?? null
+      let cultureRaised = false
+      if (cultureBand) {
+        cultureRaised = !!(strat?.startingBand && cultureBand !== strat.startingBand)
+      } else if (parBand) {
+        cultureBand = BAND_ORDER[Math.min(BAND_ORDER.indexOf(parBand) + enablerCount, BAND_ORDER.length - 1)]
+        cultureRaised = enablerCount > 0
+      }
       return {
         group: g,
         count,
         avg: agg?.avgScore ?? null,
-        cultureBand: strat?.cultureLevel ?? null,       // effective band (base + enablers)
+        cultureBand,                                    // effective band (PARI base + enablers)
+        cultureRaised,                                  // true once an enabler raised it
         startingBand: strat?.startingBand ?? null,
         coins: strat?.coins ?? null,
         currentRound: strat?.currentRound ?? 1,
@@ -390,7 +409,7 @@ export default function PortsControlCenter() {
         status,
       }
     })
-  }, [groups, groupAgg, portAssignments, portById, strategyByGroup])
+  }, [groups, groupAgg, portAssignments, portById, strategyByGroup, measureById])
 
   // Roulette gate: every team must have LOCKED the current round before drawing.
   const strategyList = Object.values(strategyByGroup)
@@ -430,7 +449,6 @@ export default function PortsControlCenter() {
   }, [phase, fetchDebrief])
 
   // ── Strategy / round helpers (v4) ───────────────────────────────────────────
-  const measureById = useMemo(() => new Map(measuresCatalog.map(m => [m.id, m])), [measuresCatalog])
   // The team currently being dictated to.
   const editingStrat = editingGroup ? strategyByGroup[editingGroup] : null
   const portfolio = editingStrat?.portfolio || []            // [{ id, name, cost }]
@@ -879,6 +897,11 @@ export default function PortsControlCenter() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                           <span style={{ width: 10, height: 10, flexShrink: 0, background: gs.portColour || COLOR.ice, border: HAIRLINE }} />
                           <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{gs.portName}</span>
+                        </div>
+                      )}
+                      {gs.cultureBand && (
+                        <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, marginTop: 2 }}>
+                          {BAND_RAMP[gs.cultureBand]?.label || gs.cultureBand} ×{(CULTURE_FACTOR[gs.cultureBand] ?? 1).toFixed(1)}{gs.cultureRaised ? ' ★' : ''}
                         </div>
                       )}
                     </div>
