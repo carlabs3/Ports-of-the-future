@@ -156,7 +156,9 @@ export default function PortsControlCenter() {
   const [spinning, setSpinning] = useState(null) // group being spun (cosmetic)
   const [wheelTeam, setWheelTeam]       = useState(null) // group on the roulette screen
   const [wheelComp, setWheelComp]       = useState(null) // { portName, exposure, portfolio, cultureLevel, illustrationMotifs, currentRound }
-  const [wheelOutcome, setWheelOutcome] = useState(null) // { eventCode, eventName, exposure, entry:{...} } once spun
+  const [wheelOutcome, setWheelOutcome] = useState(null) // { eventCode, eventName, exposure, entry:{...} } once drawn
+  const [wheelRevealed, setWheelRevealed] = useState(false) // true only once the spin animation ends
+  const [wheelAnimate, setWheelAnimate]   = useState(false) // true for a fresh spin; false when reshowing a drawn team
   const [advancing, setAdvancing]       = useState(false) // next-round call in flight
 
   // Debrief: luck vs strategy (expected results, only in the debrief phase).
@@ -279,7 +281,7 @@ export default function PortsControlCenter() {
     // roulette screen so it reopens on the first team of the new round.
     function onRoundsAdvanced() {
       fetchStrategies()
-      setWheelTeam(null); setWheelComp(null); setWheelOutcome(null)
+      setWheelTeam(null); setWheelComp(null); setWheelOutcome(null); setWheelRevealed(false); setWheelAnimate(false)
     }
     function onPhaseChange({ phase: p }) { if (p) setPhase(p) }
     function onJoined(p) { if (typeof p?.total === 'number') setJoinedCount(p.total) }
@@ -610,13 +612,19 @@ export default function PortsControlCenter() {
     setWheelTeam(group)
     setWheelComp(null)
     setWheelOutcome(null)
+    setWheelRevealed(false)
+    setWheelAnimate(false)
     try {
       const res = await api.get(`/api/par/${code}/strategy/${encodeURIComponent(group)}/wheel`)
       setWheelComp(res.data)
       if (res.data.drawnThisRound) {
+        // Reshow a team that already spun this round: show the result already
+        // landed and revealed — no animation.
         const strat = strategyByGroup[group]
         const entry = (strat?.rounds || []).find(r => r.round === res.data.currentRound)
         setWheelOutcome(outcomeFromEntry(entry, res.data))
+        setWheelAnimate(false)
+        setWheelRevealed(true)
       }
     } catch (err) {
       window.alert(err.response?.data?.error || 'Could not open the wheel.')
@@ -625,19 +633,31 @@ export default function PortsControlCenter() {
   }
 
   // Spin: the backend draws the event for the current round (gated on all teams
-  // locked) and returns the outcome; the wheel animation is purely cosmetic.
+  // locked) and returns the outcome. The result is RECEIVED now (drives the
+  // wheel's target), but the highlight / result panel / score are withheld until
+  // the wheel finishes spinning — onReveal (from EventWheel) flips wheelRevealed
+  // and only then refreshes the team state (coins, queue result).
   async function spinWheel() {
-    if (spinning || !wheelTeam) return
+    if (spinning || !wheelTeam || wheelOutcome) return
     setSpinning(wheelTeam)
+    setWheelRevealed(false)
+    setWheelAnimate(true)
     try {
       const res = await api.post(`/api/par/${code}/strategy/${encodeURIComponent(wheelTeam)}/draw`)
       setWheelOutcome(res.data.outcome)
-      fetchStrategies()
     } catch (err) {
       window.alert(err.response?.data?.error || 'Could not spin the wheel.')
+      setWheelAnimate(false)
     } finally {
       setTimeout(() => setSpinning(null), 1200)
     }
+  }
+
+  // Fired by EventWheel when the spin animation ends: reveal the result and pull
+  // the fresh team state (coins spent, queue result) at the same moment.
+  function onWheelRevealed() {
+    setWheelRevealed(true)
+    fetchStrategies()
   }
 
   // Advance every team to the next round (+2 coins). Gated server-side on all
@@ -648,7 +668,7 @@ export default function PortsControlCenter() {
     try {
       await api.post(`/api/par/${code}/next-round`)
       await fetchStrategies()
-      setWheelTeam(null); setWheelComp(null); setWheelOutcome(null)
+      setWheelTeam(null); setWheelComp(null); setWheelOutcome(null); setWheelRevealed(false); setWheelAnimate(false)
     } catch (err) {
       window.alert(err.response?.data?.error || 'Could not advance to the next round.')
     } finally {
@@ -1028,7 +1048,7 @@ export default function PortsControlCenter() {
                   {wheelComp.illustrationMotifs?.length > 0 && (
                     <PortIllustration motifs={wheelComp.illustrationMotifs} size={320} />
                   )}
-                  <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} size={420} />
+                  <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} size={420} />
                 </div>
 
                 <div>
@@ -1070,6 +1090,13 @@ export default function PortsControlCenter() {
                         {spinning ? 'Spinning…' : 'Spin the wheel →'}
                       </button>
                     </>
+                  ) : !wheelRevealed ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, paddingTop: 20 }}>
+                      <p style={uiLabel}>Spinning…</p>
+                      <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight, color: COLOR.ink60, margin: 0 }}>
+                        The wheel is turning. The result appears when it stops.
+                      </p>
+                    </div>
                   ) : (() => {
                     const e = wheelOutcome.entry || {}
                     const heldCostNow = (wheelComp.portfolio || []).reduce((s, id) => s + (measureById.get(id)?.cost || 0), 0)
