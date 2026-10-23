@@ -44,6 +44,23 @@ export function returnCard(state, measureId) {
   return { ok: true, refund }
 }
 
+// Undo a card bought THIS round, while the round is still open. This is undoing a
+// draft purchase, NOT the game's "return": it gives a FULL refund and does NOT
+// consume the one-return-per-round allowance. Rejected once the round is locked,
+// and for any card not bought this round (e.g. carried over from an earlier
+// round — those can only leave via returnCard, in rounds 2 & 3).
+export function undoCard(state, measureId) {
+  if (state.roundLocked) return { ok: false, error: 'This round is locked.' }
+  if (!state.roundBought.includes(measureId)) {
+    return { ok: false, error: `Measure ${measureId} was not bought this round and cannot be undone.` }
+  }
+  const refund = MEASURES_BY_ID[measureId]?.cost || 0
+  state.portfolio = state.portfolio.filter(id => id !== measureId)
+  state.coins += refund
+  state.roundBought = state.roundBought.filter(id => id !== measureId)
+  return { ok: true, refund }
+}
+
 // Lock the current round. Needs a starting culture level (from PARI or chosen).
 export function lockRound(state) {
   if (state.startingBand == null) return { ok: false, error: 'Set the team\'s starting culture level first.' }

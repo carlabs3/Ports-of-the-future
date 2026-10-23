@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { precomputeBestPossible } from '../src/services/strategyService.js'
-import { buyCard, returnCard, lockRound, unlockRound, recordSpin, advanceRound } from '../src/services/roundsService.js'
+import { buyCard, returnCard, undoCard, lockRound, unlockRound, recordSpin, advanceRound } from '../src/services/roundsService.js'
 
 precomputeBestPossible()
 
@@ -100,6 +100,56 @@ test('locking needs a starting level; cannot unlock after the spin', () => {
   lockRound(s); recordSpin(s, 'SI')
   assert.equal(unlockRound(s).ok, false)                 // after spin: 409-equivalent
   assert.match(unlockRound(s).error, /already been spun/)
+})
+
+test('undo in round 1: full refund, card removed, return allowance untouched', () => {
+  const s = fresh() // coins 6
+  assert.equal(buyCard(s, 24).ok, true) // cost 2 -> coins 4
+  assert.equal(buyCard(s, 13).ok, true) // cost 3 -> coins 1
+  const r = undoCard(s, 24)
+  assert.equal(r.ok, true)
+  assert.equal(r.refund, 2)             // FULL cost, not floor(2/2)
+  assert.equal(s.coins, 3)              // 1 + 2
+  assert.deepEqual(s.portfolio, [13])
+  assert.deepEqual(s.roundBought, [13])
+  assert.equal(s.roundReturned, null)   // undo never touches the return allowance
+})
+
+test('undo a same-round card in round 2: full refund, one-return-per-round still available', () => {
+  const s = fresh()
+  assert.equal(buyCard(s, 24).ok, true) // coins 4
+  lockRound(s); recordSpin(s, 'SI'); advanceRound(s) // round 2, coins 6, portfolio [24]
+  assert.equal(buyCard(s, 17).ok, true) // cost 2 -> coins 4, roundBought [17]
+  const r = undoCard(s, 17)
+  assert.equal(r.ok, true)
+  assert.equal(r.refund, 2)             // FULL refund (returnCard would be floor(2/2)=1)
+  assert.equal(s.coins, 6)
+  assert.deepEqual(s.portfolio, [24])
+  assert.deepEqual(s.roundBought, [])
+  assert.equal(s.roundReturned, null)   // untouched by the undo
+  // The one real return is still available this round (undo did not consume it):
+  const rr = returnCard(s, 24)          // 24 is a previous-round card -> half refund
+  assert.equal(rr.ok, true)
+  assert.equal(rr.refund, 1)
+  assert.equal(s.roundReturned, 24)
+})
+
+test('undo is rejected once the round is locked', () => {
+  const s = fresh()
+  buyCard(s, 24)
+  lockRound(s)
+  const r = undoCard(s, 24)
+  assert.equal(r.ok, false)
+  assert.match(r.error, /locked/)
+})
+
+test('undo is rejected for a card bought in a previous round', () => {
+  const s = fresh()
+  buyCard(s, 24)
+  lockRound(s); recordSpin(s, 'SI'); advanceRound(s) // round 2; 24 was bought in round 1
+  const r = undoCard(s, 24)
+  assert.equal(r.ok, false)
+  assert.match(r.error, /not bought this round/)
 })
 
 test('cannot advance before the current round is spun', () => {

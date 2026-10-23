@@ -2,16 +2,31 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { getPublicMeasures, costOfMeasures, validateMeasureSelection, MEASURE_BUDGET } from '../src/services/measuresService.js'
 
-test('getPublicMeasures exposes id/name/cost/raisesCultureLevel only — never protection', () => {
+// v4 card picker: protection is now exposed (it is printed on the physical cards)
+// so the Strategy tab can render hazard chips. This REPLACES the earlier rule
+// that protection stayed secret — the real secret, a port's exposure weights, is
+// never in the measure catalogue to begin with. The payload must carry exactly
+// the card-facing fields and nothing else (no description, no stray data).
+test('getPublicMeasures exposes id/name/cost/raisesCultureLevel/protection — and only those', () => {
   const pub = getPublicMeasures()
+  const EVENT_CODES = ['SS', 'RF', 'HW', 'WS', 'DR', 'WF', 'SI']
   assert.equal(pub.length, 26)
   for (const m of pub) {
+    assert.deepEqual(Object.keys(m).sort(), ['cost', 'id', 'name', 'protection', 'raisesCultureLevel'])
     assert.equal(typeof m.id, 'number')
     assert.equal(typeof m.name, 'string')
     assert.equal(typeof m.cost, 'number')
     assert.equal(typeof m.raisesCultureLevel, 'boolean')
-    // SECURITY: protection scores must never be in the public payload.
-    assert.ok(!('protection' in m), `measure ${m.id} leaked protection`)
+    // protection: exactly the 7 event codes, each an integer 0–10.
+    assert.deepEqual(Object.keys(m.protection).sort(), [...EVENT_CODES].sort())
+    for (const c of EVENT_CODES) {
+      assert.ok(Number.isInteger(m.protection[c]) && m.protection[c] >= 0 && m.protection[c] <= 10, `measure ${m.id} bad ${c}`)
+    }
+  }
+  // Enablers (#19/#20) protect against nothing — all zeros.
+  for (const id of [19, 20]) {
+    const m = pub.find(x => x.id === id)
+    assert.ok(EVENT_CODES.every(c => m.protection[c] === 0), `enabler ${id} should have zero protection`)
   }
 })
 

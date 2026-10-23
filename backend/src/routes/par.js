@@ -12,7 +12,7 @@ import { persistParSubmission, buildParRanking, computeParGroups } from '../serv
 import { getPublicMeasures } from '../services/measuresService.js'
 import { computeCultureBand, applyCultureMeasureBonus, BAND_ORDER } from '../services/cultureService.js'
 import { drawEvent, topExposureEvents } from '../services/wheelService.js'
-import { buyCard, returnCard, lockRound, unlockRound, recordSpin, advanceRound, ROUND_BUDGET } from '../services/roundsService.js'
+import { buyCard, returnCard, undoCard, lockRound, unlockRound, recordSpin, advanceRound, ROUND_BUDGET } from '../services/roundsService.js'
 import { computeFinalRanking } from '../services/strategyService.js'
 
 const BAND_LABELS = {
@@ -125,6 +125,11 @@ export default function parRouter(io) {
 
   router.post('/:code/strategy/:group/return', authMiddleware, (req, res) =>
     mutateStrategy(req.params.code, req.params.group, res, doc => returnCard(doc, Number(req.body.measureId))))
+
+  // Undo a current-round purchase (full refund; not a "return"). 400 if locked
+  // or if the card was not bought this round.
+  router.post('/:code/strategy/:group/undo', authMiddleware, (req, res) =>
+    mutateStrategy(req.params.code, req.params.group, res, doc => undoCard(doc, Number(req.body.measureId))))
 
   router.patch('/:code/strategy/:group/unlock', authMiddleware, (req, res) =>
     mutateStrategy(req.params.code, req.params.group, res, doc => unlockRound(doc), 409))
