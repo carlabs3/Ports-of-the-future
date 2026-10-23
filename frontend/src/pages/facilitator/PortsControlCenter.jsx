@@ -68,8 +68,44 @@ const cardTitle = {
 }
 
 // Read-aloud helpers (Strategy tab).
-const COIN_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six']
+const COIN_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve']
 const andList = (arr) => arr.length <= 1 ? arr.join('') : `${arr.slice(0, -1).join(', ')} and ${arr[arr.length - 1]}`
+
+// Hazard colours for the card chips — these match the printed cards. Only the
+// chip's square carries the colour (for contrast); the text stays ink/white.
+const EVENT_ORDER = ['SS', 'RF', 'HW', 'WS', 'DR', 'WF', 'SI']
+const EVENT_COLOR = { SS: '#77AEF1', RF: '#4177C0', HW: '#E3BF40', WS: '#5C6B7A', DR: '#C5E4FF', WF: '#0B1B33', SI: '#7B6FE0' }
+
+// The hazard chips for one measure. Enablers → one "+1 culture level" chip. A
+// measure with the same value on all 7 hazards → one "All 7 events N" chip.
+// Otherwise one chip per hazard it protects (value > 0), in canonical order.
+function measureChips(m) {
+  if (!m) return []
+  if (m.raisesCultureLevel) return [{ kind: 'enabler' }]
+  const vals = EVENT_ORDER.map(c => m.protection?.[c] ?? 0)
+  if (vals[0] > 0 && vals.every(v => v === vals[0])) return [{ kind: 'all', value: vals[0] }]
+  return EVENT_ORDER.filter(c => (m.protection?.[c] ?? 0) > 0).map(c => ({ kind: 'event', code: c, value: m.protection[c] }))
+}
+
+// One hazard chip. The colour lives only in the square; the text stays ink (or
+// white on a selected/owned dark card) so it always reads.
+function Chip({ chip, dark }) {
+  const base = {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold,
+    padding: '2px 6px', whiteSpace: 'nowrap',
+    border: `1px solid ${dark ? 'rgba(255,255,255,0.4)' : COLOR.ink}`,
+    color: dark ? COLOR.onInk : COLOR.ink, background: 'transparent',
+  }
+  if (chip.kind === 'enabler') return <span style={base}>★ +1 culture level</span>
+  if (chip.kind === 'all') return <span style={base}>All 7 events {chip.value}</span>
+  return (
+    <span style={base}>
+      <span style={{ width: 9, height: 9, display: 'inline-block', background: EVENT_COLOR[chip.code] || COLOR.ink, border: `1px solid ${dark ? 'rgba(255,255,255,0.35)' : 'rgba(11,27,51,0.2)'}` }} />
+      {chip.code} {chip.value}
+    </span>
+  )
+}
 
 // Mono section label (tokens). Shared by the rebuilt tabs.
 const uiLabel = {
@@ -103,7 +139,7 @@ export default function PortsControlCenter() {
   const [groups, setGroups]         = useState([])  // declared session groups
   const [groupAgg, setGroupAgg]     = useState([])  // backend per-group: { group, count, avgScore, band, cultureBand }
   const [portAssignments, setPortAssignments] = useState([]) // [{ group, portId }]
-  const [portNameById, setPortNameById]        = useState({}) // portId -> name
+  const [portById, setPortById]                = useState({}) // portId -> { id, name, deck, ... }
 
   // Strategy / rounds (v4). strategyByGroup holds the full public round state per
   // team: { portId, portName, startingBand, cultureLevel, coins, roundStartCoins,
@@ -113,8 +149,7 @@ export default function PortsControlCenter() {
   const [roundBudgets, setRoundBudgets]       = useState([6, 8, 10]) // cumulative, display only
   const [strategyByGroup, setStrategyByGroup] = useState({})
   const [editingGroup, setEditingGroup]       = useState(null) // the team now dictating
-  const [numInput, setNumInput]               = useState('')  // the measure number being added
-  const [addError, setAddError]               = useState('')  // inline validation for buy/return/lock
+  const [addError, setAddError]               = useState('')  // inline error from buy/undo/return/lock
   const [busy, setBusy]                        = useState(false) // a buy/return/lock call in flight
 
   // Roulette: one team at a time, full screen. v4 draws spin the CURRENT round.
@@ -200,7 +235,7 @@ export default function PortsControlCenter() {
       })
       .catch(() => {})
     api.get('/api/par/ports')
-      .then(res => setPortNameById(Object.fromEntries((res.data || []).map(p => [p.id, p.name]))))
+      .then(res => setPortById(Object.fromEntries((res.data || []).map(p => [p.id, p]))))
       .catch(() => {})
     api.get('/api/par/measures')
       .then(res => setMeasuresCatalog(res.data || []))
@@ -348,11 +383,11 @@ export default function PortsControlCenter() {
         portfolioCount: strat?.portfolio?.length ?? 0,
         hasStrategy: !!strat,
         spun: hasSpunCurrent(strat),
-        portName: portId != null ? (portNameById[portId] || `Port ${portId}`) : (strat?.portName ?? null),
+        portName: portId != null ? (portById[portId]?.name || `Port ${portId}`) : (strat?.portName ?? null),
         status,
       }
     })
-  }, [groups, groupAgg, portAssignments, portNameById, strategyByGroup])
+  }, [groups, groupAgg, portAssignments, portById, strategyByGroup])
 
   // Roulette gate: every team must have LOCKED the current round before drawing.
   const strategyList = Object.values(strategyByGroup)
@@ -390,6 +425,20 @@ export default function PortsControlCenter() {
   const editingStrat = editingGroup ? strategyByGroup[editingGroup] : null
   const portfolio = editingStrat?.portfolio || []            // [{ id, name, cost }]
   const portIds = portfolio.map(m => m.id)
+  const roundBought = editingStrat?.roundBought || []        // ids bought THIS round
+  // The dictating team's deck: the measures that apply to its port, as full
+  // measure objects (name, cost, protection, enabler flag), ordered by number.
+  const dictatingPort = editingStrat ? portById[editingStrat.portId] : null
+  const deckCards = useMemo(
+    () => (dictatingPort?.deck || []).map(id => measureById.get(id)).filter(Boolean).sort((a, b) => a.id - b.id),
+    [dictatingPort, measureById]
+  )
+  // Coin meter: squares = coins available this round (round-start + any return
+  // refund taken this round); filled = spent so far; "left" = coins now. This
+  // keeps "spent" non-negative even after a mid-round return adds coins back.
+  const returnRefund = editingStrat?.roundReturned != null ? Math.floor((measureById.get(editingStrat.roundReturned)?.cost || 0) / 2) : 0
+  const coinCapacity = editingStrat ? editingStrat.roundStartCoins + returnRefund : 0
+  const coinsSpent = editingStrat ? coinCapacity - editingStrat.coins : 0
   // Does this team still need a starting level chosen by hand? Only when it has
   // no questionnaire answers (count 0) and none is set yet. Teams WITH answers
   // get their starting level from the PARI mean automatically on lock.
@@ -397,16 +446,16 @@ export default function PortsControlCenter() {
   const needsStartingLevel = !!editingStrat && editingStrat.startingBand == null && editingCount === 0
   const canReturn = !!editingStrat && editingStrat.currentRound >= 2 && editingStrat.roundReturned == null && !editingStrat.roundLocked
 
-  // Read-aloud sentence for the dictating team, e.g.
-  // "Team D, round 2: measures 8, 15 and 19. Two coins left. Correct?"
-  const readAloud = editingStrat
-    ? `${editingGroup}, round ${editingStrat.currentRound}: ${portIds.length ? `measure${portIds.length !== 1 ? 's' : ''} ${andList(portIds)}` : 'no measures'}. ${COIN_WORDS[editingStrat.coins] ?? editingStrat.coins} coin${editingStrat.coins !== 1 ? 's' : ''} left. Correct?`
+  // Readback for the dictating team, from the cards it holds and their total
+  // cost, e.g. "Team D: cards 13 and 24. Five coins. Correct?"
+  const heldCost = portfolio.reduce((s, m) => s + (m.cost || 0), 0)
+  const readback = editingStrat
+    ? `${editingGroup}: ${portIds.length ? `card${portIds.length !== 1 ? 's' : ''} ${andList([...portIds].sort((a, b) => a - b))}` : 'no cards'}. ${COIN_WORDS[heldCost] ?? heldCost} coin${heldCost !== 1 ? 's' : ''}. Correct?`
     : ''
 
   // Start dictating a team.
   function openEditor(group) {
     setAddError('')
-    setNumInput('')
     setEditingGroup(group)
   }
 
@@ -427,18 +476,35 @@ export default function PortsControlCenter() {
     }
   }
 
-  // Buy one measure by number. Light client checks for instant feedback; the
-  // server enforces deck membership, duplicates and coins.
-  async function buyMeasure() {
-    const n = parseInt(numInput, 10)
-    setAddError('')
-    if (!Number.isInteger(n) || n < 1 || n > 26) { setAddError('Enter a measure number from 1 to 26.'); return }
-    if (!measureById.get(n)) { setAddError(`Measure ${n} doesn't exist.`); return }
-    if (portIds.includes(n)) { setAddError(`The team already holds measure ${n}.`); return }
-    const ok = await strategyCall('post', '/buy', { measureId: n })
-    if (ok) setNumInput('')
+  // Tap a card: buy it (if affordable and not held), or deselect it (undo, FULL
+  // refund) if it was bought THIS round. A card owned from an earlier round does
+  // nothing on tap — it can only leave via Return.
+  function onCardTap(m) {
+    if (!editingStrat || editingStrat.roundLocked || busy) return
+    const held = portIds.includes(m.id)
+    const thisRound = roundBought.includes(m.id)
+    if (!held) {
+      if (m.cost <= editingStrat.coins) strategyCall('post', '/buy', { measureId: m.id })
+    } else if (thisRound) {
+      strategyCall('post', '/undo', { measureId: m.id })
+    }
   }
-  function returnMeasure(id) { strategyCall('post', '/return', { measureId: id }) }
+  // Return an owned (previous-round) card — the game's half-refund return, one per
+  // round. Confirms first.
+  function onReturnCard(m) {
+    if (busy) return
+    const refund = Math.floor((m.cost || 0) / 2)
+    if (!window.confirm(`Return ${m.name} (#${m.id}) for ${refund} coin${refund !== 1 ? 's' : ''}? This uses this round's one return.`)) return
+    strategyCall('post', '/return', { measureId: m.id })
+  }
+  // Clear: undo every current-round purchase (full refund each).
+  async function clearRound() {
+    if (busy) return
+    for (const id of [...roundBought]) {
+      // eslint-disable-next-line no-await-in-loop
+      await strategyCall('post', '/undo', { measureId: id })
+    }
+  }
   function setStartingLevel(band) { strategyCall('patch', '/starting-level', { band }) }
 
   // Lock the current round. Derives the starting level from PARI if unset; if the
@@ -812,15 +878,27 @@ export default function PortsControlCenter() {
                 </p>
               ) : (
                 <>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
-                    <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: 0 }}>{editingGroup}</h2>
-                    <span style={uiLabel}>Round {editingStrat.currentRound} · now dictating</span>
-                  </div>
-
-                  {/* Coins available */}
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 20 }}>
-                    <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display }}>{editingStrat.coins}</span>
-                    <span style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60 }}>{editingStrat.coins === 1 ? 'coin to spend' : 'coins to spend'}</span>
+                  {/* Header: NOW DICTATING · team · port tag + coin meter */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+                    <div>
+                      <p style={uiLabel}>Now dictating</p>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
+                        <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: 0 }}>{editingGroup}</h2>
+                        <span style={{ ...uiLabel, color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, padding: '4px 10px' }}>
+                          {(dictatingPort?.name || editingStrat.portName || 'Port')} · {deckCards.length} cards
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap', marginBottom: 6, maxWidth: 260 }}>
+                        {Array.from({ length: coinCapacity }).map((_, i) => (
+                          <div key={i} style={{ width: 16, height: 16, border: `2px solid ${COLOR.ink}`, background: i < coinsSpent ? COLOR.ink : COLOR.paper }} />
+                        ))}
+                      </div>
+                      <p style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, margin: 0 }}>
+                        {coinsSpent} of {coinCapacity} coins spent · {editingStrat.coins} left
+                      </p>
+                    </div>
                   </div>
 
                   {/* Starting culture level — only for teams with no questionnaire */}
@@ -838,44 +916,49 @@ export default function PortsControlCenter() {
                     </div>
                   )}
 
-                  {/* Buy input */}
-                  {!editingStrat.roundLocked && (
-                    <>
-                      <div style={{ display: 'flex', gap: 10 }}>
-                        <input
-                          type="number" min={1} max={26} inputMode="numeric"
-                          value={numInput}
-                          onChange={e => { setNumInput(e.target.value); setAddError('') }}
-                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buyMeasure() } }}
-                          placeholder="Measure # (1–26)"
-                          style={{ flex: 1, border: HAIRLINE, borderRadius: 0, padding: '14px 16px', fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, color: COLOR.ink, background: COLOR.paper, outline: 'none', boxSizing: 'border-box' }}
-                        />
-                        <button onClick={buyMeasure} disabled={busy}
-                          style={{ height: 'auto', padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
-                          {busy ? '…' : '+ Buy'}
-                        </button>
-                      </div>
-                      {addError && <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: '#c0392b', margin: '10px 0 0' }}>{addError}</p>}
-                    </>
-                  )}
+                  {addError && <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: '#c0392b', margin: '0 0 14px' }}>{addError}</p>}
 
-                  {/* Cards held (cumulative) */}
-                  <div style={{ marginTop: 20 }}>
-                    <p style={{ ...uiLabel, marginBottom: 4 }}>Cards held</p>
-                    {portfolio.length === 0 ? (
-                      <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '8px 0 0' }}>No cards yet.</p>
-                    ) : portfolio.map(m => {
-                      const boughtThisRound = (editingStrat.roundBought || []).includes(m.id)
+                  {/* Card grid — one card per measure in this port's deck */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(176px, 1fr))', gap: 12 }}>
+                    {deckCards.map(m => {
+                      const held = portIds.includes(m.id)
+                      const thisRound = roundBought.includes(m.id)
+                      const selected = held && thisRound       // bought this round → tap to remove (undo)
+                      const owned = held && !thisRound          // from an earlier round → Return only
+                      const affordable = m.cost <= editingStrat.coins
+                      const unaffordable = !held && !affordable
+                      const locked = editingStrat.roundLocked
+                      const dark = selected || owned
+                      const tapDisabled = locked || busy || unaffordable || owned
+                      const bg = unaffordable ? '#F3F5F8' : dark ? COLOR.ink : COLOR.paper
+                      const fg = dark ? COLOR.onInk : (unaffordable ? '#5C6B7A' : COLOR.ink)
+                      const border = unaffordable ? '2px dashed #5C6B7A' : `2px solid ${COLOR.ink}`
+                      const line = owned ? 'Owned'
+                        : selected ? '✓ Selected · tap to remove'
+                          : unaffordable ? `${m.cost} coins · not enough left`
+                            : `${m.cost} coin${m.cost !== 1 ? 's' : ''}`
                       return (
-                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: HAIRLINE }}>
-                          <span style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, minWidth: 28 }}>{m.id}</span>
-                          <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.body }}>{m.name || `Measure ${m.id}`}</span>
-                          {boughtThisRound && <span style={{ ...uiLabel, color: COLOR.ink60 }}>new</span>}
-                          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>🪙 {m.cost ?? '—'}</span>
-                          {canReturn && (
-                            <button onClick={() => returnMeasure(m.id)} disabled={busy} title={`Return for ${Math.floor((m.cost || 0) / 2)} coins`}
-                              style={{ fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: FW.semibold, color: COLOR.ink, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: busy ? 'default' : 'pointer' }}>
-                              Return +{Math.floor((m.cost || 0) / 2)}
+                        <div key={m.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                          <button type="button" aria-pressed={held} onClick={() => onCardTap(m)} disabled={tapDisabled}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', border, borderRadius: 0, background: bg, color: fg, padding: '12px 14px', minHeight: 148, cursor: tapDisabled ? 'default' : 'pointer' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                              <span style={{ fontFamily: FONT.mono, fontWeight: FW.bold, fontSize: FS.body }}>#{m.id}</span>
+                              <span style={{ display: 'flex', gap: 3 }} title={`${m.cost} coins`}>
+                                {Array.from({ length: m.cost }).map((_, i) => (
+                                  <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: dark ? COLOR.onInk : COLOR.ink }} />
+                                ))}
+                              </span>
+                            </div>
+                            <span style={{ fontFamily: FONT.sans, fontWeight: FW.semibold, fontSize: FS.sm, lineHeight: 1.25 }}>{m.name}</span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 'auto' }}>
+                              {measureChips(m).map((c, i) => <Chip key={i} chip={c} dark={dark} />)}
+                            </div>
+                            <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: dark ? 'rgba(255,255,255,0.8)' : (unaffordable ? '#5C6B7A' : COLOR.ink60) }}>{line}</span>
+                          </button>
+                          {owned && canReturn && (
+                            <button type="button" onClick={() => onReturnCard(m)} disabled={busy}
+                              style={{ border: `2px solid ${COLOR.ink}`, borderTop: 'none', borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: FW.semibold, padding: '8px 10px', cursor: busy ? 'default' : 'pointer' }}>
+                              Return for {Math.floor((m.cost || 0) / 2)} coin{Math.floor((m.cost || 0) / 2) !== 1 ? 's' : ''}
                             </button>
                           )}
                         </div>
@@ -883,33 +966,34 @@ export default function PortsControlCenter() {
                     })}
                   </div>
 
-                  {editingStrat.roundReturned != null && (
-                    <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '12px 0 0' }}>
-                      Returned measure {editingStrat.roundReturned} this round (one return per round).
-                    </p>
-                  )}
-
                   {/* Effective culture level */}
                   <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, background: COLOR.ice, border: HAIRLINE, padding: '10px 14px', margin: '20px 0 0' }}>
                     Culture level: <strong>{BAND_RAMP[editingStrat.cultureLevel]?.label || '—'}</strong>
                     {portfolio.some(m => measureById.get(m.id)?.raisesCultureLevel) ? ' — raised by an enabler (#19 / #20)' : ''}
+                    {editingStrat.roundReturned != null ? ` · returned #${editingStrat.roundReturned} this round` : ''}
                   </p>
                 </>
               )}
             </div>
           </div>
 
-          {/* BOTTOM ink bar: read-aloud sentence + lock */}
+          {/* BOTTOM ink bar: readback + clear + lock */}
           {editingStrat && (
             <div style={{ background: COLOR.ink, color: COLOR.onInk, padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
               <p style={{ flex: '1 1 320px', fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, lineHeight: 1.3, margin: 0 }}>
-                {readAloud}
+                {readback}
               </p>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => { setEditingGroup(null); setAddError('') }}
-                  style={{ height: 48, padding: '0 20px', border: `1px solid ${COLOR.onInk}`, borderRadius: 0, background: 'transparent', color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
+                  style={{ height: 48, padding: '0 18px', border: `1px solid ${COLOR.onInk}`, borderRadius: 0, background: 'transparent', color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
                   Close
                 </button>
+                {!editingStrat.roundLocked && (
+                  <button onClick={clearRound} disabled={busy || roundBought.length === 0}
+                    style={{ height: 48, padding: '0 18px', border: `1px solid ${COLOR.onInk}`, borderRadius: 0, background: 'transparent', color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: (busy || roundBought.length === 0) ? 'default' : 'pointer', opacity: (busy || roundBought.length === 0) ? 0.5 : 1 }}>
+                    Clear
+                  </button>
+                )}
                 {!editingStrat.roundLocked && (
                   <button onClick={lockRoundFor} disabled={busy}
                     style={{ height: 48, padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}>
