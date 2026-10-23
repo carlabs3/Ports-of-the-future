@@ -1470,12 +1470,10 @@ export default function PortsControlCenter() {
                   const ramp = BAND_RAMP[b.band]
                   const pct = hasData ? Math.round((b.count / shownCount) * 100) : null
                   return (
-                    <div key={b.band} style={{ flex: 1, minWidth: 0, background: ramp.bg, color: ramp.text, borderLeft: i === 0 ? 'none' : HAIRLINE, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '12px 14px' }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontFamily: FONT.sans, fontSize: 24, fontWeight: 800, whiteSpace: 'nowrap' }}>{ramp.label}</div>
-                        <div style={{ fontFamily: FONT.mono, fontSize: 18 }}>{pct == null ? '—' : `${pct}%`}</div>
-                      </div>
+                    <div key={b.band} style={{ flex: 1, minWidth: 0, background: ramp.bg, color: ramp.text, borderLeft: i === 0 ? 'none' : HAIRLINE, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2, padding: '12px 14px' }}>
                       <div style={{ fontSize: 72, fontWeight: 800, lineHeight: 1 }}>{b.count}</div>
+                      <div style={{ fontFamily: FONT.sans, fontSize: 24, fontWeight: 800, lineHeight: 1.1 }}>{ramp.label}</div>
+                      <div style={{ fontFamily: FONT.mono, fontSize: 18 }}>{pct == null ? '—' : `${pct}%`}</div>
                     </div>
                   )
                 })}
