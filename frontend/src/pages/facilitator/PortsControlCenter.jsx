@@ -386,6 +386,7 @@ export default function PortsControlCenter() {
         hasStrategy: !!strat,
         spun: hasSpunCurrent(strat),
         portName: portId != null ? (portById[portId]?.name || `Port ${portId}`) : (strat?.portName ?? null),
+        portColour: portId != null ? (portById[portId]?.colour || null) : null,
         status,
       }
     })
@@ -862,7 +863,15 @@ export default function PortsControlCenter() {
                 const dictating = editingGroup === gs.group
                 return (
                   <div key={gs.group} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', borderTop: HAIRLINE }}>
-                    <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>{gs.group}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>{gs.group}</div>
+                      {gs.portName && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <span style={{ width: 10, height: 10, flexShrink: 0, background: gs.portColour || COLOR.ice, border: HAIRLINE }} />
+                          <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{gs.portName}</span>
+                        </div>
+                      )}
+                    </div>
                     <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>🪙 {gs.coins ?? '—'}</span>
                     {gs.roundLocked ? (
                       <>

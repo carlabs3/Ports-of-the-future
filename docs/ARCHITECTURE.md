@@ -26,9 +26,12 @@ The workshop moved to **v4**. Decisions, each replacing earlier ones:
   returned card may be re-bought later.
 - **D16 · Rounding** — full precision internally; P shown to 1 decimal; percentages
   as whole numbers (halves up).
-- **D17 · Ports have no colour** — the port config carries no `colour` field, and
-  none is exposed by the API. (The v4 handbook still mentions port colours; the
-  prompt overrides it.)
+- **D17 · Ports have a colour** *(superseded — originally "ports have no colour")* —
+  the printed kit uses one colour per port, so the port config now carries a
+  `colour` field and the `/par/ports` API exposes it. Values: Nord-Maris #062D69,
+  Meridia #77AEF1, Riu Verd #F4B860, Boreal #C5E4FF, Coralia #2CDA9D, Sabkha
+  #F07167 (Sabkha provisional). The control-centre team list shows a swatch +
+  port name per team.
 
 Rollout: config + `validateConfig` (commit 1, done) → scoring (2) → rounds/coins
 (3) → control-centre flow (4) → PARI profile/filters (5) → results/debrief (6) →
@@ -40,8 +43,8 @@ colours (7). Sections below that still describe v3 behaviour (single-round draw,
 - **6 ports** (`config/ports/*`), `id` a **string slug** (`nord-maris`, `meridia`,
   `riu-verd`, `boreal`, `coralia`, `sabkha`), each with `name`, `climateZone`,
   `coastalSetting`, `size`, `governance`, `deck` (13–15 measure ids, always
-  including the 6 shared cards 8/10/14/19/20/23), and secret `exposureWeights`
-  (sum 10). No colour (D17).
+  including the 6 shared cards 8/10/14/19/20/23), a `colour` (D17), and secret
+  `exposureWeights` (sum 10).
 - **26 measures** (`config/measures.js`); #19/#20 are enablers with no protection
   and `raisesCultureLevel: true`.
 - **7 events** (`config/events.js`), names per Appendix C.

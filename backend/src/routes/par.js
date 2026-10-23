@@ -40,6 +40,7 @@ export default function parRouter(io) {
       coastalSetting: p.coastalSetting,
       size:           p.size,
       governance:     p.governance,
+      colour:         p.colour,
       deck:           p.deck,
     })))
   })
