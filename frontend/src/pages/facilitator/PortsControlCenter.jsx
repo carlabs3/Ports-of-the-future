@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
@@ -173,6 +173,11 @@ export default function PortsControlCenter() {
 
   // Control-centre phase (facilitator-driven, persisted in Session.phase).
   const [phase, setPhase] = useState('join')
+  // Refs so the socket handler (set up once) reads the live phase and fires the
+  // automatic Join → Results switch only once.
+  const phaseRef = useRef(phase)
+  phaseRef.current = phase
+  const autoSwitchedRef = useRef(false)
 
   // Join tab: live participant count + port shuffle.
   const [joinedCount, setJoinedCount] = useState(0)
@@ -271,6 +276,13 @@ export default function PortsControlCenter() {
       fetchResults()
       // New PARs can change the base band → refresh effective culture bands.
       fetchStrategies()
+      // Auto-advance Join → Results once the THIRD questionnaire is in — once
+      // only, and only while still on Join (manual navigation always wins).
+      if (!autoSwitchedRef.current && phaseRef.current === 'join' && (ind?.length || 0) >= 3) {
+        autoSwitchedRef.current = true
+        setPhase('par')
+        api.patch(`/api/sessions/${code}/phase`, { phase: 'par' }).catch(() => {})
+      }
     }
     function onStrategyUpdate(payload) {
       if (payload?.group) setStrategyByGroup(prev => ({ ...prev, [payload.group]: payload }))
@@ -1349,6 +1361,16 @@ export default function PortsControlCenter() {
             <FilterSelect value={filters.team}           onChange={v => setFilters(f => ({ ...f, team: v }))}           placeholder="All teams"      options={groups.map(g => ({ value: g, label: g }))} />
             <FilterSelect value={filters.band}           onChange={v => setFilters(f => ({ ...f, band: v }))}           placeholder="All bands"      options={BAND_ORDER.map(b => ({ value: b, label: BAND_RAMP[b].label }))} />
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+              {/* Join QR + code stay on Results so late arrivals can still join. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12, borderRight: HAIRLINE }}>
+                <div style={{ border: HAIRLINE, padding: 3, lineHeight: 0 }}>
+                  <QRCodeSVG value={joinUrl} size={44} fgColor="#0B1B33" bgColor="#FFFFFF" />
+                </div>
+                <div>
+                  <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60 }}>Join</div>
+                  <div style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, letterSpacing: '0.08em' }}>{code}</div>
+                </div>
+              </div>
               {anyFilter ? (
                 <>
                   <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>Showing {shownCount} of {totalAnswers} answers</span>
