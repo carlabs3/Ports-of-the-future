@@ -403,6 +403,13 @@ export default function PortsControlCenter() {
   // Everyone has spun this round → the round is complete.
   const roundComplete = strategyList.length > 0 && strategyList.every(hasSpunCurrent)
 
+  // The port image for the team on the roulette screen (from the port config).
+  const portImageFor = (group) => {
+    const pid = portAssignments.find(pa => pa.group === group)?.portId
+    return pid != null ? (portById[pid]?.image || null) : null
+  }
+  const wheelImage = wheelTeam ? portImageFor(wheelTeam) : null
+
   // NOTE: these two effects MUST stay below the declarations of `allConfirmed`,
   // `groupStats` and `drawnGroups` — the dep array reads `allConfirmed` during
   // render, so declaring them earlier put it in the temporal dead zone and
@@ -615,6 +622,9 @@ export default function PortsControlCenter() {
     setWheelOutcome(null)
     setWheelRevealed(false)
     setWheelAnimate(false)
+    // Preload the port image so it is ready before the spin — never pops in.
+    const img = portImageFor(group)
+    if (img) { const pre = new Image(); pre.src = img }
     try {
       const res = await api.get(`/api/par/${code}/strategy/${encodeURIComponent(group)}/wheel`)
       setWheelComp(res.data)
@@ -1054,7 +1064,10 @@ export default function PortsControlCenter() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 460px) 1fr', gap: 32, alignItems: 'start' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
-                  {wheelComp.illustrationMotifs?.length > 0 && (
+                  {wheelImage ? (
+                    <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`}
+                      style={{ width: 320, maxWidth: '100%', aspectRatio: '1 / 1', objectFit: 'cover', border: HAIRLINE, display: 'block' }} />
+                  ) : wheelComp.illustrationMotifs?.length > 0 && (
                     <PortIllustration motifs={wheelComp.illustrationMotifs} size={320} />
                   )}
                   <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} size={420} />

@@ -41,6 +41,7 @@ export default function parRouter(io) {
       size:           p.size,
       governance:     p.governance,
       colour:         p.colour,
+      image:          p.image,
       deck:           p.deck,
     })))
   })
