@@ -25,6 +25,7 @@ test('full 3-round playthrough for Boreal, including a return — every number',
   assert.equal(r1.strategyScore, 88)        // 51 / best 58
   assert.equal(r1.coinsThatHelped, 5)       // #24 (2) + #13 (3); #19 none
   assert.equal(r1.heldCost, 6)              // 24(2) + 13(3) + 19(1)
+  assert.equal(r1.lossValue, 3)             // SI loss value
   assert.equal(r1.cultureLevel, 'developing') // Aware + 1 enabler
   assert.equal(advanceRound(s).ok, true)
   assert.equal(s.coins, 2)                  // 0 + 2

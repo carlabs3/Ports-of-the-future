@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { COLOR_HEX } from '../styles/tokens.js'
 import { buildGeometry, spinTo, landingAngle, WHEEL_TURNS } from '../utils/wheelMath.js'
+import { HazardIconPaths } from './HazardIcons.jsx'
 
 // Cosmetic event-roulette wheel. The SERVER decides the event; this only animates
 // a spin that decelerates onto `resultCode`. Slice sizes are proportional to the
@@ -39,22 +40,6 @@ function arcPath(start, sweep, r = 48, cx = 50, cy = 50) {
   const [x2, y2] = polar(cx, cy, r, start + sweep)
   const large = sweep > 180 ? 1 : 0
   return `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z`
-}
-
-// Simple stroke icon per hazard, drawn in a ~6-unit box centred on (0,0). Kept
-// deliberately minimal and upright; the repo has no hazard icon set to reuse.
-function EventIcon({ code, color }) {
-  const p = { fill: 'none', stroke: color, strokeWidth: 0.55, strokeLinecap: 'round', strokeLinejoin: 'round' }
-  switch (code) {
-    case 'SS': return <g {...p}><path d="M-3,1.4 q1.5,-1.6 3,0 q1.5,1.6 3,0" /><path d="M0,-0.2 L0,-2.8" /><path d="M-1,-1.6 L0,-2.9 L1,-1.6" /></g>
-    case 'RF': return <g {...p}><path d="M-2.6,0.1 a1.4,1.4 0 0 1 0.4,-2.75 a1.9,1.9 0 0 1 3.7,0.15 a1.3,1.3 0 0 1 -0.2,2.6 Z" /><path d="M-1.6,1 L-2.1,2.5 M0.1,1 L-0.4,2.5 M1.8,1 L1.3,2.5" /></g>
-    case 'HW': return <g {...p}><path d="M0,-2.6 L0,1.3" /><circle cx="0" cy="2.1" r="1.1" /><path d="M-1,-1.8 L-0.2,-1.8 M-1,-0.4 L-0.2,-0.4 M-1,1 L-0.2,1" /></g>
-    case 'WS': return <g {...p}><path d="M-3,-1.4 q3.2,-0.9 4,0.5 q0.3,1 -0.9,1" /><path d="M-3,0.3 q4,-0.9 4.9,0.7 q0.3,1.1 -1,1" /><path d="M-2.4,1.9 q2.6,-0.6 3.2,0.5" /></g>
-    case 'DR': return <g {...p}><path d="M0,-2.6 q1.9,2.2 1.9,3.5 a1.9,1.9 0 1 1 -3.8,0 q0,-1.3 1.9,-3.5 Z" /><path d="M-2.8,2.8 L2.8,-2.8" /></g>
-    case 'WF': return <g {...p}><path d="M0,2.8 a2.3,2.3 0 0 1 -1.7,-3.8 q0.3,1.1 1,1.3 q-0.9,-2.1 1,-3.6 q-0.3,2.1 1.3,3 a2.3,2.3 0 0 1 -1.6,3.1 Z" /></g>
-    case 'SI': return <g {...p}><path d="M0,-3 L0,3 M-2.6,-1.5 L2.6,1.5 M-2.6,1.5 L2.6,-1.5" /></g>
-    default: return null
-  }
 }
 
 export default function EventWheel({ slices = [], resultCode, size = 420, animate = true, onReveal }) {
@@ -136,23 +121,20 @@ export default function EventWheel({ slices = [], resultCode, size = 420, animat
               const labelColor = LABEL_INK.has(g.code) ? COLOR_HEX.ink : COLOR_HEX.paper
               const isDrawn = !!resultCode && revealed && g.code === resultCode
               const faded = !!resultCode && revealed && g.code !== resultCode
-              const [ix, iy] = polar(50, 50, 34, g.mid)
-              const [wx, wy] = polar(50, 50, 21, g.mid)
-              // Keep every word upright: flip the lower-half labels 180°.
-              const labelRot = (g.mid > 90 && g.mid < 270) ? g.mid + 180 : g.mid
-              const word = EVENT_WORDS[g.code] || g.code
-              const parts = word.split(' & ')
+              // Icon + code, always horizontal (no rotation), at ~60% of the radius.
+              const [cx, cy] = polar(50, 50, 30, g.mid)
+              const s = 10 / 24 // scale the 24×24 icon down into the 100-unit wheel
               return (
                 <g key={g.code} opacity={faded ? 0.35 : 1} style={{ transition: 'opacity 0.4s ease' }}>
                   <path d={arcPath(g.start, g.sweep)} fill={EVENT_COLOR[g.code] || COLOR_HEX.ice}
                     stroke={COLOR_HEX.ink} strokeWidth={isDrawn ? 1.8 : 0.5} />
-                  <g transform={`translate(${ix} ${iy})`}><EventIcon code={g.code} color={labelColor} /></g>
-                  <text x={wx} y={wy} fontSize={parts.length > 1 ? 3.3 : 4}
-                    fontWeight="800" fill={labelColor} textAnchor="middle" dominantBaseline="middle"
-                    transform={`rotate(${labelRot} ${wx} ${wy})`} style={{ letterSpacing: '-0.02em' }}>
-                    {parts.length > 1
-                      ? parts.map((p, k) => <tspan key={k} x={wx} dy={k === 0 ? -1.7 : 3.4}>{p}{k === 0 ? ' &' : ''}</tspan>)
-                      : word}
+                  <g transform={`translate(${cx - 12 * s} ${cy - 2 - 12 * s}) scale(${s})`}
+                    fill="none" stroke={labelColor} strokeWidth={2} strokeLinecap="square" strokeLinejoin="miter">
+                    <HazardIconPaths code={g.code} />
+                  </g>
+                  <text x={cx} y={cy + 6} fontSize={5} fontWeight="800" fill={labelColor}
+                    textAnchor="middle" dominantBaseline="middle" style={{ letterSpacing: '0.04em' }}>
+                    {g.code}
                   </text>
                 </g>
               )

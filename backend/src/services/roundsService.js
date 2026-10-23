@@ -106,6 +106,7 @@ export function recordSpin(state, event) {
     strategyScore:       computeStrategyScore({ expectedProtection: expected, portId: state.portId, startingBand: state.startingBand, budget }),
     coinsThatHelped:     computeCoinsThatHelped({ measures: state.portfolio, event }),
     heldCost,
+    lossValue,
     cultureLevel:        effBand,
   }
   state.rounds.push(entry)

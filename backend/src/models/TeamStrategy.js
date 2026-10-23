@@ -24,6 +24,7 @@ const roundSchema = new Schema({
   strategyScore:     Number,                           // whole %
   coinsThatHelped:   Number,
   heldCost:          Number,                           // total cost of cards held this round
+  lossValue:         Number,                           // the drawn event's loss value (damage-bill denominator)
   cultureLevel:      String,                           // effective band that applied
 }, { _id: false })
 

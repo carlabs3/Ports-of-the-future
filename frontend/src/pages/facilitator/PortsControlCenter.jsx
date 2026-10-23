@@ -3,12 +3,23 @@ import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
 import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
+import { HazardIcon } from '../../components/HazardIcons.jsx'
 import PortIllustration from '../../components/PortIllustration.jsx'
 import { socket } from '../../utils/socket.js'
 import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP, AREA_COLOR } from '../../styles/tokens.js'
 
 // Culture multiplier by band (display only — the backend applies it in scoring).
 const CULTURE_FACTOR = { reactive: 0.8, aware: 0.9, developing: 1.0, proactive: 1.1 }
+
+// Hazard colours (hex), for the roulette result square. Matches EventWheel.
+const EVENT_HEX = { SS: '#77AEF1', RF: '#4177C0', HW: '#E3BF40', WS: '#5C6B7A', DR: '#C5E4FF', WF: '#0B1B33', SI: '#7B6FE0' }
+// Ink or white text/icon for a given background hex, by perceived luminance.
+function textOnColour(hex) {
+  const h = (hex || '').replace('#', '')
+  if (h.length !== 6) return '#0B1B33'
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#0B1B33' : '#FFFFFF'
+}
 
 // Read-only PARI observation board. It only reads and displays live PAR data;
 // it never triggers reveals, confirms actions, or writes anything.
@@ -440,6 +451,7 @@ export default function PortsControlCenter() {
     return pid != null ? (portById[pid]?.image || null) : null
   }
   const wheelImage = wheelTeam ? portImageFor(wheelTeam) : null
+  const wheelPortColour = wheelTeam ? (portById[portAssignments.find(pa => pa.group === wheelTeam)?.portId]?.colour || null) : null
 
   // NOTE: these two effects MUST stay below the declarations of `allConfirmed`,
   // `groupStats` and `drawnGroups` — the dep array reads `allConfirmed` during
@@ -1092,20 +1104,34 @@ export default function PortsControlCenter() {
             <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Select a team below to open its wheel.</p>
           ) : (
             <>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
-                <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: 0 }}>{wheelTeam}</h2>
-                <span style={uiLabel}>{wheelComp.portName} · round {wheelComp.currentRound} of 3</span>
-              </div>
+              {/* Port band — port name large on the port colour + a photo strip */}
+              {(() => {
+                const bandBg = wheelPortColour || '#C5E4FF'
+                const bandFg = textOnColour(bandBg)
+                const cultLabel = BAND_RAMP[wheelComp.cultureLevel]?.label
+                const cultMult = (CULTURE_FACTOR[wheelComp.cultureLevel] ?? 1).toFixed(1)
+                return (
+                  <div style={{ display: 'flex', border: HAIRLINE, overflow: 'hidden', minHeight: 150 }}>
+                    <div style={{ flex: '1 1 58%', minWidth: 0, background: bandBg, color: bandFg, padding: '0 28px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10 }}>
+                      <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(44px, 7vw, 84px)', lineHeight: 0.9, letterSpacing: LS.display, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wheelComp.portName}</div>
+                      <div style={{ fontFamily: FONT.mono, fontSize: FS.body, letterSpacing: LS.mono, textTransform: 'uppercase' }}>
+                        {wheelTeam} · Round {wheelComp.currentRound} of 3{cultLabel ? ` · ${cultLabel} ×${cultMult}` : ''}
+                      </div>
+                    </div>
+                    {wheelImage && (
+                      <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`}
+                        style={{ flex: '1 1 42%', minWidth: 0, alignSelf: 'stretch', objectFit: 'cover', display: 'block' }} />
+                    )}
+                  </div>
+                )
+              })()}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 460px) 1fr', gap: 32, alignItems: 'start' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
-                  {wheelImage ? (
-                    <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`}
-                      style={{ width: 320, maxWidth: '100%', aspectRatio: '1 / 1', objectFit: 'cover', border: HAIRLINE, display: 'block' }} />
-                  ) : wheelComp.illustrationMotifs?.length > 0 && (
-                    <PortIllustration motifs={wheelComp.illustrationMotifs} size={320} />
-                  )}
-                  <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} size={420} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) 1fr', gap: 28, alignItems: 'start' }}>
+                {/* Left: the wheel alone, centred */}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ width: 'min(440px, 42vh)', maxWidth: '100%' }}>
+                    <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} size={440} />
+                  </div>
                 </div>
 
                 <div>
@@ -1156,49 +1182,51 @@ export default function PortsControlCenter() {
                     </div>
                   ) : (() => {
                     const e = wheelOutcome.entry || {}
-                    const heldCostNow = (wheelComp.portfolio || []).reduce((s, id) => s + (measureById.get(id)?.cost || 0), 0)
-                    const cb = e.cultureLevel
+                    const code = wheelOutcome.eventCode
+                    const sqBg = EVENT_HEX[code] || COLOR.ice
+                    const sqFg = textOnColour(EVENT_HEX[code] || '#C5E4FF')
                     const next = nextTeamToDraw()
+                    const bigNum = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(40px, 5.5vh, 64px)', lineHeight: 1, margin: '6px 0 2px' }
+                    const factLine = { fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }
                     return (
-                      <>
-                        <p style={uiLabel}>The wheel drew</p>
-                        <h3 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, margin: '6px 0 2px' }}>{EVENT_WORDS[wheelOutcome.eventCode] || wheelOutcome.eventCode}</h3>
-                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '0 0 20px' }}>{wheelOutcome.eventName || wheelOutcome.eventCode}</p>
-
-                        <div style={{ background: COLOR.harbour, color: COLOR.onHarbour, border: HAIRLINE, padding: '20px 24px', marginBottom: 20 }}>
-                          <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.mega, letterSpacing: LS.display, lineHeight: 0.9 }}>{Math.round(e.lossesAvoidedPct ?? 0)}%</span>
-                          <span style={{ fontSize: FS.h3, fontWeight: FW.bold, marginLeft: 10 }}>of losses avoided</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        {/* Drew: label · code · event square · full name once */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                          <div style={{ width: 76, height: 76, flexShrink: 0, border: HAIRLINE, background: sqBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <HazardIcon code={code} color={sqFg} size={44} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={uiLabel}>The wheel drew · {code}</p>
+                            <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.tight, lineHeight: 1 }}>{wheelOutcome.eventName || code}</div>
+                          </div>
                         </div>
 
-                        {/* Result facts (round) */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-                          {[
-                            ['Damage bill', `${e.damageBill ?? '—'}`, 'rounded to the nearest ½'],
-                            ['Strategy score', `${e.strategyScore ?? '—'}`, 'plan vs the best possible'],
-                            ['Expected protection', `${Math.round(e.expectedProtection ?? 0)}%`, 'across every event'],
-                            ['Coins that helped', `${e.coinsThatHelped ?? 0} of ${heldCostNow}`, 'coins on cards that mattered'],
-                          ].map(([label, value, sub]) => (
-                            <div key={label} style={{ border: HAIRLINE, padding: 14 }}>
-                              <p style={uiLabel}>{label}</p>
-                              <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.display, marginTop: 4 }}>{value}</div>
-                              <p style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, margin: '2px 0 0' }}>{sub}</p>
-                            </div>
-                          ))}
+                        {/* Two result panels */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                          <div style={{ border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, padding: '16px 18px' }}>
+                            <p style={uiLabel}>Luck · this spin</p>
+                            <div style={bigNum}>{Math.round(e.lossesAvoidedPct ?? 0)}%</div>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '0 0 10px' }}>of losses avoided</p>
+                            <p style={factLine}>Damage bill {e.damageBill ?? '—'} of {e.lossValue ?? '—'} coins</p>
+                          </div>
+                          <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '16px 18px' }}>
+                            <p style={{ ...uiLabel, color: COLOR.onHarbour }}>Strategy · your plan</p>
+                            <div style={bigNum}>{e.strategyScore ?? '—'}%</div>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: '0 0 10px', opacity: 0.85 }}>strategy score</p>
+                            <p style={factLine}>Expected protection {Math.round(e.expectedProtection ?? 0)}%</p>
+                            <p style={{ ...factLine, marginTop: 4 }}>Coins on useful cards {e.coinsThatHelped ?? 0} of {e.heldCost ?? 0}</p>
+                          </div>
                         </div>
-
-                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, margin: '0 0 24px' }}>
-                          Culture level: <strong>{BAND_RAMP[cb]?.label || '—'}</strong> · scores ×{(CULTURE_FACTOR[cb] ?? 1).toFixed(1)}
-                        </p>
 
                         {next ? (
                           <button onClick={() => openWheel(next)}
-                            style={{ width: '100%', height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: 'pointer' }}>
+                            style={{ width: '100%', height: 52, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: 'pointer' }}>
                             Next: {next} →
                           </button>
                         ) : (
                           <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Every team has spun round {wheelComp.currentRound}.</p>
                         )}
-                      </>
+                      </div>
                     )
                   })()}
                 </div>
