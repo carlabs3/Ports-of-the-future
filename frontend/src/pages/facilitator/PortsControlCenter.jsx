@@ -162,6 +162,29 @@ export default function PortsControlCenter() {
   const [wheelRevealed, setWheelRevealed] = useState(false) // true only once the spin animation ends
   const [wheelAnimate, setWheelAnimate]   = useState(false) // true for a fresh spin; false when reshowing a drawn team
   const [advancing, setAdvancing]       = useState(false) // next-round call in flight
+  const [soundOn, setSoundOn]           = useState(false) // wheel click sound, off by default
+  const audioRef = useRef(null)
+  // Create/resume the audio context on the Spin click (a user gesture).
+  function ensureAudio() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext
+      if (!audioRef.current && AC) audioRef.current = new AC()
+      audioRef.current?.resume?.()
+    } catch { /* audio unavailable */ }
+  }
+  // A short "tick" on each peg pass (only when sound is on).
+  function playTick() {
+    const ctx = audioRef.current
+    if (!ctx || !soundOn) return
+    const t = ctx.currentTime
+    const osc = ctx.createOscillator(); const gain = ctx.createGain()
+    osc.frequency.value = 1100; osc.type = 'square'
+    gain.gain.setValueAtTime(0.0001, t)
+    gain.gain.exponentialRampToValueAtTime(0.12, t + 0.001)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.03)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start(t); osc.stop(t + 0.04)
+  }
 
   // Debrief: luck vs strategy (expected results, only in the debrief phase).
   const [debrief, setDebrief] = useState(null) // { budget, teams: [...] }
@@ -691,6 +714,7 @@ export default function PortsControlCenter() {
   // and only then refreshes the team state (coins, queue result).
   async function spinWheel() {
     if (spinning || !wheelTeam || wheelOutcome) return
+    ensureAudio() // start the audio context on the user gesture (if sound is on later)
     setSpinning(wheelTeam)
     setWheelRevealed(false)
     setWheelAnimate(true)
@@ -1198,10 +1222,16 @@ export default function PortsControlCenter() {
                 {/* ZONE 2 · wheel + current-state content */}
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 28, alignItems: 'flex-start' }}>
                   <div style={{ flexShrink: 0, width: 'min(470px, 55vh)', maxWidth: '100%' }}>
-                    <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} size={470} />
+                    <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} portColour={wheelPortColour || '#C5E4FF'} onPeg={playTick} size={470} />
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <button onClick={() => setSoundOn(v => !v)}
+                        style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, background: 'transparent', border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: 'pointer' }}>
+                        {soundOn ? '🔊 Sound on' : '🔇 Sound off'}
+                      </button>
+                    </div>
                     {!wheelRevealed ? (
                       <>
                         <p style={uiLabel}>{wheelComp.portName}’s wheel</p>
