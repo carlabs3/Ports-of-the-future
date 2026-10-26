@@ -17,11 +17,19 @@ export default function sessionsRouter(io) {
       const session = await Session.findOne({ code: req.params.code }, 'code name groups portAssignments status phase currentStep resultsRevealed step3Revealed winnersRevealed configVersion')
       // Note: 'draft' and 'closed' statuses are intentionally included
       if (!session) return res.status(404).json({ error: 'Sesión no encontrada' })
+      // How many people joined each team (vs how many submitted — that comes from
+      // the CAP results). Used by the Teams screen's "N of M answered".
+      const counts = await Participant.aggregate([
+        { $match: { sessionCode: req.params.code } },
+        { $group: { _id: '$group', n: { $sum: 1 } } },
+      ])
+      const memberCounts = Object.fromEntries(counts.map(c => [c._id, c.n]))
       res.json({
         code:            session.code,
         name:            session.name,
         groups:          session.groups,
         portAssignments: session.portAssignments || [],
+        memberCounts,
         status:          session.status,
         phase:           session.phase || 'join',
         currentStep:     session.currentStep,
@@ -154,7 +162,7 @@ export default function sessionsRouter(io) {
   // Facilitator-driven control-centre phase. Manual only — never derived from
   // data. Persists so a reload / different laptop stays on the same phase, and
   // broadcasts phase:change to the room. Independent of currentStep/STEP_MAP.
-  const SESSION_PHASES = ['join', 'par', 'strategy', 'wheel', 'debrief']
+  const SESSION_PHASES = ['join', 'par', 'teams', 'strategy', 'wheel', 'debrief']
   router.patch('/:code/phase', async (req, res) => {
     try {
       const { phase } = req.body

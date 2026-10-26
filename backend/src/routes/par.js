@@ -392,12 +392,12 @@ export default function parRouter(io) {
       await resend.emails.send({
         from: 'Ports of the Future <noreply@apps.threeoclock.co>',
         to: email,
-        subject: `Your PAR Index result — ${score}/100 (${bandLabel})`,
+        subject: `Your CAP Index result — ${score}/100 (${bandLabel})`,
         html: `
           <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-            <p style="font-size: 13px; color: #666; margin: 0 0 24px; line-height: 1.7;">Thank you for taking part in the Ports of the Future PAR Index assessment.</p>
+            <p style="font-size: 13px; color: #666; margin: 0 0 24px; line-height: 1.7;">Thank you for taking part in the Ports of the Future CAP Index assessment.</p>
             <div style="background: #000; border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px;">
-              <p style="color: rgba(255,255,255,0.55); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 8px;">Your PAR Index</p>
+              <p style="color: rgba(255,255,255,0.55); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 8px;">Your CAP Index</p>
               <h2 style="color: #fff; font-size: 52px; font-weight: 700; margin: 0;">${score}<span style="font-size: 20px; color: rgba(255,255,255,0.55);">/100</span></h2>
               <p style="color: rgba(255,255,255,0.75); font-size: 16px; margin: 12px 0 0;">Band: <strong>${bandLabel}</strong></p>
             </div>

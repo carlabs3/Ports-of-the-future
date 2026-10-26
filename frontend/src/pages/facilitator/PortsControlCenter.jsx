@@ -50,6 +50,7 @@ const PORT_SIZE_ORDER = ['small', 'medium', 'large']
 const PHASES = [
   { id: 'join',     label: 'Join' },
   { id: 'par',      label: 'Results' },
+  { id: 'teams',    label: 'Teams' },
   { id: 'strategy', label: 'Strategy' },
   { id: 'wheel',    label: 'Roulette' },
   { id: 'debrief',  label: 'Debrief' },
@@ -207,6 +208,7 @@ export default function PortsControlCenter() {
 
   // Join tab: live participant count + port shuffle.
   const [joinedCount, setJoinedCount] = useState(0)
+  const [memberCounts, setMemberCounts] = useState({}) // group -> people who joined that team
   const [shuffling, setShuffling]     = useState(false)
   const [shuffleMsg, setShuffleMsg]   = useState('')
 
@@ -265,6 +267,7 @@ export default function PortsControlCenter() {
         setClosed(res.data.status === 'closed')
         setDraft(res.data.status === 'draft')
         setPhase(res.data.phase || 'join')
+        setMemberCounts(res.data.memberCounts || {})
       })
       .catch(() => {})
     api.get('/api/par/ports')
@@ -322,7 +325,11 @@ export default function PortsControlCenter() {
       setWheelTeam(null); setWheelComp(null); setWheelOutcome(null); setWheelRevealed(false); setWheelAnimate(false)
     }
     function onPhaseChange({ phase: p }) { if (p) setPhase(p) }
-    function onJoined(p) { if (typeof p?.total === 'number') setJoinedCount(p.total) }
+    function onJoined(p) {
+      if (typeof p?.total === 'number') setJoinedCount(p.total)
+      // Refresh per-team joined counts for the Teams screen (no phase change).
+      api.get(`/api/sessions/${code}/info`).then(r => setMemberCounts(r.data.memberCounts || {})).catch(() => {})
+    }
     socket.on('par:update', onParUpdate)
     socket.on('strategy:update', onStrategyUpdate)
     socket.on('outcome:update', onOutcomeUpdate)
@@ -444,6 +451,7 @@ export default function PortsControlCenter() {
         spun: hasSpunCurrent(strat),
         portName: portId != null ? (portById[portId]?.name || `Port ${portId}`) : (strat?.portName ?? null),
         portColour: portId != null ? (portById[portId]?.colour || null) : null,
+        portDesc: portId != null ? (portById[portId]?.description || '') : '',
         status,
       }
     })
@@ -780,7 +788,10 @@ export default function PortsControlCenter() {
       }
     }
     if (phase === 'par') {
-      return { text: 'Talk through the room’s culture level.', primary: { label: 'Start strategy →', onClick: () => changePhase('strategy'), disabled: false } }
+      return { text: 'Talk through the room’s culture level.', primary: { label: 'Show teams →', onClick: () => changePhase('teams'), disabled: false } }
+    }
+    if (phase === 'teams') {
+      return { text: 'Each team: this is your port and your CAP Index.', primary: { label: 'Start strategy →', onClick: () => changePhase('strategy'), disabled: false } }
     }
     if (phase === 'strategy') {
       if (allConfirmed) return { text: 'Every team is locked.', primary: { label: 'Start the roulette →', onClick: () => changePhase('wheel'), disabled: false } }
@@ -1002,6 +1013,37 @@ export default function PortsControlCenter() {
             {shuffleMsg && (
               <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>{shuffleMsg}</span>
             )}
+          </div>
+        </div>
+        )}
+
+        {/* 3 · TEAMS — phase: teams. One card per team: port + CAP Index. */}
+        {phase === 'teams' && (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, Math.max(1, groupStats.length))}, 1fr)`, gridAutoRows: '1fr', gap: 16 }}>
+            {groupStats.map(g => {
+              const bg = g.portColour || '#C5E4FF'
+              const fg = textOnColour(bg)
+              const mult = (CULTURE_FACTOR[g.cultureBand] ?? 1).toFixed(1)
+              const joined = memberCounts[g.group] ?? g.count
+              return (
+                <div key={g.group} style={{ display: 'flex', flexDirection: 'column', border: HAIRLINE, minWidth: 0, minHeight: 0 }}>
+                  <div style={{ background: bg, color: fg, padding: '14px 16px', flexShrink: 0 }}>
+                    <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(22px, 2vw, 32px)', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.portName || '—'}</div>
+                    {g.portDesc && <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, marginTop: 4, opacity: 0.9 }}>{g.portDesc}</div>}
+                  </div>
+                  <div style={{ flex: 1, minHeight: 0, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold }}>{g.group}</div>
+                    <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, marginTop: 4 }}>CAP Index</div>
+                    <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(44px, 6vh, 80px)', lineHeight: 1 }}>
+                      {g.avg != null ? g.avg : '—'}<span style={{ fontSize: '0.32em', fontWeight: FW.semibold, color: COLOR.ink60 }}> /100</span>
+                    </div>
+                    <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, marginTop: 4 }}>{BAND_RAMP[g.cultureBand]?.label || '—'} · scores ×{mult}{g.cultureRaised ? ' ★' : ''}</div>
+                    <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, marginTop: 'auto' }}>{g.count} of {joined} answered</div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
         )}

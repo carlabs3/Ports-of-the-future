@@ -18,7 +18,7 @@ export default function SessionEnd() {
 
       <div style={{ maxWidth: 480, margin: '0 auto', width: '100%', padding: '32px 24px', flex: 1 }}>
         <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, lineHeight: 1.6, margin: '0 0 28px' }}>
-          Your PAR Index has been recorded.
+          Your CAP Index has been recorded.
         </p>
 
         <button

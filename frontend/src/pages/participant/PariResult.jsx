@@ -100,7 +100,7 @@ export default function PariResult() {
     <div style={{ minHeight: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
       <div style={{ fontSize: '3rem', marginBottom: '1.25rem' }}>⏳</div>
       <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, maxWidth: 300, lineHeight: 1.65 }}>
-        Calculating your PAR Index…
+        Calculating your CAP Index…
       </p>
     </div>
   )
@@ -117,7 +117,7 @@ export default function PariResult() {
       <div style={{ background: COLOR.harbour, color: COLOR.onHarbour, borderBottom: HAIRLINE }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '28px 20px 32px' }}>
           <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', margin: '0 0 12px', color: 'rgba(255,255,255,0.8)' }}>
-            Your PAR Index
+            Your CAP Index
           </p>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span style={{ fontWeight: FW.display, fontSize: FS.mega, letterSpacing: LS.display, lineHeight: 0.9 }}>{result.score}</span>
