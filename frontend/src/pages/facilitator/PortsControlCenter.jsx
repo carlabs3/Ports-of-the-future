@@ -769,13 +769,14 @@ export default function PortsControlCenter() {
   // One source of truth, read by the bottom bar and the presentation clicker.
   const conductor = (() => {
     if (phase === 'join') {
-      if (draft) return { text: 'Start the session so people can join.', primary: { label: starting ? 'Starting…' : 'Start session →', onClick: startSession, disabled: starting } }
+      // Two always-actionable steps: activate (so phones can answer), then move
+      // to Results. Never a dead disabled button with no way forward.
+      const shuffle = { label: shuffling ? 'Shuffling…' : '↻ Shuffle ports', onClick: shufflePorts, disabled: shuffling }
+      if (draft) return { text: 'Activate the session so phones can scan and answer.', primary: { label: starting ? 'Starting…' : 'Start questionnaire →', onClick: startSession, disabled: starting }, secondaries: [shuffle] }
       return {
         text: 'Ask everyone to scan the QR and answer.',
-        primary: totalAnswers > 0
-          ? { label: 'Show results →', onClick: () => changePhase('par'), disabled: false }
-          : { label: `Waiting for answers (${totalAnswers})`, onClick: () => {}, disabled: true },
-        secondaries: [{ label: shuffling ? 'Shuffling…' : '↻ Shuffle ports', onClick: shufflePorts, disabled: shuffling }],
+        primary: { label: 'Show results →', onClick: () => changePhase('par'), disabled: false },
+        secondaries: [shuffle],
       }
     }
     if (phase === 'par') {

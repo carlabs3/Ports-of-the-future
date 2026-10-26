@@ -64,6 +64,7 @@ export default function EventWheel({ slices = [], resultCode, size = 440, animat
   const rafRef = useRef(0)
   const studRef = useRef(Math.floor(rotation / 12))
   const flapperRef = useRef(0)
+  const lastTickRef = useRef(0) // throttle kicks + ticks to ≤1 per 40ms
   const onRevealRef = useRef(onReveal); onRevealRef.current = onReveal
   const onPegRef = useRef(onPeg); onPegRef.current = onPeg
 
@@ -93,12 +94,16 @@ export default function EventWheel({ slices = [], resultCode, size = 440, animat
       const rot = from + (to - from) * easeOut(p)
       rotationRef.current = rot
       setRotation(rot)
-      // Every 12° of travel, a peg/stud passes the flapper: kick it + tick.
+      // Every 12° of travel, a peg/stud passes the flapper: kick it + tick — but
+      // throttled to ≤1 per 40ms so the fast start doesn't become a buzz.
       const studs = Math.floor(rot / 12)
       if (studs > studRef.current) {
         studRef.current = studs
-        flapperRef.current = 20
-        onPegRef.current?.()
+        if (now - lastTickRef.current >= 40) {
+          lastTickRef.current = now
+          flapperRef.current = 20
+          onPegRef.current?.()
+        }
       }
       flapperRef.current *= 0.75 // spring back
       setFlapper(flapperRef.current)
