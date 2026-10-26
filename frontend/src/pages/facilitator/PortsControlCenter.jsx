@@ -55,15 +55,6 @@ const PHASES = [
   { id: 'debrief',  label: 'Debrief' },
 ]
 
-// "NOW" strip: one sentence telling the room what to do in the current phase.
-const NOW_COPY = {
-  join:     'Everyone joins on their phone. It takes 30 seconds.',
-  par:      'Answer the 10 questions on your phone. Results update live.',
-  strategy: "Each team reads out its measure numbers. Other teams' choices stay hidden.",
-  wheel:    'One team at a time. Each port has its own wheel.',
-  debrief:  'Which team had the best plan — and which just had the best luck?',
-}
-
 // NOTE: band boundaries live ONLY in the backend (scoringService.getBand).
 // This screen never derives a band from a score — it displays the band the
 // backend sends (per-group in `groups`, per-submission in `individual.band`).
@@ -455,12 +446,6 @@ export default function PortsControlCenter() {
   const wheelImage = wheelPort?.image || null
   const wheelPortColour = wheelPort?.colour || null
   const wheelPortDesc = wheelPort?.description || ''
-  // NOW-bar line follows the roulette sub-state (ready / spinning / result).
-  const nowText = (phase === 'wheel' && wheelTeam && wheelComp)
-    ? (wheelOutcome && wheelRevealed ? 'Read the result aloud: luck first, then strategy.'
-      : wheelOutcome ? 'The wheel is spinning…'
-      : `${wheelTeam}, read your port aloud. Then press Spin.`)
-    : NOW_COPY[phase]
 
   // NOTE: these two effects MUST stay below the declarations of `allConfirmed`,
   // `groupStats` and `drawnGroups` — the dep array reads `allConfirmed` during
@@ -571,8 +556,13 @@ export default function PortsControlCenter() {
   // Lock the current round. Derives the starting level from PARI if unset; if the
   // team has no answers and none is chosen, the server 409s and we show it.
   async function lockRoundFor() {
+    const locked = editingGroup
     const ok = await strategyCall('patch', '/lock')
-    if (ok) setEditingGroup(null)
+    if (ok) {
+      // Move straight to the next team that still needs to lock.
+      const nextU = groupStats.find(g => !g.roundLocked && g.group !== locked)?.group
+      setEditingGroup(nextU || null)
+    }
   }
   // Unlock the current round. Server refuses if it has already spun.
   async function unlockRoundFor(group) {
@@ -750,7 +740,83 @@ export default function PortsControlCenter() {
   }
 
   const currentIndex = Math.max(0, PHASES.findIndex(p => p.id === phase))
-  const nextPhase = PHASES[currentIndex + 1]
+
+  // ── Conductor: the single instruction + primary action for the current step ──
+  // One source of truth, read by the bottom bar and the presentation clicker.
+  const conductor = (() => {
+    if (phase === 'join') {
+      if (draft) return { text: 'Start the session so people can join.', primary: { label: starting ? 'Starting…' : 'Start session →', onClick: startSession, disabled: starting } }
+      return {
+        text: 'Ask everyone to scan the QR and answer.',
+        primary: totalAnswers > 0
+          ? { label: 'Show results →', onClick: () => changePhase('par'), disabled: false }
+          : { label: `Waiting for answers (${totalAnswers})`, onClick: () => {}, disabled: true },
+        secondaries: [{ label: shuffling ? 'Shuffling…' : '↻ Shuffle ports', onClick: shufflePorts, disabled: shuffling }],
+      }
+    }
+    if (phase === 'par') {
+      return { text: 'Talk through the room’s culture level.', primary: { label: 'Start strategy →', onClick: () => changePhase('strategy'), disabled: false } }
+    }
+    if (phase === 'strategy') {
+      if (allConfirmed) return { text: 'Every team is locked.', primary: { label: 'Start the roulette →', onClick: () => changePhase('wheel'), disabled: false } }
+      if (editingStrat && !editingStrat.roundLocked) {
+        return {
+          text: readback,
+          primary: { label: busy ? 'Locking…' : `Lock ${editingGroup} →`, onClick: lockRoundFor, disabled: busy },
+          secondaries: [
+            { label: 'Clear', onClick: clearRound, disabled: busy || roundBought.length === 0 },
+            { label: 'Close', onClick: () => { setEditingGroup(null); setAddError('') }, disabled: false },
+          ],
+        }
+      }
+      const nextU = groupStats.find(g => !g.roundLocked)?.group
+      return { text: 'Pick a team and read its cards aloud.', primary: nextU ? { label: `Dictate ${nextU} →`, onClick: () => openEditor(nextU), disabled: false } : { label: 'Start the roulette →', onClick: () => changePhase('wheel'), disabled: false } }
+    }
+    if (phase === 'wheel') {
+      if (!allConfirmed) {
+        return { text: 'Lock every team before the roulette.', primary: { label: `Waiting: ${pendingConfirm.length} ${pendingConfirm.length === 1 ? 'team' : 'teams'} not locked`, onClick: () => {}, disabled: true } }
+      }
+      if (!wheelTeam || !wheelComp) {
+        const first = groupStats.find(g => !drawnGroups.has(g.group))?.group || groupStats[0]?.group
+        return { text: 'Open a team’s wheel.', primary: first ? { label: `Open ${first} →`, onClick: () => openWheel(first), disabled: false } : null }
+      }
+      if (!wheelRevealed) {
+        const isSpinning = !!wheelOutcome || !!spinning
+        return {
+          text: isSpinning ? 'The wheel is spinning…' : `${wheelTeam}, read your port aloud. Then press Spin.`,
+          primary: { label: isSpinning ? 'Spinning…' : 'Spin the wheel', onClick: spinWheel, disabled: isSpinning },
+        }
+      }
+      const next = nextTeamToDraw()
+      if (next) return { text: 'Read the result aloud: luck first, then strategy.', primary: { label: `Next: ${next} →`, onClick: () => openWheel(next), disabled: false } }
+      if (currentRound < 3) return { text: 'Every team has spun this round.', primary: { label: advancing ? 'Advancing…' : `Start round ${currentRound + 1} strategy →`, onClick: () => setAdvanceDialog('round'), disabled: advancing } }
+      return { text: 'All three rounds are done.', primary: { label: 'Go to Debrief →', onClick: () => setAdvanceDialog('debrief'), disabled: false } }
+    }
+    if (phase === 'debrief') {
+      return { text: closed ? 'Session ended.' : 'Review luck vs strategy, then wrap up.', primary: closed ? null : { label: 'Close the session…', onClick: () => setEndDialogOpen(true), disabled: false } }
+    }
+    return { text: '', primary: null }
+  })()
+
+  // Presentation clicker: Right arrow / PageDown fire the primary action — but
+  // never while typing in a field or while a dialog is open (so it can't confirm
+  // a dialog). Refs keep the once-registered listener reading live values.
+  const primaryRef = useRef(null)
+  primaryRef.current = conductor.primary
+  const dialogOpenRef = useRef(false)
+  dialogOpenRef.current = !!(endDialogOpen || advanceDialog)
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key !== 'ArrowRight' && e.key !== 'PageDown') return
+      const el = document.activeElement
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
+      if (dialogOpenRef.current) return
+      const p = primaryRef.current
+      if (p && !p.disabled && typeof p.onClick === 'function') { e.preventDefault(); p.onClick() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
     <div className="cc-screen" style={{ background: COLOR.paper, fontFamily: FONT.sans, color: COLOR.ink }}>
@@ -765,15 +831,16 @@ export default function PortsControlCenter() {
           {PHASES.map((p, i) => {
             const active = phase === p.id
             const done = i < currentIndex
+            const future = i > currentIndex
             return (
-              <button key={p.id} onClick={() => changePhase(p.id)}
+              <button key={p.id} onClick={future ? undefined : () => changePhase(p.id)} disabled={future}
                 style={{
                   padding: '10px 16px', border: HAIRLINE, borderLeft: i === 0 ? HAIRLINE : 'none',
-                  borderRadius: 0, cursor: 'pointer', whiteSpace: 'nowrap',
+                  borderRadius: 0, cursor: future ? 'default' : 'pointer', whiteSpace: 'nowrap',
                   fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: active ? FW.bold : FW.medium,
                   letterSpacing: LS.tight,
                   background: active ? COLOR.harbour : COLOR.paper,
-                  color: active ? COLOR.onHarbour : (done ? COLOR.ink60 : COLOR.ink),
+                  color: active ? COLOR.onHarbour : (future ? COLOR.ink40 : COLOR.ink),
                 }}>
                 <span style={{ fontFamily: FONT.mono, opacity: 0.7, marginRight: 6 }}>{i + 1}</span>
                 {p.label}{done ? ' ✓' : ''}
@@ -797,18 +864,6 @@ export default function PortsControlCenter() {
         </div>
       </header>
 
-      {/* ═══ NOW strip ═══ */}
-      <div style={{ flexShrink: 0, background: COLOR.ice, color: COLOR.ink, borderBottom: HAIRLINE, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <span style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60 }}>Now</span>
-          <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.medium }}>{nowText}</span>
-        </div>
-        {nextPhase && (
-          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono, color: COLOR.ink60, whiteSpace: 'nowrap' }}>
-            Next: {nextPhase.label}
-          </span>
-        )}
-      </div>
 
       {/* ═══ END SESSION dialog ═══ */}
       {endDialogOpen && (
@@ -911,7 +966,7 @@ export default function PortsControlCenter() {
             </div>
           </div>
 
-          {/* Actions: live counter · shuffle · start */}
+          {/* Live counter + shuffle feedback (the actions live in the bottom bar). */}
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 20, borderTop: HAIRLINE, paddingTop: 20 }}>
             <div style={{ flex: '1 1 auto' }}>
               <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display }}>{joinedCount}</span>
@@ -919,27 +974,9 @@ export default function PortsControlCenter() {
                 {joinedCount === 1 ? 'person has joined' : 'people have joined'}
               </span>
             </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              {shuffleMsg && (
-                <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>{shuffleMsg}</span>
-              )}
-              <button onClick={shufflePorts} disabled={shuffling}
-                style={{ height: 56, padding: '0 22px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: shuffling ? 'default' : 'pointer' }}>
-                {shuffling ? 'Shuffling…' : '↻ Shuffle ports'}
-              </button>
-              {draft ? (
-                <button onClick={startSession} disabled={starting}
-                  style={{ height: 56, padding: '0 28px', border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: starting ? 'default' : 'pointer' }}>
-                  {starting ? 'Starting…' : 'Start session →'}
-                </button>
-              ) : (
-                <button onClick={() => changePhase('par')}
-                  style={{ height: 56, padding: '0 28px', border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: 'pointer' }}>
-                  Start questionnaire →
-                </button>
-              )}
-            </div>
+            {shuffleMsg && (
+              <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>{shuffleMsg}</span>
+            )}
           </div>
         </div>
         )}
@@ -1116,33 +1153,6 @@ export default function PortsControlCenter() {
               )}
             </div>
           </div>
-
-          {/* BOTTOM ink bar: readback + clear + lock */}
-          {editingStrat && (
-            <div style={{ background: COLOR.ink, color: COLOR.onInk, padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-              <p style={{ flex: '1 1 320px', fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, lineHeight: 1.3, margin: 0 }}>
-                {readback}
-              </p>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => { setEditingGroup(null); setAddError('') }}
-                  style={{ height: 48, padding: '0 18px', border: `1px solid ${COLOR.onInk}`, borderRadius: 0, background: 'transparent', color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
-                  Close
-                </button>
-                {!editingStrat.roundLocked && (
-                  <button onClick={clearRound} disabled={busy || roundBought.length === 0}
-                    style={{ height: 48, padding: '0 18px', border: `1px solid ${COLOR.onInk}`, borderRadius: 0, background: 'transparent', color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: (busy || roundBought.length === 0) ? 'default' : 'pointer', opacity: (busy || roundBought.length === 0) ? 0.5 : 1 }}>
-                    Clear
-                  </button>
-                )}
-                {!editingStrat.roundLocked && (
-                  <button onClick={lockRoundFor} disabled={busy}
-                    style={{ height: 48, padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}>
-                    {busy ? 'Locking…' : `Yes — lock ${editingGroup} →`}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
         </div>
         )}
 
@@ -1192,38 +1202,28 @@ export default function PortsControlCenter() {
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {!wheelRevealed ? (() => {
-                      // READY and SPINNING share this layout; only the button changes.
-                      const isSpinning = !!wheelOutcome || !!spinning
-                      return (
-                        <>
-                          <p style={uiLabel}>{wheelComp.portName}’s wheel</p>
-                          <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '6px 0 16px' }}>Bigger slices are more likely here.</p>
-                          <div style={{ marginBottom: 20 }}>
-                            {[...wheelComp.exposure].filter(e => e.weight > 0).sort((a, b) => b.weight - a.weight).map(e => (
-                              <div key={e.code} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
-                                <div style={{ width: 32, height: 32, flexShrink: 0, background: EVENT_HEX[e.code] || COLOR.ice, border: HAIRLINE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <HazardIcon code={e.code} color={textOnColour(EVENT_HEX[e.code] || '#C5E4FF')} size={20} />
-                                </div>
-                                <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>{e.name}</span>
+                    {!wheelRevealed ? (
+                      <>
+                        <p style={uiLabel}>{wheelComp.portName}’s wheel</p>
+                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '6px 0 16px' }}>Bigger slices are more likely here.</p>
+                        <div>
+                          {[...wheelComp.exposure].filter(e => e.weight > 0).sort((a, b) => b.weight - a.weight).map(e => (
+                            <div key={e.code} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
+                              <div style={{ width: 32, height: 32, flexShrink: 0, background: EVENT_HEX[e.code] || COLOR.ice, border: HAIRLINE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <HazardIcon code={e.code} color={textOnColour(EVENT_HEX[e.code] || '#C5E4FF')} size={20} />
                               </div>
-                            ))}
-                          </div>
-                          <button onClick={spinWheel} disabled={isSpinning}
-                            style={{ width: '100%', height: 60, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: FW.bold, letterSpacing: LS.tight, cursor: isSpinning ? 'default' : 'pointer', opacity: isSpinning ? 0.6 : 1 }}>
-                            {isSpinning ? 'Spinning…' : 'Spin the wheel'}
-                          </button>
-                        </>
-                      )
-                    })() : (() => {
+                              <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>{e.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (() => {
                       const e = wheelOutcome.entry || {}
                       const code = wheelOutcome.eventCode
                       const sqBg = EVENT_HEX[code] || COLOR.ice
                       const sqFg = textOnColour(EVENT_HEX[code] || '#C5E4FF')
-                      const next = nextTeamToDraw()
                       const bigNum = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(38px, 6vh, 60px)', lineHeight: 1 }
                       const sideLine = { fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, lineHeight: 1.5, textAlign: 'right', whiteSpace: 'nowrap' }
-                      const nextBtn = { width: '100%', height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: FW.bold, letterSpacing: LS.tight, cursor: 'pointer' }
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                           {/* a) drew */}
@@ -1254,16 +1254,6 @@ export default function PortsControlCenter() {
                             </div>
                             <p style={sideLine}>Expected protection {Math.round(e.expectedProtection ?? 0)}%<br />Coins on useful cards {e.coinsThatHelped ?? 0} of {e.heldCost ?? 0}</p>
                           </div>
-                          {/* d) next action */}
-                          {next ? (
-                            <button onClick={() => openWheel(next)} style={nextBtn}>Next: {next} →</button>
-                          ) : currentRound < 3 ? (
-                            <button onClick={() => setAdvanceDialog('round')} disabled={advancing} style={{ ...nextBtn, cursor: advancing ? 'default' : 'pointer', opacity: advancing ? 0.6 : 1 }}>
-                              {advancing ? 'Advancing…' : `Start round ${currentRound + 1} strategy →`}
-                            </button>
-                          ) : (
-                            <button onClick={() => setAdvanceDialog('debrief')} style={nextBtn}>Go to Debrief →</button>
-                          )}
                         </div>
                       )
                     })()}
@@ -1535,6 +1525,28 @@ export default function PortsControlCenter() {
         </div>
         )}
 
+      </div>
+
+      {/* ═══ CONDUCTOR bar — one instruction + one primary action, always here ═══ */}
+      <div style={{ flexShrink: 0, minHeight: 72, background: COLOR.ink, color: COLOR.onInk, borderTop: HAIRLINE, display: 'flex', alignItems: 'center', gap: 16, padding: '0 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flex: 1, minWidth: 0 }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)', flexShrink: 0 }}>Now</span>
+          <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.medium, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conductor.text}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          {(conductor.secondaries || []).map((s, i) => (
+            <button key={i} onClick={s.onClick} disabled={s.disabled}
+              style={{ height: 44, padding: '0 16px', border: `1px solid ${COLOR.onInk}`, borderRadius: 0, background: 'transparent', color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: s.disabled ? 'default' : 'pointer', opacity: s.disabled ? 0.45 : 1 }}>
+              {s.label}
+            </button>
+          ))}
+          {conductor.primary && (
+            <button onClick={conductor.primary.onClick} disabled={conductor.primary.disabled}
+              style={{ height: 50, padding: '0 28px', border: 'none', borderRadius: 0, background: conductor.primary.disabled ? 'rgba(255,255,255,0.22)' : COLOR.paper, color: conductor.primary.disabled ? 'rgba(255,255,255,0.75)' : COLOR.ink, fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: FW.bold, letterSpacing: LS.tight, whiteSpace: 'nowrap', cursor: conductor.primary.disabled ? 'default' : 'pointer' }}>
+              {conductor.primary.label}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
