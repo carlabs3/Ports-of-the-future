@@ -15,6 +15,7 @@ export default {
   governance: 'Landlord port',
   colour: '#062D69',
   image: '/ports/nord-maris.webp',
+  description: 'North Sea coast',
   deck: [8, 10, 14, 19, 20, 23, 1, 2, 3, 6, 9, 13, 18, 24],
   // SECRET — sum = 10.
   exposureWeights: { SS: 4, RF: 1, HW: 1, WS: 3, DR: 0, WF: 0, SI: 1 },

@@ -8,6 +8,7 @@ export default {
   governance: 'Landlord port',
   colour: '#F4B860',
   image: '/ports/riu-verd.webp',
+  description: 'River port in Southern Europe',
   deck: [8, 10, 14, 19, 20, 23, 3, 5, 7, 9, 11, 17, 21, 22, 25],
   exposureWeights: { SS: 0, RF: 3, HW: 2, WS: 0, DR: 4, WF: 1, SI: 0 },
 }

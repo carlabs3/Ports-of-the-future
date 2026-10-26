@@ -181,6 +181,7 @@ export default function PortsControlCenter() {
   const [draft, setDraft]     = useState(false)
   const [starting, setStarting] = useState(false)
   const [endDialogOpen, setEndDialogOpen] = useState(false) // "End session…" confirmation
+  const [advanceDialog, setAdvanceDialog] = useState(null) // null | 'round' | 'debrief' — confirm before advancing
 
   // Control-centre phase (facilitator-driven, persisted in Session.phase).
   const [phase, setPhase] = useState('join')
@@ -453,7 +454,7 @@ export default function PortsControlCenter() {
   const wheelPort = wheelTeam ? (portById[portAssignments.find(pa => pa.group === wheelTeam)?.portId] || null) : null
   const wheelImage = wheelPort?.image || null
   const wheelPortColour = wheelPort?.colour || null
-  const wheelPortDesc = wheelPort ? [wheelPort.climateZone, wheelPort.coastalSetting].filter(Boolean).join(' · ') : ''
+  const wheelPortDesc = wheelPort?.description || ''
   // NOW-bar line follows the roulette sub-state (ready / spinning / result).
   const nowText = (phase === 'wheel' && wheelTeam && wheelComp)
     ? (wheelOutcome && wheelRevealed ? 'Read the result aloud: luck first, then strategy.'
@@ -828,6 +829,51 @@ export default function PortsControlCenter() {
                 {closing ? 'Ending…' : 'End session'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ ADVANCE dialog — confirm round advance (+2 coins each) / debrief ═══ */}
+      {advanceDialog && (
+        <div onClick={() => setAdvanceDialog(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(11,27,51,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: COLOR.paper, border: HAIRLINE, maxWidth: 440, width: '100%', padding: 28 }}>
+            {advanceDialog === 'round' ? (
+              <>
+                <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, margin: '0 0 12px' }}>Start round {currentRound + 1}?</h2>
+                <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, lineHeight: 1.5, margin: '0 0 24px' }}>
+                  All {groupStats.length} teams get +2 coins and move to Strategy. This cannot be undone.
+                </p>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setAdvanceDialog(null)}
+                    style={{ flex: 1, height: 48, border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button disabled={advancing}
+                    onClick={async () => { await nextRound(); setAdvanceDialog(null); changePhase('strategy') }}
+                    style={{ flex: 1, height: 48, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: advancing ? 'default' : 'pointer', opacity: advancing ? 0.6 : 1 }}>
+                    {advancing ? 'Advancing…' : `Start round ${currentRound + 1}`}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, margin: '0 0 12px' }}>End the game and go to Debrief?</h2>
+                <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, lineHeight: 1.5, margin: '0 0 24px' }}>
+                  The three rounds are over; the scores are final.
+                </p>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setAdvanceDialog(null)}
+                    style={{ flex: 1, height: 48, border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button onClick={() => { setAdvanceDialog(null); changePhase('debrief') }}
+                    style={{ flex: 1, height: 48, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: 'pointer' }}>
+                    Go to Debrief
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1212,11 +1258,11 @@ export default function PortsControlCenter() {
                           {next ? (
                             <button onClick={() => openWheel(next)} style={nextBtn}>Next: {next} →</button>
                           ) : currentRound < 3 ? (
-                            <button onClick={async () => { await nextRound(); changePhase('strategy') }} disabled={advancing} style={{ ...nextBtn, cursor: advancing ? 'default' : 'pointer', opacity: advancing ? 0.6 : 1 }}>
+                            <button onClick={() => setAdvanceDialog('round')} disabled={advancing} style={{ ...nextBtn, cursor: advancing ? 'default' : 'pointer', opacity: advancing ? 0.6 : 1 }}>
                               {advancing ? 'Advancing…' : `Start round ${currentRound + 1} strategy →`}
                             </button>
                           ) : (
-                            <button onClick={() => changePhase('debrief')} style={nextBtn}>Go to Debrief →</button>
+                            <button onClick={() => setAdvanceDialog('debrief')} style={nextBtn}>Go to Debrief →</button>
                           )}
                         </div>
                       )
