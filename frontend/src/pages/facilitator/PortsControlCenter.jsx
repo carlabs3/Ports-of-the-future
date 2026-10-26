@@ -819,7 +819,7 @@ export default function PortsControlCenter() {
       if (!wheelRevealed) {
         const isSpinning = !!wheelOutcome || !!spinning
         return {
-          text: isSpinning ? 'The wheel is spinning…' : `${wheelTeam}, read your port aloud. Then press Spin.`,
+          text: isSpinning ? 'The wheel is spinning…' : `${wheelTeam}, read your port and your cards aloud. Then press Spin.`,
           primary: { label: isSpinning ? 'Spinning…' : 'Spin the wheel', onClick: spinWheel, disabled: isSpinning },
         }
       }
@@ -1235,102 +1235,132 @@ export default function PortsControlCenter() {
             <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Select a team below to open its wheel.</p>
           ) : (
             <>
-              {/* Zones 1 + 2 */}
-              <div style={{ display: 'flex', gap: 24, flex: 1, minHeight: 0, alignItems: 'stretch' }}>
-
-                {/* ZONE 1 · port column */}
+              {/* LEFT COLUMN (port header + cards) + RIGHT ZONE (wheel + result) */}
+              <div style={{ display: 'flex', gap: 24, flex: 1, minHeight: 0 }}>
                 {(() => {
                   const bandBg = wheelPortColour || '#C5E4FF'
                   const bandFg = textOnColour(bandBg)
                   const cultLabel = BAND_RAMP[wheelComp.cultureLevel]?.label
                   const cultMult = (CULTURE_FACTOR[wheelComp.cultureLevel] ?? 1).toFixed(1)
-                  return (
-                    <div style={{ flex: '0 0 360px', maxWidth: 360, minWidth: 300, display: 'flex', flexDirection: 'column', border: HAIRLINE }}>
-                      {wheelImage && (
-                        <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`}
-                          style={{ width: '100%', height: 200, flexShrink: 0, objectFit: 'cover', display: 'block', borderBottom: HAIRLINE }} />
-                      )}
-                      <div style={{ flex: 1, minHeight: 0, background: bandBg, color: bandFg, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <div style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', opacity: 0.85 }}>Now spinning · {wheelTeam}</div>
-                        <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(40px, 4vw, 64px)', lineHeight: 0.92, letterSpacing: LS.display }}>{wheelComp.portName}</div>
-                        {wheelPortDesc && <div style={{ fontFamily: FONT.sans, fontSize: FS.body, opacity: 0.9 }}>{wheelPortDesc}</div>}
-                        <div style={{ marginTop: 'auto', fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono, textTransform: 'uppercase' }}>
-                          Culture level · {cultLabel || '—'} · scores ×{cultMult}
+                  const wStrat = strategyByGroup[wheelTeam]
+                  const returnRefundW = wStrat?.roundReturned != null ? Math.floor((measureById.get(wStrat.roundReturned)?.cost || 0) / 2) : 0
+                  const coinCapW = wStrat ? wStrat.roundStartCoins + returnRefundW : 0
+                  const coinsSpentW = wStrat ? coinCapW - wStrat.coins : 0
+                  const ids = [...(wheelComp.portfolio || [])].sort((a, b) => a - b)
+                  const wheelCodes = wheelComp.exposure.filter(e => e.weight > 0).map(e => e.code)
+                  const drawnCode = wheelRevealed ? wheelOutcome?.eventCode : null
+                  const twoCol = ids.length > 5
+
+                  const renderCard = (id) => {
+                    const m = measureById.get(id)
+                    const prot = m?.protection || {}
+                    const isEnabler = !!m?.raisesCultureLevel
+                    const helped = !!drawnCode && (prot[drawnCode] || 0) > 0
+                    const notThisTime = !!drawnCode && !helped && !isEnabler
+                    const chips = wheelCodes.filter(c => (prot[c] || 0) > 0)
+                    const status = drawnCode ? (helped ? 'HELPED' : isEnabler ? 'RAISED CULTURE' : 'NOT THIS TIME') : null
+                    const nameCol = notThisTime ? '#5C6B7A' : COLOR.ink
+                    return (
+                      <div key={id} style={{ display: 'flex', alignItems: 'stretch', gap: 10, minWidth: 0, background: notThisTime ? '#F3F5F8' : COLOR.paper, border: notThisTime ? '2px dashed #5C6B7A' : `2px solid ${COLOR.ink}` }}>
+                        <div style={{ width: 52, minHeight: 52, flexShrink: 0, background: notThisTime ? '#5C6B7A' : COLOR.ink, color: COLOR.onInk, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT.mono, fontWeight: FW.bold, fontSize: FS.h3 }}>{id}</div>
+                        <div style={{ flex: 1, minWidth: 0, padding: '7px 10px 7px 0' }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ fontFamily: FONT.sans, fontSize: 17, fontWeight: 700, color: nameCol, lineHeight: 1.15 }}>{m?.name || `Measure ${id}`}</span>
+                            <span style={{ display: 'flex', gap: 2, flexShrink: 0, marginTop: 3 }}>
+                              {Array.from({ length: m?.cost || 0 }).map((_, i) => <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#E3BF40' }} />)}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
+                            {isEnabler ? (
+                              <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold, border: `1px solid ${COLOR.ink}`, padding: '1px 5px' }}>★ +1 culture level</span>
+                            ) : chips.map(c => {
+                              const inv = !!drawnCode && c === drawnCode
+                              return (
+                                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: `1px solid ${COLOR.ink}`, padding: '1px 5px', background: inv ? COLOR.ink : 'transparent', color: inv ? COLOR.onInk : COLOR.ink, fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold }}>
+                                  <span style={{ width: 8, height: 8, flexShrink: 0, background: EVENT_HEX[c] || COLOR.ice, border: `1px solid ${inv ? 'rgba(255,255,255,0.5)' : COLOR.ink}` }} />
+                                  {c} {prot[c]}
+                                </span>
+                              )
+                            })}
+                            {status && <span style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold, letterSpacing: LS.mono, color: notThisTime ? '#5C6B7A' : COLOR.ink }}>{status}</span>}
+                          </div>
                         </div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div style={{ flex: '0 0 clamp(480px, 42%, 600px)', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+                      {/* a) port header row */}
+                      <div style={{ display: 'flex', height: 150, flexShrink: 0, border: `2px solid ${COLOR.ink}`, overflow: 'hidden' }}>
+                        {wheelImage && <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`} style={{ flex: '0 0 42%', minWidth: 0, objectFit: 'cover', display: 'block' }} />}
+                        <div style={{ flex: 1, minWidth: 0, background: bandBg, color: bandFg, padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+                          <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', opacity: 0.85 }}>Now spinning · {wheelTeam}</div>
+                          <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(32px, 2.6vw, 48px)', lineHeight: 0.95, letterSpacing: LS.display, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wheelComp.portName}</div>
+                          {wheelPortDesc && <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, opacity: 0.9 }}>{wheelPortDesc}</div>}
+                          <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', marginTop: 2 }}>{cultLabel || '—'} · scores ×{cultMult}</div>
+                        </div>
+                      </div>
+                      {/* b) heading */}
+                      <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, letterSpacing: LS.mono, textTransform: 'uppercase', flexShrink: 0 }}>
+                        {drawnCode ? `Which cards helped against ${wheelOutcome.eventName || drawnCode}` : `${wheelTeam}'s cards · ${coinsSpentW} of ${coinCapW} coins`}
+                      </div>
+                      {/* c + d) cards */}
+                      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr', gap: 8, alignContent: 'start' }}>
+                        {ids.length === 0
+                          ? <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No cards.</p>
+                          : ids.map(renderCard)}
                       </div>
                     </div>
                   )
                 })()}
 
-                {/* ZONE 2 · wheel + current-state content */}
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 28, alignItems: 'flex-start' }}>
-                  <div style={{ flexShrink: 0, width: 'min(470px, 55vh)', maxWidth: '100%' }}>
-                    <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} portColour={wheelPortColour || '#C5E4FF'} onPeg={playTick} size={470} />
+                {/* RIGHT ZONE · wheel, large and centred (+ result when revealed) */}
+                <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', gap: 28, alignItems: 'center', justifyContent: 'center' }}>
+                  <button onClick={() => setSoundOn(v => !v)}
+                    style={{ position: 'absolute', top: 0, right: 0, zIndex: 1, fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: 'pointer' }}>
+                    {soundOn ? '🔊 Sound on' : '🔇 Sound off'}
+                  </button>
+                  <div style={{ flexShrink: 0, width: wheelRevealed ? 'min(400px, 46vh)' : 'min(560px, 62vh)', maxWidth: '100%' }}>
+                    <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} portColour={wheelPortColour || '#C5E4FF'} onPeg={playTick} size={560} />
                   </div>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                      <button onClick={() => setSoundOn(v => !v)}
-                        style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, background: 'transparent', border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: 'pointer' }}>
-                        {soundOn ? '🔊 Sound on' : '🔇 Sound off'}
-                      </button>
-                    </div>
-                    {!wheelRevealed ? (
-                      <>
-                        <p style={uiLabel}>{wheelComp.portName}’s wheel</p>
-                        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '6px 0 16px' }}>Bigger slices are more likely here.</p>
-                        <div>
-                          {[...wheelComp.exposure].filter(e => e.weight > 0).sort((a, b) => b.weight - a.weight).map(e => (
-                            <div key={e.code} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
-                              <div style={{ width: 32, height: 32, flexShrink: 0, background: EVENT_HEX[e.code] || COLOR.ice, border: HAIRLINE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <HazardIcon code={e.code} color={textOnColour(EVENT_HEX[e.code] || '#C5E4FF')} size={20} />
-                              </div>
-                              <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>{e.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    ) : (() => {
-                      const e = wheelOutcome.entry || {}
-                      const code = wheelOutcome.eventCode
-                      const sqBg = EVENT_HEX[code] || COLOR.ice
-                      const sqFg = textOnColour(EVENT_HEX[code] || '#C5E4FF')
-                      const bigNum = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(38px, 6vh, 60px)', lineHeight: 1 }
-                      const sideLine = { fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, lineHeight: 1.5, textAlign: 'right', whiteSpace: 'nowrap' }
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                          {/* a) drew */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                            <div style={{ width: 64, height: 64, flexShrink: 0, border: HAIRLINE, background: sqBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <HazardIcon code={code} color={sqFg} size={38} />
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <p style={uiLabel}>The wheel drew</p>
-                              <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: 'clamp(28px, 4vw, 52px)', letterSpacing: LS.tight, lineHeight: 1 }}>{wheelOutcome.eventName || code}</div>
-                            </div>
+                  {wheelRevealed && (() => {
+                    const e = wheelOutcome.entry || {}
+                    const code = wheelOutcome.eventCode
+                    const sqBg = EVENT_HEX[code] || COLOR.ice
+                    const sqFg = textOnColour(EVENT_HEX[code] || '#C5E4FF')
+                    const bigNum = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(38px, 6vh, 60px)', lineHeight: 1 }
+                    const sideLine = { fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, lineHeight: 1.5, textAlign: 'right', whiteSpace: 'nowrap' }
+                    return (
+                      <div style={{ flex: 1, minWidth: 0, maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                          <div style={{ width: 64, height: 64, flexShrink: 0, border: HAIRLINE, background: sqBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <HazardIcon code={code} color={sqFg} size={38} />
                           </div>
-                          {/* b) luck */}
-                          <div style={{ border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-                            <div>
-                              <p style={uiLabel}>Luck · this spin</p>
-                              <div style={bigNum}>{Math.round(e.lossesAvoidedPct ?? 0)}%</div>
-                              <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>of losses avoided</p>
-                            </div>
-                            <p style={sideLine}>Damage bill {e.damageBill ?? '—'} of {e.lossValue ?? '—'} coins</p>
-                          </div>
-                          {/* c) strategy */}
-                          <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-                            <div>
-                              <p style={{ ...uiLabel, color: COLOR.onHarbour }}>Strategy · your plan</p>
-                              <div style={bigNum}>{e.strategyScore ?? '—'}%</div>
-                              <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: 0, opacity: 0.85 }}>strategy score</p>
-                            </div>
-                            <p style={sideLine}>Expected protection {Math.round(e.expectedProtection ?? 0)}%<br />Coins on useful cards {e.coinsThatHelped ?? 0} of {e.heldCost ?? 0}</p>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={uiLabel}>The wheel drew</p>
+                            <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: 'clamp(28px, 4vw, 52px)', letterSpacing: LS.tight, lineHeight: 1 }}>{wheelOutcome.eventName || code}</div>
                           </div>
                         </div>
-                      )
-                    })()}
-                  </div>
+                        <div style={{ border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                          <div>
+                            <p style={uiLabel}>Luck · this spin</p>
+                            <div style={bigNum}>{Math.round(e.lossesAvoidedPct ?? 0)}%</div>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>of losses avoided</p>
+                          </div>
+                          <p style={sideLine}>Damage bill {e.damageBill ?? '—'} of {e.lossValue ?? '—'} coins</p>
+                        </div>
+                        <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                          <div>
+                            <p style={{ ...uiLabel, color: COLOR.onHarbour }}>Strategy · your plan</p>
+                            <div style={bigNum}>{e.strategyScore ?? '—'}%</div>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: 0, opacity: 0.85 }}>strategy score</p>
+                          </div>
+                          <p style={sideLine}>Expected protection {Math.round(e.expectedProtection ?? 0)}%<br />Coins on useful cards {e.coinsThatHelped ?? 0} of {e.heldCost ?? 0}</p>
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
 
