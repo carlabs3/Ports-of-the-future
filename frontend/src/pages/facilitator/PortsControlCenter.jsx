@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
-import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
+import EventWheel from '../../components/EventWheel.jsx'
 import { HazardIcon } from '../../components/HazardIcons.jsx'
 import PortIllustration from '../../components/PortIllustration.jsx'
 import { socket } from '../../utils/socket.js'
@@ -450,8 +450,16 @@ export default function PortsControlCenter() {
     const pid = portAssignments.find(pa => pa.group === group)?.portId
     return pid != null ? (portById[pid]?.image || null) : null
   }
-  const wheelImage = wheelTeam ? portImageFor(wheelTeam) : null
-  const wheelPortColour = wheelTeam ? (portById[portAssignments.find(pa => pa.group === wheelTeam)?.portId]?.colour || null) : null
+  const wheelPort = wheelTeam ? (portById[portAssignments.find(pa => pa.group === wheelTeam)?.portId] || null) : null
+  const wheelImage = wheelPort?.image || null
+  const wheelPortColour = wheelPort?.colour || null
+  const wheelPortDesc = wheelPort ? [wheelPort.climateZone, wheelPort.coastalSetting].filter(Boolean).join(' · ') : ''
+  // NOW-bar line follows the roulette sub-state (ready / spinning / result).
+  const nowText = (phase === 'wheel' && wheelTeam && wheelComp)
+    ? (wheelOutcome && wheelRevealed ? 'Read the result aloud: luck first, then strategy.'
+      : wheelOutcome ? 'The wheel is spinning…'
+      : `${wheelTeam}, read your port aloud. Then press Spin.`)
+    : NOW_COPY[phase]
 
   // NOTE: these two effects MUST stay below the declarations of `allConfirmed`,
   // `groupStats` and `drawnGroups` — the dep array reads `allConfirmed` during
@@ -792,7 +800,7 @@ export default function PortsControlCenter() {
       <div style={{ flexShrink: 0, background: COLOR.ice, color: COLOR.ink, borderBottom: HAIRLINE, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
           <span style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60 }}>Now</span>
-          <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.medium }}>{NOW_COPY[phase]}</span>
+          <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.medium }}>{nowText}</span>
         </div>
         {nextPhase && (
           <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono, color: COLOR.ink60, whiteSpace: 'nowrap' }}>
@@ -1092,9 +1100,9 @@ export default function PortsControlCenter() {
         </div>
         )}
 
-        {/* 4 · ROULETTE — phase: wheel. One team at a time, round by round. */}
+        {/* 4 · ROULETTE — phase: wheel. One screen, no scroll; one obvious action. */}
         {phase === 'wheel' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
           {!allConfirmed ? (
             <div style={{ border: HAIRLINE, padding: '48px 28px', textAlign: 'center' }}>
               <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight, margin: '0 0 8px' }}>The roulette opens once every team has locked round {currentRound}.</p>
@@ -1104,177 +1112,147 @@ export default function PortsControlCenter() {
             <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Select a team below to open its wheel.</p>
           ) : (
             <>
-              {/* Port band — port name large on the port colour + a photo strip */}
-              {(() => {
-                const bandBg = wheelPortColour || '#C5E4FF'
-                const bandFg = textOnColour(bandBg)
-                const cultLabel = BAND_RAMP[wheelComp.cultureLevel]?.label
-                const cultMult = (CULTURE_FACTOR[wheelComp.cultureLevel] ?? 1).toFixed(1)
-                return (
-                  <div style={{ display: 'flex', border: HAIRLINE, overflow: 'hidden', minHeight: 150 }}>
-                    <div style={{ flex: '1 1 58%', minWidth: 0, background: bandBg, color: bandFg, padding: '0 28px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10 }}>
-                      <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(44px, 7vw, 84px)', lineHeight: 0.9, letterSpacing: LS.display, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wheelComp.portName}</div>
-                      <div style={{ fontFamily: FONT.mono, fontSize: FS.body, letterSpacing: LS.mono, textTransform: 'uppercase' }}>
-                        {wheelTeam} · Round {wheelComp.currentRound} of 3{cultLabel ? ` · ${cultLabel} ×${cultMult}` : ''}
+              {/* Zones 1 + 2 */}
+              <div style={{ display: 'flex', gap: 24, flex: 1, minHeight: 0, alignItems: 'stretch' }}>
+
+                {/* ZONE 1 · port column */}
+                {(() => {
+                  const bandBg = wheelPortColour || '#C5E4FF'
+                  const bandFg = textOnColour(bandBg)
+                  const cultLabel = BAND_RAMP[wheelComp.cultureLevel]?.label
+                  const cultMult = (CULTURE_FACTOR[wheelComp.cultureLevel] ?? 1).toFixed(1)
+                  return (
+                    <div style={{ flex: '0 0 360px', maxWidth: 360, minWidth: 300, display: 'flex', flexDirection: 'column', border: HAIRLINE }}>
+                      {wheelImage && (
+                        <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`}
+                          style={{ width: '100%', height: 200, flexShrink: 0, objectFit: 'cover', display: 'block', borderBottom: HAIRLINE }} />
+                      )}
+                      <div style={{ flex: 1, minHeight: 0, background: bandBg, color: bandFg, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', opacity: 0.85 }}>Now spinning · {wheelTeam}</div>
+                        <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(40px, 4vw, 64px)', lineHeight: 0.92, letterSpacing: LS.display }}>{wheelComp.portName}</div>
+                        {wheelPortDesc && <div style={{ fontFamily: FONT.sans, fontSize: FS.body, opacity: 0.9 }}>{wheelPortDesc}</div>}
+                        <div style={{ marginTop: 'auto', fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono, textTransform: 'uppercase' }}>
+                          Culture level · {cultLabel || '—'} · scores ×{cultMult}
+                        </div>
                       </div>
                     </div>
-                    {wheelImage && (
-                      <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`}
-                        style={{ flex: '1 1 42%', minWidth: 0, alignSelf: 'stretch', objectFit: 'cover', display: 'block' }} />
-                    )}
-                  </div>
-                )
-              })()}
+                  )
+                })()}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) 1fr', gap: 28, alignItems: 'start' }}>
-                {/* Left: the wheel alone, centred */}
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <div style={{ width: 'min(440px, 42vh)', maxWidth: '100%' }}>
-                    <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} size={440} />
+                {/* ZONE 2 · wheel + current-state content */}
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 28, alignItems: 'flex-start' }}>
+                  <div style={{ flexShrink: 0, width: 'min(470px, 55vh)', maxWidth: '100%' }}>
+                    <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} size={470} />
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {!wheelRevealed ? (() => {
+                      // READY and SPINNING share this layout; only the button changes.
+                      const isSpinning = !!wheelOutcome || !!spinning
+                      return (
+                        <>
+                          <p style={uiLabel}>{wheelComp.portName}’s wheel</p>
+                          <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: '6px 0 16px' }}>Bigger slices are more likely here.</p>
+                          <div style={{ marginBottom: 20 }}>
+                            {[...wheelComp.exposure].filter(e => e.weight > 0).sort((a, b) => b.weight - a.weight).map(e => (
+                              <div key={e.code} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
+                                <div style={{ width: 32, height: 32, flexShrink: 0, background: EVENT_HEX[e.code] || COLOR.ice, border: HAIRLINE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <HazardIcon code={e.code} color={textOnColour(EVENT_HEX[e.code] || '#C5E4FF')} size={20} />
+                                </div>
+                                <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>{e.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <button onClick={spinWheel} disabled={isSpinning}
+                            style={{ width: '100%', height: 60, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: FW.bold, letterSpacing: LS.tight, cursor: isSpinning ? 'default' : 'pointer', opacity: isSpinning ? 0.6 : 1 }}>
+                            {isSpinning ? 'Spinning…' : 'Spin the wheel'}
+                          </button>
+                        </>
+                      )
+                    })() : (() => {
+                      const e = wheelOutcome.entry || {}
+                      const code = wheelOutcome.eventCode
+                      const sqBg = EVENT_HEX[code] || COLOR.ice
+                      const sqFg = textOnColour(EVENT_HEX[code] || '#C5E4FF')
+                      const next = nextTeamToDraw()
+                      const bigNum = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(38px, 6vh, 60px)', lineHeight: 1 }
+                      const sideLine = { fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, lineHeight: 1.5, textAlign: 'right', whiteSpace: 'nowrap' }
+                      const nextBtn = { width: '100%', height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: FW.bold, letterSpacing: LS.tight, cursor: 'pointer' }
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          {/* a) drew */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                            <div style={{ width: 64, height: 64, flexShrink: 0, border: HAIRLINE, background: sqBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <HazardIcon code={code} color={sqFg} size={38} />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={uiLabel}>The wheel drew</p>
+                              <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: 'clamp(28px, 4vw, 52px)', letterSpacing: LS.tight, lineHeight: 1 }}>{wheelOutcome.eventName || code}</div>
+                            </div>
+                          </div>
+                          {/* b) luck */}
+                          <div style={{ border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                            <div>
+                              <p style={uiLabel}>Luck · this spin</p>
+                              <div style={bigNum}>{Math.round(e.lossesAvoidedPct ?? 0)}%</div>
+                              <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>of losses avoided</p>
+                            </div>
+                            <p style={sideLine}>Damage bill {e.damageBill ?? '—'} of {e.lossValue ?? '—'} coins</p>
+                          </div>
+                          {/* c) strategy */}
+                          <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                            <div>
+                              <p style={{ ...uiLabel, color: COLOR.onHarbour }}>Strategy · your plan</p>
+                              <div style={bigNum}>{e.strategyScore ?? '—'}%</div>
+                              <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: 0, opacity: 0.85 }}>strategy score</p>
+                            </div>
+                            <p style={sideLine}>Expected protection {Math.round(e.expectedProtection ?? 0)}%<br />Coins on useful cards {e.coinsThatHelped ?? 0} of {e.heldCost ?? 0}</p>
+                          </div>
+                          {/* d) next action */}
+                          {next ? (
+                            <button onClick={() => openWheel(next)} style={nextBtn}>Next: {next} →</button>
+                          ) : currentRound < 3 ? (
+                            <button onClick={async () => { await nextRound(); changePhase('strategy') }} disabled={advancing} style={{ ...nextBtn, cursor: advancing ? 'default' : 'pointer', opacity: advancing ? 0.6 : 1 }}>
+                              {advancing ? 'Advancing…' : `Start round ${currentRound + 1} strategy →`}
+                            </button>
+                          ) : (
+                            <button onClick={() => changePhase('debrief')} style={nextBtn}>Go to Debrief →</button>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
+              </div>
 
-                <div>
-                  {!wheelOutcome ? (
-                    <>
-                      <p style={uiLabel}>What this wheel holds · 10 slots</p>
-                      <div style={{ marginTop: 14, marginBottom: 24 }}>
-                        {wheelComp.exposure.filter(e => e.weight > 0).map(e => (
-                          <div key={e.code} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0', borderTop: HAIRLINE }}>
-                            <span style={{ flex: '0 0 110px', fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.bold }}>{EVENT_WORDS[e.code] || e.name}</span>
-                            <div style={{ flex: 1, display: 'flex', gap: 3 }}>
-                              {Array.from({ length: 10 }).map((_, i) => (
-                                <div key={i} style={{ flex: 1, height: 14, border: HAIRLINE, background: i < e.weight ? COLOR.harbour : COLOR.ice }} />
-                              ))}
-                            </div>
-                            <span style={{ flex: '0 0 42px', textAlign: 'right', fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>{e.weight}/10</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <p style={uiLabel}>Cards held</p>
-                      <div style={{ marginTop: 10, marginBottom: 24 }}>
-                        {(wheelComp.portfolio || []).length === 0 ? (
-                          <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>None.</p>
-                        ) : wheelComp.portfolio.map(id => {
-                          const m = measureById.get(id)
-                          return (
-                            <div key={id} style={{ display: 'flex', gap: 12, padding: '7px 0', borderTop: HAIRLINE }}>
-                              <span style={{ fontFamily: FONT.mono, fontWeight: FW.bold, minWidth: 28 }}>{id}</span>
-                              <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.body }}>{m?.name || `Measure ${id}`}</span>
-                              <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>🪙 {m?.cost ?? '—'}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-
-                      <button onClick={spinWheel} disabled={!!spinning}
-                        style={{ width: '100%', height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: spinning ? 'default' : 'pointer', opacity: spinning ? 0.6 : 1 }}>
-                        {spinning ? 'Spinning…' : 'Spin the wheel →'}
-                      </button>
-                    </>
-                  ) : !wheelRevealed ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, paddingTop: 20 }}>
-                      <p style={uiLabel}>Spinning…</p>
-                      <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight, color: COLOR.ink60, margin: 0 }}>
-                        The wheel is turning. The result appears when it stops.
-                      </p>
-                    </div>
-                  ) : (() => {
-                    const e = wheelOutcome.entry || {}
-                    const code = wheelOutcome.eventCode
-                    const sqBg = EVENT_HEX[code] || COLOR.ice
-                    const sqFg = textOnColour(EVENT_HEX[code] || '#C5E4FF')
-                    const next = nextTeamToDraw()
-                    const bigNum = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(40px, 5.5vh, 64px)', lineHeight: 1, margin: '6px 0 2px' }
-                    const factLine = { fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }
+              {/* ZONE 3 · bottom strip */}
+              <div style={{ flexShrink: 0, borderTop: HAIRLINE, paddingTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', minHeight: 56 }}>
+                <span style={{ ...uiLabel, whiteSpace: 'nowrap' }}>Round {currentRound} of 3 · {drawnGroups.size} of {groupStats.length} spun</span>
+                <div style={{ flex: 1, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {groupStats.map(g => {
+                    const strat = strategyByGroup[g.group]
+                    const entry = (strat?.rounds || []).find(r => r.round === g.currentRound)
+                    const isNow = g.group === wheelTeam
+                    const done = drawnGroups.has(g.group)
                     return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        {/* Drew: label · code · event square · full name once */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                          <div style={{ width: 76, height: 76, flexShrink: 0, border: HAIRLINE, background: sqBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <HazardIcon code={code} color={sqFg} size={44} />
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <p style={uiLabel}>The wheel drew · {code}</p>
-                            <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.tight, lineHeight: 1 }}>{wheelOutcome.eventName || code}</div>
-                          </div>
-                        </div>
-
-                        {/* Two result panels */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                          <div style={{ border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, padding: '16px 18px' }}>
-                            <p style={uiLabel}>Luck · this spin</p>
-                            <div style={bigNum}>{Math.round(e.lossesAvoidedPct ?? 0)}%</div>
-                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '0 0 10px' }}>of losses avoided</p>
-                            <p style={factLine}>Damage bill {e.damageBill ?? '—'} of {e.lossValue ?? '—'} coins</p>
-                          </div>
-                          <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '16px 18px' }}>
-                            <p style={{ ...uiLabel, color: COLOR.onHarbour }}>Strategy · your plan</p>
-                            <div style={bigNum}>{e.strategyScore ?? '—'}%</div>
-                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: '0 0 10px', opacity: 0.85 }}>strategy score</p>
-                            <p style={factLine}>Expected protection {Math.round(e.expectedProtection ?? 0)}%</p>
-                            <p style={{ ...factLine, marginTop: 4 }}>Coins on useful cards {e.coinsThatHelped ?? 0} of {e.heldCost ?? 0}</p>
-                          </div>
-                        </div>
-
-                        {next ? (
-                          <button onClick={() => openWheel(next)}
-                            style={{ width: '100%', height: 52, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: 'pointer' }}>
-                            Next: {next} →
-                          </button>
+                      <button key={g.group} onClick={() => openWheel(g.group)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, border: HAIRLINE, borderRadius: 0, background: isNow ? COLOR.ink : COLOR.paper, color: isNow ? COLOR.onInk : COLOR.ink, padding: '8px 10px', cursor: 'pointer' }}>
+                        <span style={{ width: 14, height: 14, flexShrink: 0, background: g.portColour || COLOR.ice, border: `1px solid ${isNow ? COLOR.onInk : COLOR.ink}` }} />
+                        <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.bold }}>{g.group}</span>
+                        {done && entry?.drawnEvent ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <HazardIcon code={entry.drawnEvent} color={isNow ? COLOR.onInk : COLOR.ink} size={14} />
+                            <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold }}>{Math.round(entry.lossesAvoidedPct ?? 0)}%</span>
+                          </span>
                         ) : (
-                          <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Every team has spun round {wheelComp.currentRound}.</p>
+                          <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: isNow ? COLOR.onInk : '#5C6B7A' }}>{isNow ? 'now' : 'Waiting'}</span>
                         )}
-                      </div>
+                      </button>
                     )
-                  })()}
+                  })}
                 </div>
               </div>
             </>
-          )}
-
-          {/* Queue strip — one cell per team (current-round result) */}
-          {allConfirmed && groupStats.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, borderTop: HAIRLINE, paddingTop: 16, flexWrap: 'wrap' }}>
-              {groupStats.map(g => {
-                const strat = strategyByGroup[g.group]
-                const entry = (strat?.rounds || []).find(r => r.round === g.currentRound)
-                const isNow = g.group === wheelTeam
-                const done = drawnGroups.has(g.group)
-                const bg = isNow ? COLOR.signal : done ? COLOR.ink : COLOR.paper
-                const fg = isNow ? COLOR.ink : done ? COLOR.onInk : COLOR.ink
-                return (
-                  <button key={g.group} onClick={() => openWheel(g.group)}
-                    style={{ flex: '1 1 90px', border: HAIRLINE, borderRadius: 0, background: bg, color: fg, padding: '10px 8px', cursor: 'pointer', textAlign: 'left' }}>
-                    <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.bold }}>{g.group}</div>
-                    <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, marginTop: 2 }}>
-                      {done && entry?.lossesAvoidedPct != null ? `${Math.round(entry.lossesAvoidedPct)}%` : isNow ? 'now' : 'waiting'}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Round advance / finish — once every team has spun this round */}
-          {roundComplete && (
-            <div style={{ background: COLOR.ink, color: COLOR.onInk, padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight }}>
-                Round {currentRound} complete.{currentRound < 3 ? ' Each team gets +2 coins next round.' : ''}
-              </span>
-              {currentRound < 3 ? (
-                <button onClick={nextRound} disabled={advancing}
-                  style={{ height: 48, padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold, cursor: advancing ? 'default' : 'pointer', opacity: advancing ? 0.6 : 1 }}>
-                  {advancing ? 'Advancing…' : `Start round ${currentRound + 1} →`}
-                </button>
-              ) : (
-                <button onClick={() => changePhase('debrief')}
-                  style={{ height: 48, padding: '0 24px', border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold, cursor: 'pointer' }}>
-                  Go to debrief →
-                </button>
-              )}
-            </div>
           )}
         </div>
         )}
