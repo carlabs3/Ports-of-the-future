@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
-import EventWheel from '../../components/EventWheel.jsx'
+import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
 import { HazardIcon } from '../../components/HazardIcons.jsx'
 import PortIllustration from '../../components/PortIllustration.jsx'
 import { socket } from '../../utils/socket.js'
@@ -13,6 +13,7 @@ const CULTURE_FACTOR = { reactive: 0.8, aware: 0.9, developing: 1.0, proactive: 
 
 // Hazard colours (hex), for the roulette result square. Matches EventWheel.
 const EVENT_HEX = { SS: '#77AEF1', RF: '#4177C0', HW: '#E3BF40', WS: '#5C6B7A', DR: '#C5E4FF', WF: '#0B1B33', SI: '#7B6FE0' }
+const EVENT_CODES = Object.keys(EVENT_HEX) // canonical order, matches the backend
 // Ink or white text/icon for a given background hex, by perceived luminance.
 function textOnColour(hex) {
   const h = (hex || '').replace('#', '')
@@ -1409,6 +1410,7 @@ export default function PortsControlCenter() {
               return <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No debrief data yet. Play all three rounds first.</p>
             }
             const rint = v => Math.round(v || 0)
+            const d1 = v => (Math.round((v || 0) * 10) / 10).toFixed(1) // damage, 1 dp
             // Facts across the room (all teams, all rounds).
             const scored = teams.filter(t => (t.rounds || []).length > 0)
             const roomAvgScore = scored.length ? Math.round(scored.reduce((s, t) => s + (t.finalScore || 0), 0) / scored.length) : 0
@@ -1476,7 +1478,7 @@ export default function PortsControlCenter() {
                       <div style={{ flex: '0 0 150px', textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, lineHeight: 1 }}>{rint(t.finalScore)}</div>
                         <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold }}>final score</div>
-                        <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, marginTop: 4 }}>Total damage {t.totalDamage ?? 0}</div>
+                        <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, marginTop: 4 }}>Total damage {d1(t.totalDamage)} coins</div>
                       </div>
                     </div>
                   ))}
@@ -1486,9 +1488,42 @@ export default function PortsControlCenter() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                   {fact('Average strategy score', `${roomAvgScore}`, 'across the room')}
                   {fact('Best plan', bestPlan?.group || '—', bestPlan ? `final score ${rint(bestPlan.finalScore)}` : '')}
-                  {fact('Hardest luck', hardest?.group || '—', hardest ? `total damage ${hardest.totalDamage ?? 0}` : '')}
+                  {fact('Hardest luck', hardest?.group || '—', hardest ? `total damage ${d1(hardest.totalDamage)} coins` : '')}
                   {fact("Coins that didn't help", coinsNoHelp, 'across all three rounds')}
                 </div>
+
+                {/* Impact by port — the real impact values, hidden during play.
+                    Base impact applies in 2026 & 2031; two events rise +1 in 2036. */}
+                {teams.some(t => t.impactsByRound) && (
+                  <div>
+                    <p style={{ ...uiLabel, marginBottom: 10 }}>Impact by port · what each event would have cost at full strength</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                      {teams.filter(t => t.impactsByRound).map(t => {
+                        const base = t.impactsByRound[1] || {}
+                        const r3 = t.impactsByRound[3] || {}
+                        const codes = EVENT_CODES.filter(c => (base[c] ?? 0) > 0)
+                        return (
+                          <div key={t.group} style={{ border: HAIRLINE, padding: '12px 14px' }}>
+                            <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.bold, marginBottom: 2 }}>{t.group}</div>
+                            <div style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, marginBottom: 8 }}>{t.portName || '—'}</div>
+                            {codes.map(c => {
+                              const bumped = (r3[c] ?? 0) > (base[c] ?? 0)
+                              return (
+                                <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                                  <HazardIcon code={c} color={EVENT_HEX[c] || COLOR.ink} size={14} />
+                                  <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.sm }}>{EVENT_WORDS[c] || c}</span>
+                                  <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>
+                                    {base[c]}{bumped && <span style={{ color: EVENT_HEX[c] || COLOR.harbour }}> → {r3[c]} in 2036</span>}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </>
             )
           })()}

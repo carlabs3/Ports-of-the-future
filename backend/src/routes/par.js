@@ -6,14 +6,14 @@ import TeamStrategy from '../models/TeamStrategy.js'
 import Session from '../models/Session.js'
 import { PORTS, PORTS_BY_ID } from '../config/ports/index.js'
 import { MEASURES_BY_ID } from '../config/measures.js'
-import { EVENTS_BY_CODE, EVENT_CODES } from '../config/events.js'
 import { getPublicQuestionnaire } from '../services/questionnaireService.js'
 import { persistParSubmission, buildParRanking, computeParGroups } from '../services/parSubmissionService.js'
 import { getPublicMeasures } from '../services/measuresService.js'
 import { computeCultureBand, applyCultureMeasureBonus, BAND_ORDER } from '../services/cultureService.js'
-import { drawEvent, topExposureEvents } from '../services/wheelService.js'
+import { drawEvent } from '../services/wheelService.js'
 import { buyCard, returnCard, undoCard, lockRound, unlockRound, recordSpin, advanceRound, ROUND_BUDGET } from '../services/roundsService.js'
 import { computeFinalRanking } from '../services/strategyService.js'
+import { canRevealWheel, buildWheelPayload, buildDrawPayload, buildOutcomesTeam, buildDebriefTeam } from '../services/parPayloads.js'
 
 const BAND_LABELS = {
   reactive:   'Reactive',
@@ -77,15 +77,8 @@ export default function parRouter(io) {
     }
   }
 
-  // D3: round r's wheel may be revealed only once EVERY team has LOCKED round r.
-  // A team has "locked round r" if it has already spun that round, or it is on
-  // round r with the round locked. Used to gate the per-team wheel composition.
-  const allLockedRound = (strategies, round) =>
-    strategies.length > 0 && strategies.every(s =>
-      s.rounds.some(r => r.round === round) || (s.currentRound === round && s.roundLocked))
-
-  // The port's per-round wheel likelihoods (percent, sum 100). Server-side only.
-  const roundLikelihoods = (port, round) => port?.wheels?.[round]?.likelihoods || {}
+  // D3 reveal gate + all round-payload shapes are the pure builders in
+  // parPayloads.js (unit-tested for the secrecy rules there).
 
   // Run a pure round-logic mutation on a team's doc, save + broadcast on success.
   async function mutateStrategy(code, group, res, fn, badStatus = 400) {
@@ -171,27 +164,12 @@ export default function parRouter(io) {
 
       const round = doc.currentRound
       const all = await TeamStrategy.find({ sessionCode: code })
-      if (!allLockedRound(all, round)) {
+      if (!canRevealWheel(all, round)) {
         return res.status(409).json({ error: `Every team must lock round ${round} before its wheel is shown.` })
       }
 
       const port = PORTS_BY_ID[doc.portId]
-      const likelihoods = roundLikelihoods(port, round)
-      // Likelihoods only (percent, sum 100) — never the impact table (D4). Field
-      // name kept `weight` so the existing wheel renderer needs no change.
-      const exposure = EVENT_CODES.map(c => ({ code: c, name: EVENTS_BY_CODE[c]?.name || c, weight: likelihoods[c] || 0 }))
-      const spun = doc.rounds.find(r => r.round === round)
-      res.json({
-        group,
-        portName:           port?.name || null,
-        exposure,                        // [{ code, name, weight }] — weights sum 100
-        portfolio:          doc.portfolio,
-        cultureLevel:       applyCultureMeasureBonus(doc.startingBand, doc.portfolio),
-        illustrationMotifs: topExposureEvents(likelihoods),
-        currentRound:       round,
-        drawnThisRound:     !!spun,
-        eventCode:          spun?.drawnEvent || null,
-      })
+      res.json(buildWheelPayload({ port, doc, round }))
     } catch (err) {
       console.error('PAR wheel error:', err.message)
       res.status(500).json({ error: 'Could not load the wheel' })
@@ -223,20 +201,9 @@ export default function parRouter(io) {
       await doc.save()
 
       const port = PORTS_BY_ID[doc.portId]
-      const likelihoods = roundLikelihoods(port, round)
       // D4: the payload carries the round's likelihoods and ONLY the drawn event's
       // impact/damage (inside r.entry) — never the full per-event impact table.
-      const exposure = EVENT_CODES.map(c => ({ code: c, name: EVENTS_BY_CODE[c]?.name || c, weight: likelihoods[c] || 0 }))
-      const payload = {
-        group,
-        portName:  port?.name || null,
-        round:     r.entry.round,
-        eventCode,
-        eventName: EVENTS_BY_CODE[eventCode]?.name || eventCode,
-        exposure,
-        illustrationMotifs: topExposureEvents(likelihoods),
-        entry:     r.entry, // losses avoided, impact, damage, expected, strategy score, coins that helped
-      }
+      const payload = buildDrawPayload({ port, group, round: r.entry.round, eventCode, entry: r.entry })
       io.to(code).emit('outcome:update', { group, round: r.entry.round })
       io.to(code).emit('strategy:update', publicStrategy(doc))
       res.json({ ok: true, outcome: payload })
@@ -271,11 +238,7 @@ export default function parRouter(io) {
   router.get('/:code/outcomes', authMiddleware, async (req, res) => {
     try {
       const strategies = await TeamStrategy.find({ sessionCode: req.params.code })
-      const teams = strategies.map(s => ({
-        group:    s.group,
-        portName: PORTS_BY_ID[s.portId]?.name || null,
-        rounds:   s.rounds.map(r => (r.toObject ? r.toObject() : r)),
-      }))
+      const teams = strategies.map(s => buildOutcomesTeam(s, PORTS_BY_ID[s.portId]))
       res.json({ teams })
     } catch (err) {
       console.error('PAR outcomes error:', err.message)
@@ -285,10 +248,10 @@ export default function parRouter(io) {
 
   // Facilitator-only: DEBRIEF — luck vs strategy over the three rounds. Final
   // rank is the mean of the three strategy scores (skill); total damage across
-  // rounds is the luck line. Per round: event, losses avoided, damage bill,
-  // expected protection, strategy score, coins that helped. Exposure weights are
-  // used server-side only — just the resulting numbers go out. (Frontend B10
-  // adaptation lands in Commit 6; this is the data source.)
+  // rounds is the luck line (sum of the full-precision damages). Per round:
+  // event, losses avoided, damage, expected protection, strategy score, coins
+  // that helped. This is the ONLY payload that reveals a port's full per-round
+  // impact table ("Impact by port") — the game is over (D4).
   router.get('/:code/debrief', authMiddleware, async (req, res) => {
     try {
       const { code } = req.params
@@ -308,23 +271,8 @@ export default function parRouter(io) {
       })))
       const rankByGroup = Object.fromEntries(ranking.map(r => [r.group, r]))
 
-      const teams = strategies.map(s => {
-        const port = PORTS_BY_ID[s.portId]
-        const row = rankByGroup[s.group] || {}
-        return {
-          group:        s.group,
-          portName:     port?.name || null,
-          rank:         row.rank ?? null,
-          finalScore:   row.finalScore ?? 0,     // mean of the 3 strategy scores (skill)
-          totalDamage:  row.totalDamage ?? 0,    // sum of the 3 damage bills (luck)
-          portfolio:    s.portfolio.map(id => ({ id, name: MEASURES_BY_ID[id]?.name || `Measure ${id}`, cost: MEASURES_BY_ID[id]?.cost ?? null })),
-          rounds:       s.rounds.map(r => {
-            const o = r.toObject ? r.toObject() : r
-            return { ...o, eventName: o.drawnEvent ? (EVENTS_BY_CODE[o.drawnEvent]?.name || o.drawnEvent) : null }
-          }),
-          illustrationMotifs: topExposureEvents(roundLikelihoods(port, 1)),
-        }
-      })
+      const teams = strategies.map(s =>
+        buildDebriefTeam({ team: s, port: PORTS_BY_ID[s.portId], rankRow: rankByGroup[s.group] || {} }))
 
       teams.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
       res.json({ roundBudgets: ROUND_BUDGET, teams })

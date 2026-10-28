@@ -1,6 +1,5 @@
 import { MEASURES_BY_ID } from '../config/measures.js'
 import { EVENT_CODES } from '../config/events.js'
-import { applyCultureMeasureBonus } from './cultureService.js'
 
 // Preparedness scoring — pure, server-side, no DB. This is the phase-8 maths.
 //
@@ -60,8 +59,6 @@ export function computePreparedness({ measureIds = [], eventCode, cultureBand = 
   }
 }
 
-const round2 = x => Math.round(x * 100) / 100
-
 // ── v5 scoring (Appendix C) ─────────────────────────────────────────────────
 
 // The impact (coins 1–5) per event for a port in a given round. Base impacts are
@@ -100,42 +97,6 @@ export function expectedProtection({ measures = [], effectiveBand = null, likeli
     possible += L * I
   }
   return possible > 0 ? (avoided / possible) * 100 : 0
-}
-
-// ── v4 (deprecated, kept importable until Commit 3 rewires rounds) ───────────
-// Damage bill (v4) = event losses × (1 − P/10), rounded to the nearest 0.5. v5
-// uses computeDamage (full precision, per-port/round impact) instead.
-export function computeDamageBill(lossValue, P) {
-  const raw = (Number(lossValue) || 0) * (1 - (Number(P) || 0) / 10)
-  return Math.round(raw / 0.5) * 0.5 // Math.round takes exact halves up
-}
-
-// Expected protection over ALL the port's events, weighted by exposure, using an
-// EFFECTIVE culture band (already including any enabler bump). Σ (weight/10) ×
-// lossesAvoided(e), per-event values UNROUNDED; result rounded to 2 decimals.
-export function expectedProtectionPct({ measures = [], effectiveBand = null, exposureWeights = {} }) {
-  let sum = 0
-  for (const code of EVENT_CODES) {
-    const w = Number(exposureWeights[code]) || 0
-    if (w <= 0) continue
-    const { rawLossesAvoidedPct } = computePreparedness({ measureIds: measures, eventCode: code, cultureBand: effectiveBand })
-    sum += (w / 10) * rawLossesAvoidedPct
-  }
-  return round2(sum)
-}
-
-// (4) Expected losses-avoided for a team across ALL events, weighted by the
-// port's exposure. Reuses computePreparedness (so the culture multiplier and the
-// per-measure formula are not duplicated) and applyCultureMeasureBonus (so the
-// #19/#20 culture bump is applied) — `cultureBand` is the BASE band.
-//
-//   computeExpectedLossesAvoided({ measures, cultureBand, exposureWeights })
-//     = Σ over events e of (weight_e / 10) × lossesAvoidedPct(measures, e, effBand)
-//   where effBand = applyCultureMeasureBonus(cultureBand, measures).
-// Returned rounded to 2 decimals; per-event values are taken UNROUNDED.
-export function computeExpectedLossesAvoided({ measures = [], cultureBand = null, exposureWeights = {} }) {
-  const effectiveBand = applyCultureMeasureBonus(cultureBand, measures)
-  return expectedProtectionPct({ measures, effectiveBand, exposureWeights })
 }
 
 // (5) Coins that helped against the DRAWN event: the sum of the costs of the
