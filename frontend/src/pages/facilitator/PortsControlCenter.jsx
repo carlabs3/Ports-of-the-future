@@ -220,7 +220,7 @@ export default function PortsControlCenter() {
 
   // PAR tab: combinable filters (v4 profile fields) + their labels for the
   // dropdowns. No minimum-group suppression (R1 removed it; it stays removed).
-  const [filters, setFilters] = useState({ portSize: '', governance: '', climateZone: '', coastalSetting: '', team: '', band: '' })
+  const [filters, setFilters] = useState({ portSize: '', governance: '', climateZone: '', coastalSetting: '' })
   const [demoOptions, setDemoOptions] = useState({ portSize: [], governance: [], climateZone: [], coastalSetting: [] }) // each: [{ optionId, label }]
 
   const joinUrl  = `${window.location.origin}/?code=${code}`
@@ -355,15 +355,13 @@ export default function PortsControlCenter() {
   }, [code, fetchResults, fetchStrategies])
 
   // ── PAR tab: combinable filters + filtered aggregates (all client-side) ─────
-  const anyFilter = !!(filters.portSize || filters.governance || filters.climateZone || filters.coastalSetting || filters.team || filters.band)
+  const anyFilter = !!(filters.portSize || filters.governance || filters.climateZone || filters.coastalSetting)
 
   const filteredRows = useMemo(() => rows.filter(r =>
     (!filters.portSize       || r.portSize       === filters.portSize) &&
     (!filters.governance     || r.governance     === filters.governance) &&
     (!filters.climateZone    || r.climateZone    === filters.climateZone) &&
-    (!filters.coastalSetting || r.coastalSetting === filters.coastalSetting) &&
-    (!filters.team           || r.group          === filters.team) &&
-    (!filters.band           || r.band           === filters.band)
+    (!filters.coastalSetting || r.coastalSetting === filters.coastalSetting)
   ), [rows, filters])
 
   const totalAnswers = rows.length         // all submissions this session
@@ -1535,15 +1533,13 @@ export default function PortsControlCenter() {
         {phase === 'par' && (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-          {/* Filter row — six combinable filters, no minimum-group suppression */}
+          {/* Filter row — four combinable profile filters, no minimum-group suppression */}
           <div style={{ flexShrink: 0, minHeight: 60, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 24px', borderBottom: HAIRLINE, flexWrap: 'wrap' }}>
             <span style={uiLabel}>Filter</span>
             <FilterSelect value={filters.portSize}       onChange={v => setFilters(f => ({ ...f, portSize: v }))}       placeholder="All sizes"      options={demoOptions.portSize.map(o => ({ value: o.optionId, label: o.label }))} />
             <FilterSelect value={filters.governance}     onChange={v => setFilters(f => ({ ...f, governance: v }))}     placeholder="All governance" options={demoOptions.governance.map(o => ({ value: o.optionId, label: o.label }))} />
             <FilterSelect value={filters.climateZone}    onChange={v => setFilters(f => ({ ...f, climateZone: v }))}    placeholder="All climates"   options={demoOptions.climateZone.map(o => ({ value: o.optionId, label: o.label }))} />
             <FilterSelect value={filters.coastalSetting} onChange={v => setFilters(f => ({ ...f, coastalSetting: v }))} placeholder="All coasts"     options={demoOptions.coastalSetting.map(o => ({ value: o.optionId, label: o.label }))} />
-            <FilterSelect value={filters.team}           onChange={v => setFilters(f => ({ ...f, team: v }))}           placeholder="All teams"      options={groups.map(g => ({ value: g, label: g }))} />
-            <FilterSelect value={filters.band}           onChange={v => setFilters(f => ({ ...f, band: v }))}           placeholder="All bands"      options={BAND_ORDER.map(b => ({ value: b, label: BAND_RAMP[b].label }))} />
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
               {/* Join QR + code stay on Results so late arrivals can still join. */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12, borderRight: HAIRLINE }}>
@@ -1558,7 +1554,7 @@ export default function PortsControlCenter() {
               {anyFilter ? (
                 <>
                   <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>Showing {shownCount} of {totalAnswers} answers</span>
-                  <button onClick={() => setFilters({ portSize: '', governance: '', climateZone: '', coastalSetting: '', team: '', band: '' })}
+                  <button onClick={() => setFilters({ portSize: '', governance: '', climateZone: '', coastalSetting: '' })}
                     style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                     Clear filters
                   </button>
@@ -1578,7 +1574,7 @@ export default function PortsControlCenter() {
               {/* Room average box */}
               <div style={{ flexShrink: 0, background: COLOR.sky, color: COLOR.ink, border: HAIRLINE, padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
                 <div>
-                  <p style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink, margin: 0 }}>Room average</p>
+                  <p style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink, margin: 0 }}>Room average · CAP index (0–100)</p>
                   {hasData ? (
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
                       <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 128, letterSpacing: '-0.07em', lineHeight: 0.85 }}>{fAverage}</span>
@@ -1601,7 +1597,7 @@ export default function PortsControlCenter() {
               {/* Average by area */}
               <div style={{ flex: 1, minHeight: 0, border: HAIRLINE, padding: '12px 18px', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ flexShrink: 0, marginBottom: 6 }}>
-                  <span style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink }}>Average by area (out of 20)</span>
+                  <span style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink }}>Average by area · points (max 20)</span>
                 </div>
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                   {areaMeans.map(a => {
@@ -1632,8 +1628,7 @@ export default function PortsControlCenter() {
               {/* Distribution of individual scores — takes the rest of the height */}
               <div style={{ flex: 7, minHeight: 0, border: HAIRLINE, padding: '12px 18px', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
-                  <span style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink }}>Distribution of individual scores</span>
-                  <span style={{ fontSize: 15, color: COLOR.ink60 }}>People per score range</span>
+                  <span style={{ fontFamily: FONT.mono, fontSize: 13, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink }}>Distribution of individual CAP index scores · participants per 10-point range</span>
                 </div>
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', gap: 6 }}>
                   {histBins.map(b => (
