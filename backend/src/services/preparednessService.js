@@ -62,9 +62,49 @@ export function computePreparedness({ measureIds = [], eventCode, cultureBand = 
 
 const round2 = x => Math.round(x * 100) / 100
 
-// Damage bill (D14) = event losses × (1 − P/10), rounded to the nearest 0.5 with
-// halves rounding up. A score only; it never removes coins. P is the full-
-// precision preparedness (0–10).
+// ── v5 scoring (Appendix C) ─────────────────────────────────────────────────
+
+// The impact (coins 1–5) per event for a port in a given round. Base impacts are
+// used in rounds 1 & 2; in round 3 the two `impactRound3Plus` events gain +1.
+// Events with no base impact are absent (they can't occur on this port's wheel).
+export function impactsForRound(port, round) {
+  const base = port?.impacts || {}
+  const plus = new Set(round === 3 ? (port?.impactRound3Plus || []) : [])
+  const out = {}
+  for (const [code, v] of Object.entries(base)) out[code] = v + (plus.has(code) ? 1 : 0)
+  return out
+}
+
+// Damage for the DRAWN event (D1): impact × (1 − P/10), at FULL precision — no
+// rounding to 0.5 any more. P is the preparedness (0–10) for that event with the
+// team's effective culture band. A score only; it never removes coins.
+export function computeDamage({ measures = [], event, effectiveBand = null, impact = 0 }) {
+  const P = computePreparedness({ measureIds: measures, eventCode: event, cultureBand: effectiveBand }).rawPreparedness
+  return (Number(impact) || 0) * (1 - P / 10)
+}
+
+// Expected protection (%) for a round: Σ_e (L_e × I_e × P_e/10) ÷ Σ_e (L_e × I_e),
+// ×100, over all events, where L is the likelihood on the ROUND's wheel and I the
+// impact in the ROUND. P_e uses the team's EFFECTIVE band. Does not depend on the
+// drawn event. Full precision — display rounds half-up (D9). The L scale cancels
+// in the ratio, so likelihoods may be in percent.
+export function expectedProtection({ measures = [], effectiveBand = null, likelihoods = {}, impacts = {} }) {
+  let avoided = 0
+  let possible = 0
+  for (const code of EVENT_CODES) {
+    const L = Number(likelihoods[code]) || 0
+    const I = Number(impacts[code]) || 0
+    if (L <= 0 || I <= 0) continue
+    const P = computePreparedness({ measureIds: measures, eventCode: code, cultureBand: effectiveBand }).rawPreparedness
+    avoided += L * I * (P / 10)
+    possible += L * I
+  }
+  return possible > 0 ? (avoided / possible) * 100 : 0
+}
+
+// ── v4 (deprecated, kept importable until Commit 3 rewires rounds) ───────────
+// Damage bill (v4) = event losses × (1 − P/10), rounded to the nearest 0.5. v5
+// uses computeDamage (full precision, per-port/round impact) instead.
 export function computeDamageBill(lossValue, P) {
   const raw = (Number(lossValue) || 0) * (1 - (Number(P) || 0) / 10)
   return Math.round(raw / 0.5) * 0.5 // Math.round takes exact halves up
