@@ -110,6 +110,9 @@ export default function PariCalculator() {
   // Navigation: 'start' (Before you start) first, then flat walk over the 10 questions.
   const [phase, setPhase]         = useState('start')
   const [stepIndex, setStepIndex] = useState(0)
+  // "A little more about your port" (phase 'profile') is paged one question per
+  // screen: 0 governance · 1 climate zone · 2 coastal setting.
+  const [profileStep, setProfileStep] = useState(0)
 
   // "Before you start" (Q0) — not scored, sent as separate payload fields. v4:
   // world zone replaced by governance model, climate zone and coastal setting,
@@ -172,9 +175,10 @@ export default function PariCalculator() {
     const saved = localStorage.getItem(PROGRESS_KEY)
     if (!saved) return
     try {
-      const { phase: p, stepIndex: si, team: t, portSize: ps, governance: gv, climateZone: cz, coastalSetting: cs, answers: a } = JSON.parse(saved)
+      const { phase: p, stepIndex: si, profileStep: pst, team: t, portSize: ps, governance: gv, climateZone: cz, coastalSetting: cs, answers: a } = JSON.parse(saved)
       if (p) setPhase(p === 'demographics' ? 'start' : p) // back-compat with old key
       if (typeof si === 'number') setStepIndex(si)
+      if (typeof pst === 'number') setProfileStep(pst)
       if (t) setTeam(t)
       if (ps) setPortSize(ps)
       if (gv) setGovernance(gv)
@@ -188,8 +192,8 @@ export default function PariCalculator() {
 
   // ── Save progress on every change ──────────────────────────────────────────
   useEffect(() => {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ phase, stepIndex, team, portSize, governance, climateZone, coastalSetting, answers }))
-  }, [phase, stepIndex, team, portSize, governance, climateZone, coastalSetting, answers]) // eslint-disable-line react-hooks/exhaustive-deps
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ phase, stepIndex, profileStep, team, portSize, governance, climateZone, coastalSetting, answers }))
+  }, [phase, stepIndex, profileStep, team, portSize, governance, climateZone, coastalSetting, answers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Loading / error states ─────────────────────────────────────────────────
   if (!hasParticipant) return null
@@ -311,7 +315,7 @@ export default function PariCalculator() {
 
         {/* Footer */}
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px 24px', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
-          <button onClick={() => { if (canContinue) setPhase('profile') }} disabled={!canContinue}
+          <button onClick={() => { if (canContinue) { setProfileStep(0); setPhase('profile') } }} disabled={!canContinue}
             style={{ display: 'block', width: '100%', maxWidth: 560, margin: '0 auto', height: 56, border: HAIRLINE, borderRadius: 0, background: canContinue ? COLOR.ink : COLOR.paper, color: canContinue ? COLOR.onInk : COLOR.ink40, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: canContinue ? 'pointer' : 'not-allowed' }}>
             Continue →
           </button>
@@ -322,17 +326,26 @@ export default function PariCalculator() {
 
   // ── Before you start, screen 2 (governance + climate + coastal) ────────────
   if (phase === 'profile') {
-    // The three screen-2 questions MUST arrive with options. If any is missing
-    // (e.g. an older backend that doesn't serve the v4 profile fields), we must
-    // NOT render an empty step with a dead "Start" button — show an error and a
-    // way to retry instead. `hasOptions` tolerates both config shapes.
+    // "A little more about your port" — one question per page, in order:
+    // governance · climate zone · coastal setting. Each page MUST arrive with
+    // options; if a page's def is missing (e.g. an older backend that doesn't
+    // serve the v4 profile fields) we show an error + retry instead of a dead
+    // "Next". Same paging pattern as the 10 scored questions below.
     const hasOptions = (d) => Array.isArray(d?.options) && d.options.length > 0
-    const profileDefs = [demo.governance, demo.climateZone, demo.coastalSetting]
-    const profileReady = profileDefs.every(hasOptions)
-    const canContinue = profileReady && governance !== '' && climateZone !== '' && coastalSetting !== ''
+    const profilePages = [
+      { def: demo.governance,     fallback: 'Governance model', value: governance,     set: setGovernance },
+      { def: demo.climateZone,    fallback: 'Climate zone',     value: climateZone,    set: setClimateZone },
+      { def: demo.coastalSetting, fallback: 'Coastal setting',  value: coastalSetting, set: setCoastalSetting },
+    ]
+    const idx           = Math.min(Math.max(profileStep, 0), profilePages.length - 1)
+    const page          = profilePages[idx]
+    const pageReady     = hasOptions(page.def)
+    const isLastProfile = idx === profilePages.length - 1
+    const canNextProfile = pageReady && page.value !== ''
+    const allAnswered   = governance !== '' && climateZone !== '' && coastalSetting !== ''
 
     function startQuestionnaire() {
-      if (!canContinue) return
+      if (!allAnswered) return
       // Commit the team: update the device marker and join (emits session:join).
       try {
         const markerKey = `ports_participant_${code}`
@@ -343,33 +356,63 @@ export default function PariCalculator() {
       setPhase('questions')
       setStepIndex(0)
     }
+    function profileNext() {
+      if (!canNextProfile) return
+      if (isLastProfile) { startQuestionnaire(); return }
+      setProfileStep(idx + 1)
+    }
+    function profileBack() {
+      if (idx === 0) { setPhase('start'); return }
+      setProfileStep(idx - 1)
+    }
+
+    const primaryLabel = !pageReady ? 'Questions unavailable' : isLastProfile ? 'Start the questionnaire →' : 'Next →'
 
     return (
-      <div style={{ minHeight: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', fontFamily: FONT.sans }}>
-        {/* Sky header */}
-        <div style={{ background: COLOR.sky, color: COLOR.ink, padding: '32px 20px 28px', borderBottom: HAIRLINE }}>
-          <div style={{ maxWidth: 560, margin: '0 auto', width: '100%' }}>
-            <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', margin: '0 0 10px' }}>
+      <div style={{ height: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: FONT.sans }}>
+        {/* Sky header: step heading + "N of 3" page counter */}
+        <div style={{ background: COLOR.sky, color: COLOR.ink, borderBottom: HAIRLINE, flexShrink: 0 }}>
+          <div style={{ maxWidth: 560, margin: '0 auto', width: '100%', padding: '24px 20px 18px' }}>
+            <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', margin: '0 0 8px' }}>
               Before you start · 2 of 2
             </p>
             <h1 style={{ fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.display, lineHeight: 1.05, margin: 0 }}>
               A little more about your port
             </h1>
+            <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', margin: '10px 0 0' }}>
+              {idx + 1} of {profilePages.length}
+            </p>
           </div>
         </div>
 
-        <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '28px 20px 140px', flex: 1 }}>
-          {profileReady ? (
-            <>
-              <ProfileQuestion def={demo.governance}     fallbackText="Governance model" value={governance}     onSelect={setGovernance} />
-              <ProfileQuestion def={demo.climateZone}    fallbackText="Climate zone"     value={climateZone}    onSelect={setClimateZone} />
-              <ProfileQuestion def={demo.coastalSetting} fallbackText="Coastal setting"  value={coastalSetting} onSelect={setCoastalSetting} />
-            </>
-          ) : (
+        {pageReady ? (
+          <>
+            {/* Question text */}
+            <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '24px 20px 12px', flexShrink: 0 }}>
+              <p style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: FW.display, color: COLOR.ink, lineHeight: 1.25, margin: 0, letterSpacing: LS.tight }}>
+                {page.def.text || page.fallback}
+              </p>
+            </div>
+
+            {/* Options — scroll within this area; the footer stays fixed/reachable */}
+            <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '4px 20px 8px', flex: 1, overflowY: 'auto', paddingBottom: 100 }}>
+              {page.def.options.map((opt, i, arr) => (
+                <SelectRow key={opt.optionId}
+                  label={opt.label}
+                  description={opt.description}
+                  selected={page.value === opt.optionId}
+                  onSelect={() => page.set(opt.optionId)}
+                  last={i === arr.length - 1}
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '28px 20px 100px', flex: 1, overflowY: 'auto' }}>
             <div style={{ border: HAIRLINE, padding: '28px 24px', textAlign: 'center' }}>
               <div style={{ fontSize: '2rem', marginBottom: 12 }}>📡</div>
               <p style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, color: COLOR.ink, margin: '0 0 6px' }}>
-                We couldn't load these questions.
+                We couldn't load this question.
               </p>
               <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '0 0 20px', lineHeight: 1.5 }}>
                 Please check your connection and try again.
@@ -379,17 +422,17 @@ export default function PariCalculator() {
                 Retry
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Footer: back + start */}
+        {/* Footer: back + next (same pattern as the scored questions) */}
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px 24px', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
           <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', display: 'flex', gap: 10 }}>
-            <button onClick={() => setPhase('start')}
+            <button onClick={profileBack}
               style={{ width: 56, height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontSize: FS.h3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
-            <button onClick={startQuestionnaire} disabled={!canContinue}
-              style={{ flex: 1, height: 56, border: HAIRLINE, borderRadius: 0, background: canContinue ? COLOR.ink : COLOR.paper, color: canContinue ? COLOR.onInk : COLOR.ink40, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: canContinue ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {profileReady ? 'Start the questionnaire →' : 'Questions unavailable'}
+            <button onClick={profileNext} disabled={!canNextProfile}
+              style={{ flex: 1, height: 56, border: HAIRLINE, borderRadius: 0, background: canNextProfile ? COLOR.ink : COLOR.paper, color: canNextProfile ? COLOR.onInk : COLOR.ink40, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: canNextProfile ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {primaryLabel}
             </button>
           </div>
         </div>
@@ -412,7 +455,7 @@ export default function PariCalculator() {
     setStepIndex(i => i + 1)
   }
   function handlePrev() {
-    if (stepIndex === 0) { setPhase('profile'); return }
+    if (stepIndex === 0) { setProfileStep(2); setPhase('profile'); return } // back to profile page 3 of 3
     setStepIndex(i => i - 1)
   }
 
