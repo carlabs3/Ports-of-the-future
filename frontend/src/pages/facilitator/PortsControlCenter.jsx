@@ -33,6 +33,10 @@ const AREA_LABELS = {
   preparedness: 'Preparedness',
 }
 
+// The three rounds are the years 2026 / 2031 / 2036 (workshop v5).
+const ROUND_YEARS = [2026, 2031, 2036]
+const roundYear = (round) => ROUND_YEARS[(round || 1) - 1] ?? ''
+
 const BAND_ORDER = ['reactive', 'aware', 'developing', 'proactive']
 const BAND_CONFIG = {
   reactive:   { label: 'Reactive',   color: '#f472b6' },
@@ -149,7 +153,7 @@ export default function PortsControlCenter() {
   // currentRound, roundLocked, roundBudget, portfolio:[{id,name,cost}],
   // roundBought, roundReturned, rounds:[...] }.
   const [measuresCatalog, setMeasuresCatalog] = useState([]) // [{ id, name, cost }]
-  const [roundBudgets, setRoundBudgets]       = useState([6, 8, 10]) // cumulative, display only
+  const [roundBudgets, setRoundBudgets]       = useState([6, 9, 12]) // cumulative, display only (v5)
   const [strategyByGroup, setStrategyByGroup] = useState({})
   const [editingGroup, setEditingGroup]       = useState(null) // the team now dictating
   const [addError, setAddError]               = useState('')  // inline error from buy/undo/return/lock
@@ -318,7 +322,7 @@ export default function PortsControlCenter() {
     }
     // A spin changed coins + added a round snapshot; re-pull the team state.
     function onOutcomeUpdate() { fetchStrategies() }
-    // Every team advanced to the next round (+2 coins): re-pull and reset the
+    // Every team advanced to the next round (+3 coins): re-pull and reset the
     // roulette screen so it reopens on the first team of the new round.
     function onRoundsAdvanced() {
       fetchStrategies()
@@ -744,7 +748,7 @@ export default function PortsControlCenter() {
     fetchStrategies()
   }
 
-  // Advance every team to the next round (+2 coins). Gated server-side on all
+  // Advance every team to the next round (+3 coins). Gated server-side on all
   // teams having spun the current round.
   async function nextRound() {
     if (advancing) return
@@ -825,7 +829,7 @@ export default function PortsControlCenter() {
       }
       const next = nextTeamToDraw()
       if (next) return { text: 'Read the result aloud: luck first, then strategy.', primary: { label: `Next: ${next} →`, onClick: () => openWheel(next), disabled: false } }
-      if (currentRound < 3) return { text: 'Every team has spun this round.', primary: { label: advancing ? 'Advancing…' : `Start round ${currentRound + 1} strategy →`, onClick: () => setAdvanceDialog('round'), disabled: advancing } }
+      if (currentRound < 3) return { text: 'Every team has spun this round.', primary: { label: advancing ? 'Advancing…' : `Start round ${currentRound + 1} · ${roundYear(currentRound + 1)} →`, onClick: () => setAdvanceDialog('round'), disabled: advancing } }
       return { text: 'All three rounds are done.', primary: { label: 'Go to Debrief →', onClick: () => setAdvanceDialog('debrief'), disabled: false } }
     }
     if (phase === 'debrief') {
@@ -924,16 +928,16 @@ export default function PortsControlCenter() {
         </div>
       )}
 
-      {/* ═══ ADVANCE dialog — confirm round advance (+2 coins each) / debrief ═══ */}
+      {/* ═══ ADVANCE dialog — confirm round advance (+3 coins each) / debrief ═══ */}
       {advanceDialog && (
         <div onClick={() => setAdvanceDialog(null)}
           style={{ position: 'fixed', inset: 0, background: 'rgba(11,27,51,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: COLOR.paper, border: HAIRLINE, maxWidth: 440, width: '100%', padding: 28 }}>
             {advanceDialog === 'round' ? (
               <>
-                <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, margin: '0 0 12px' }}>Start round {currentRound + 1}?</h2>
+                <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight, margin: '0 0 12px' }}>Start round {currentRound + 1} · {roundYear(currentRound + 1)}?</h2>
                 <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, lineHeight: 1.5, margin: '0 0 24px' }}>
-                  All {groupStats.length} teams get +2 coins and move to Strategy. This cannot be undone.
+                  All {groupStats.length} teams get +3 coins and move to Strategy. This cannot be undone.
                 </p>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={() => setAdvanceDialog(null)}
@@ -943,7 +947,7 @@ export default function PortsControlCenter() {
                   <button disabled={advancing}
                     onClick={async () => { await nextRound(); setAdvanceDialog(null); changePhase('strategy') }}
                     style={{ flex: 1, height: 48, border: HAIRLINE, borderRadius: 0, background: COLOR.ink, color: COLOR.onInk, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, cursor: advancing ? 'default' : 'pointer', opacity: advancing ? 0.6 : 1 }}>
-                    {advancing ? 'Advancing…' : `Start round ${currentRound + 1}`}
+                    {advancing ? 'Advancing…' : `Start round ${currentRound + 1} · ${roundYear(currentRound + 1)}`}
                   </button>
                 </div>
               </>
@@ -1056,7 +1060,7 @@ export default function PortsControlCenter() {
           {/* Round banner */}
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', background: COLOR.ice, border: HAIRLINE, padding: '14px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
-              <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight }}>Round {currentRound} of 3</span>
+              <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight }}>Round {currentRound} · {roundYear(currentRound)}</span>
               <span style={uiLabel}>{roundBudgets[currentRound - 1]}-coin budget{currentRound >= 2 ? ' · one return allowed' : ''}</span>
             </div>
             <span style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold }}>
@@ -1228,7 +1232,7 @@ export default function PortsControlCenter() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
           {!allConfirmed ? (
             <div style={{ border: HAIRLINE, padding: '48px 28px', textAlign: 'center' }}>
-              <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight, margin: '0 0 8px' }}>The roulette opens once every team has locked round {currentRound}.</p>
+              <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight, margin: '0 0 8px' }}>The roulette opens once every team has locked round {currentRound} · {roundYear(currentRound)}.</p>
               {pendingConfirm.length > 0 && <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Waiting on: {pendingConfirm.join(', ')}.</p>}
             </div>
           ) : !wheelTeam || !wheelComp ? (
@@ -1348,7 +1352,7 @@ export default function PortsControlCenter() {
                             <div style={bigNum}>{Math.round(e.lossesAvoidedPct ?? 0)}%</div>
                             <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>of losses avoided</p>
                           </div>
-                          <p style={sideLine}>Damage bill {e.damageBill ?? '—'} of {e.lossValue ?? '—'} coins</p>
+                          <p style={sideLine}>Damage {e.damageBill != null ? e.damageBill.toFixed(1) : '—'} of {e.impact ?? '—'} impact</p>
                         </div>
                         <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                           <div>
@@ -1366,7 +1370,7 @@ export default function PortsControlCenter() {
 
               {/* ZONE 3 · bottom strip */}
               <div style={{ flexShrink: 0, borderTop: HAIRLINE, paddingTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', minHeight: 56 }}>
-                <span style={{ ...uiLabel, whiteSpace: 'nowrap' }}>Round {currentRound} of 3 · {drawnGroups.size} of {groupStats.length} spun</span>
+                <span style={{ ...uiLabel, whiteSpace: 'nowrap' }}>Round {currentRound} · {roundYear(currentRound)} · {drawnGroups.size} of {groupStats.length} spun</span>
                 <div style={{ flex: 1, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {groupStats.map(g => {
                     const strat = strategyByGroup[g.group]

@@ -1,17 +1,17 @@
 import { MEASURES_BY_ID } from '../config/measures.js'
 import { PORTS_BY_ID } from '../config/ports/index.js'
-import { EVENTS_BY_CODE } from '../config/events.js'
+import { roundGrants, cumulativeBudgets } from '../config/game.js'
 import { applyCultureMeasureBonus } from './cultureService.js'
 import {
-  computePreparedness, computeExpectedLossesAvoided, computeDamageBill, computeCoinsThatHelped,
+  computePreparedness, computeCoinsThatHelped, expectedProtection, impactsForRound,
 } from './preparednessService.js'
 import { computeStrategyScore } from './strategyService.js'
 
-// Round rules (workshop v4). Pure state transitions on a plain `state` object so
+// Round rules (workshop v5). Pure state transitions on a plain `state` object so
 // the whole 3-round flow is testable without a DB. The endpoints map the Mongoose
-// doc to/from this shape. The strategy-score denominator uses the CUMULATIVE
-// budget 6/8/10, independent of coins actually lost on returns.
-export const ROUND_BUDGET = [6, 8, 10]
+// doc to/from this shape. Budgets and grants come from config/game.js — the
+// strategy-score denominator uses the CUMULATIVE budget 6/9/12.
+export const ROUND_BUDGET = cumulativeBudgets
 
 const roundSpun = (state) => state.rounds.some(r => r.round === state.currentRound)
 
@@ -75,23 +75,31 @@ export function unlockRound(state) {
   return { ok: true }
 }
 
-// Record a spin for the current round: compute P, losses avoided, damage bill,
-// expected protection, strategy score, coins that helped, and append the snapshot.
+// Record a spin for the current round (v5): compute P, losses avoided, damage (at
+// full precision, using the port+round impact), expected protection (round wheel),
+// strategy score, coins that helped, and append the snapshot. New spins store the
+// drawn event's `impact`; `lossValue` is no longer written (kept readable for old
+// sessions — D4).
 export function recordSpin(state, event) {
   if (roundSpun(state)) return { ok: false, error: 'This round has already been spun.' }
   const port = PORTS_BY_ID[state.portId]
+  const round = state.currentRound
   const effBand = applyCultureMeasureBonus(state.startingBand, state.portfolio)
   const prep = computePreparedness({ measureIds: state.portfolio, eventCode: event, cultureBand: effBand })
-  const lossValue = EVENTS_BY_CODE[event]?.lossValue ?? 0
-  const expected = computeExpectedLossesAvoided({ measures: state.portfolio, cultureBand: state.startingBand, exposureWeights: port?.exposureWeights || {} })
-  const budget = ROUND_BUDGET[state.currentRound - 1]
+
+  const likelihoods = port?.wheels?.[round]?.likelihoods || {}
+  const impacts = impactsForRound(port, round)
+  const impact = impacts[event] ?? 0
+  const damage = impact * (1 - prep.rawPreparedness / 10) // full precision (D1)
+  const expected = expectedProtection({ measures: state.portfolio, effectiveBand: effBand, likelihoods, impacts })
+
   const coinsSpent = state.roundBought.reduce((s, id) => s + (MEASURES_BY_ID[id]?.cost || 0), 0)
   const refund = state.roundReturned != null ? Math.floor((MEASURES_BY_ID[state.roundReturned]?.cost || 0) / 2) : 0
   // Total coins invested in the cards held this round — the denominator for
   // "coins that helped N of M" and the debrief's "coins that didn't help".
   const heldCost = state.portfolio.reduce((s, id) => s + (MEASURES_BY_ID[id]?.cost || 0), 0)
   const entry = {
-    round:               state.currentRound,
+    round,
     bought:              [...state.roundBought],
     returned:            state.roundReturned,
     coinsStart:          state.roundStartCoins,
@@ -101,24 +109,25 @@ export function recordSpin(state, event) {
     drawnEvent:          event,
     rawLossesAvoidedPct: prep.rawLossesAvoidedPct,
     lossesAvoidedPct:    prep.lossesAvoidedPct,
-    damageBill:          computeDamageBill(lossValue, prep.rawPreparedness),
+    damageBill:          damage,          // full precision (display rounds to 1 dp)
+    impact,                               // the drawn event's impact this round (v5)
     expectedProtection:  expected,
-    strategyScore:       computeStrategyScore({ expectedProtection: expected, portId: state.portId, startingBand: state.startingBand, budget }),
+    strategyScore:       computeStrategyScore({ expectedProtection: expected, portId: state.portId, round, startingBand: state.startingBand }),
     coinsThatHelped:     computeCoinsThatHelped({ measures: state.portfolio, event }),
     heldCost,
-    lossValue,
     cultureLevel:        effBand,
   }
   state.rounds.push(entry)
   return { ok: true, entry }
 }
 
-// Advance to the next round: +2 coins, reset the round's working state.
+// Advance to the next round: grant the round's coins (config roundGrants: +3 in
+// rounds 2 and 3), reset the round's working state.
 export function advanceRound(state) {
   if (state.currentRound >= 3) return { ok: false, error: 'All three rounds are complete.' }
   if (!roundSpun(state)) return { ok: false, error: 'The current round has not been spun yet.' }
   state.currentRound += 1
-  state.coins += 2
+  state.coins += roundGrants[state.currentRound - 1] // grant for the new round
   state.roundStartCoins = state.coins
   state.roundLocked = false
   state.roundBought = []

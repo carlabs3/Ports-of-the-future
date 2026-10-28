@@ -30,8 +30,9 @@ export default function parRouter(io) {
     res.json(getPublicQuestionnaire())
   })
 
-  // Facilitator-only: port catalogue. PUBLIC fields only — exposureWeights is
-  // SECRET and never exposed. Explicit field copy, NOT a spread of the port.
+  // Facilitator-only: port catalogue. PUBLIC fields only — the wheels, impacts
+  // and impactRound3Plus are SECRET and never exposed. Explicit field copy, NOT a
+  // spread of the port.
   router.get('/ports', authMiddleware, (_req, res) => {
     res.json(PORTS.map(p => ({
       id:             p.id,
@@ -76,10 +77,15 @@ export default function parRouter(io) {
     }
   }
 
-  // "Every team has locked round 1" — the point from which a team's wheel may be
-  // revealed (its composition + B11 motifs), for the team being drawn only.
-  const allLockedRound1 = (strategies) =>
-    strategies.length > 0 && strategies.every(s => s.rounds.some(r => r.round === 1) || (s.currentRound === 1 && s.roundLocked))
+  // D3: round r's wheel may be revealed only once EVERY team has LOCKED round r.
+  // A team has "locked round r" if it has already spun that round, or it is on
+  // round r with the round locked. Used to gate the per-team wheel composition.
+  const allLockedRound = (strategies, round) =>
+    strategies.length > 0 && strategies.every(s =>
+      s.rounds.some(r => r.round === round) || (s.currentRound === round && s.roundLocked))
+
+  // The port's per-round wheel likelihoods (percent, sum 100). Server-side only.
+  const roundLikelihoods = (port, round) => port?.wheels?.[round]?.likelihoods || {}
 
   // Run a pure round-logic mutation on a team's doc, save + broadcast on success.
   async function mutateStrategy(code, group, res, fn, badStatus = 400) {
@@ -163,22 +169,26 @@ export default function parRouter(io) {
       const doc = await TeamStrategy.findOne({ sessionCode: code, group })
       if (!doc) return res.status(404).json({ error: 'Team strategy not found' })
 
+      const round = doc.currentRound
       const all = await TeamStrategy.find({ sessionCode: code })
-      if (!allLockedRound1(all)) {
-        return res.status(409).json({ error: 'Every team must lock round 1 before any wheel is shown.' })
+      if (!allLockedRound(all, round)) {
+        return res.status(409).json({ error: `Every team must lock round ${round} before its wheel is shown.` })
       }
 
       const port = PORTS_BY_ID[doc.portId]
-      const exposure = EVENT_CODES.map(c => ({ code: c, name: EVENTS_BY_CODE[c]?.name || c, weight: port?.exposureWeights?.[c] || 0 }))
-      const spun = doc.rounds.find(r => r.round === doc.currentRound)
+      const likelihoods = roundLikelihoods(port, round)
+      // Likelihoods only (percent, sum 100) — never the impact table (D4). Field
+      // name kept `weight` so the existing wheel renderer needs no change.
+      const exposure = EVENT_CODES.map(c => ({ code: c, name: EVENTS_BY_CODE[c]?.name || c, weight: likelihoods[c] || 0 }))
+      const spun = doc.rounds.find(r => r.round === round)
       res.json({
         group,
         portName:           port?.name || null,
-        exposure,                        // [{ code, name, weight }] — weights sum 10
+        exposure,                        // [{ code, name, weight }] — weights sum 100
         portfolio:          doc.portfolio,
         cultureLevel:       applyCultureMeasureBonus(doc.startingBand, doc.portfolio),
-        illustrationMotifs: topExposureEvents(port?.exposureWeights || {}),
-        currentRound:       doc.currentRound,
+        illustrationMotifs: topExposureEvents(likelihoods),
+        currentRound:       round,
         drawnThisRound:     !!spun,
         eventCode:          spun?.drawnEvent || null,
       })
@@ -204,15 +214,19 @@ export default function parRouter(io) {
         return res.status(409).json({ error: `Every team must lock this round before any spin. Pending: ${pending.join(', ') || '—'}`, pending })
       }
 
-      const eventCode = drawEvent(doc.portId)
-      if (!eventCode) return res.status(400).json({ error: 'Could not draw an event (port has no weights).' })
+      const round = doc.currentRound
+      const eventCode = drawEvent(doc.portId, round)
+      if (!eventCode) return res.status(400).json({ error: 'Could not draw an event (round has no likelihoods).' })
 
       const r = recordSpin(doc, eventCode)
       if (!r.ok) return res.status(409).json({ error: r.error })
       await doc.save()
 
       const port = PORTS_BY_ID[doc.portId]
-      const exposure = EVENT_CODES.map(c => ({ code: c, name: EVENTS_BY_CODE[c]?.name || c, weight: port?.exposureWeights?.[c] || 0 }))
+      const likelihoods = roundLikelihoods(port, round)
+      // D4: the payload carries the round's likelihoods and ONLY the drawn event's
+      // impact/damage (inside r.entry) — never the full per-event impact table.
+      const exposure = EVENT_CODES.map(c => ({ code: c, name: EVENTS_BY_CODE[c]?.name || c, weight: likelihoods[c] || 0 }))
       const payload = {
         group,
         portName:  port?.name || null,
@@ -220,8 +234,8 @@ export default function parRouter(io) {
         eventCode,
         eventName: EVENTS_BY_CODE[eventCode]?.name || eventCode,
         exposure,
-        illustrationMotifs: topExposureEvents(port?.exposureWeights || {}),
-        entry:     r.entry, // losses avoided, damage, expected, strategy score, coins that helped
+        illustrationMotifs: topExposureEvents(likelihoods),
+        entry:     r.entry, // losses avoided, impact, damage, expected, strategy score, coins that helped
       }
       io.to(code).emit('outcome:update', { group, round: r.entry.round })
       io.to(code).emit('strategy:update', publicStrategy(doc))
@@ -232,8 +246,8 @@ export default function parRouter(io) {
     }
   })
 
-  // Facilitator-only: advance ALL teams to the next round (+2 coins). GATE: every
-  // team must have spun the current round.
+  // Facilitator-only: advance ALL teams to the next round (grants +3 coins in
+  // rounds 2 and 3, per config). GATE: every team must have spun the current round.
   router.post('/:code/next-round', authMiddleware, async (req, res) => {
     try {
       const { code } = req.params
@@ -308,7 +322,7 @@ export default function parRouter(io) {
             const o = r.toObject ? r.toObject() : r
             return { ...o, eventName: o.drawnEvent ? (EVENTS_BY_CODE[o.drawnEvent]?.name || o.drawnEvent) : null }
           }),
-          illustrationMotifs: topExposureEvents(port?.exposureWeights || {}),
+          illustrationMotifs: topExposureEvents(roundLikelihoods(port, 1)),
         }
       })
 

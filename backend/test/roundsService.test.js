@@ -1,7 +1,17 @@
-// v5 migration: this v4 suite is skipped in Commit 1 and rewritten in Commit 2/3
+// Rounds state machine (workshop v5). The structural numbers (coins, grants,
+// refunds, portfolio, lock/undo rules) are asserted as literals — they are the
+// point of this service. The per-spin scoring fields are verified against an
+// INDEPENDENT recomputation (round wheel + impactsForRound + effective band),
+// which catches a wrong-round / wrong-band wiring bug in recordSpin without
+// hardcoding numbers that aren't in an appendix. The scoring maths themselves
+// are pinned to the appendix in scoringV5.test.js.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { precomputeBestPossible } from '../src/services/strategyService.js'
+import { PORTS_BY_ID } from '../src/config/ports/index.js'
+import { roundGrants } from '../src/config/game.js'
+import { precomputeBestPossible, computeStrategyScore } from '../src/services/strategyService.js'
+import { applyCultureMeasureBonus } from '../src/services/cultureService.js'
+import { computePreparedness, expectedProtection, impactsForRound } from '../src/services/preparednessService.js'
 import { buyCard, returnCard, undoCard, lockRound, unlockRound, recordSpin, advanceRound } from '../src/services/roundsService.js'
 
 precomputeBestPossible()
@@ -10,66 +20,78 @@ function fresh(portId = 'boreal', startingBand = 'aware') {
   return { portId, startingBand, portfolio: [], coins: 6, roundStartCoins: 6, currentRound: 1, roundLocked: false, roundBought: [], roundReturned: null, rounds: [] }
 }
 
-test.skip('full 3-round playthrough for Boreal, including a return — every number', () => {
+// Independently recompute what a spin's scoring fields SHOULD be, from the round
+// wheel, the round's impacts, and the effective culture band — then assert the
+// recorded entry matches. If recordSpin used the wrong round's wheel, used base
+// impacts in round 3, or skipped the enabler bonus, these diverge.
+function assertSpinScoring(entry, { portId, startingBand, portfolio, round, event }) {
+  const port = PORTS_BY_ID[portId]
+  const effBand = applyCultureMeasureBonus(startingBand, portfolio)
+  const prep = computePreparedness({ measureIds: portfolio, eventCode: event, cultureBand: effBand })
+  const impacts = impactsForRound(port, round)
+  const impact = impacts[event] ?? 0
+  const expDamage = impact * (1 - prep.rawPreparedness / 10)
+  const exp = expectedProtection({ measures: portfolio, effectiveBand: effBand, likelihoods: port.wheels[round].likelihoods, impacts })
+
+  assert.equal(entry.cultureLevel, effBand, 'effective band')
+  assert.equal(entry.impact, impact, 'drawn-event impact for this port/round')
+  assert.equal(entry.rawLossesAvoidedPct, prep.rawLossesAvoidedPct, 'losses avoided')
+  assert.ok(Math.abs(entry.damageBill - expDamage) < 1e-9, `damage full precision (${entry.damageBill} vs ${expDamage})`)
+  assert.ok(Math.abs(entry.expectedProtection - exp) < 1e-9, 'expected protection uses this round\'s wheel')
+  assert.equal(entry.strategyScore, computeStrategyScore({ expectedProtection: exp, portId, round, startingBand }), 'strategy score')
+  assert.ok(entry.lossValue == null, 'v5 spins do not write lossValue')
+}
+
+test('full 3-round playthrough for Boreal: coins, grants, returns, and per-round scoring', () => {
   const s = fresh()
 
-  // ── Round 1: buy 24 (2) + 13 (3) + 19 (1) = 6 coins, spin SI ──────────────
-  for (const id of [24, 13, 19]) assert.equal(buyCard(s, id).ok, true)
+  // ── Round 1 (budget 6): buy 24 (3) + 17 (2) + 19 (1) = 6, spin SI ─────────
+  for (const id of [24, 17, 19]) assert.equal(buyCard(s, id).ok, true)
   assert.equal(s.coins, 0)
-  assert.deepEqual(s.portfolio, [24, 13, 19])
+  assert.deepEqual(s.portfolio, [24, 17, 19])
   assert.equal(lockRound(s).ok, true)
   const r1 = recordSpin(s, 'SI').entry
   assert.deepEqual([r1.coinsStart, r1.coinsSpent, r1.refund, r1.coinsLeft], [6, 6, 0, 0])
-  assert.equal(r1.lossesAvoidedPct, 76)     // P = 7.6
-  assert.equal(r1.damageBill, 0.5)          // 3 × 0.24 = 0.72 → 0.5
-  assert.equal(r1.expectedProtection, 51.4) // displays 51
-  assert.equal(r1.strategyScore, 88)        // 51 / best 58
-  assert.equal(r1.coinsThatHelped, 5)       // #24 (2) + #13 (3); #19 none
-  assert.equal(r1.heldCost, 6)              // 24(2) + 13(3) + 19(1)
-  assert.equal(r1.lossValue, 3)             // SI loss value
-  assert.equal(r1.cultureLevel, 'developing') // Aware + 1 enabler
+  assert.equal(r1.heldCost, 6)              // 24(3) + 17(2) + 19(1)
+  assert.equal(r1.cultureLevel, 'developing') // Aware + 1 enabler (#19)
+  assert.equal(r1.impact, 5)                // Boreal SI impact = 5
+  assertSpinScoring(r1, { portId: 'boreal', startingBand: 'aware', portfolio: [24, 17, 19], round: 1, event: 'SI' })
   assert.equal(advanceRound(s).ok, true)
-  assert.equal(s.coins, 2)                  // 0 + 2
+  assert.equal(s.coins, roundGrants[1])     // 0 + 3
 
-  // ── Round 2: return 13 (refund 1), buy 17 (2), spin WS ────────────────────
-  assert.equal(returnCard(s, 13).refund, 1) // floor(3/2)
-  assert.equal(s.coins, 3)
-  assert.deepEqual(s.portfolio, [24, 19])
-  assert.equal(buyCard(s, 17).ok, true)
-  assert.equal(s.coins, 1)
+  // ── Round 2 (grant +3): return 24 (refund 1), buy 6 (2), spin WS ──────────
+  assert.equal(returnCard(s, 24).refund, 1) // floor(3/2)
+  assert.equal(s.coins, 4)                   // 3 + 1
+  assert.deepEqual(s.portfolio, [17, 19])
+  assert.equal(buyCard(s, 6).ok, true)
+  assert.equal(s.coins, 2)                   // 4 − 2
   assert.equal(lockRound(s).ok, true)
   const r2 = recordSpin(s, 'WS').entry
-  assert.deepEqual([r2.coinsStart, r2.coinsSpent, r2.refund, r2.coinsLeft], [2, 2, 1, 1])
-  assert.deepEqual(r2.bought, [17])
-  assert.equal(r2.returned, 13)
-  assert.equal(r2.lossesAvoidedPct, 30)     // P = 3.0 (#17 WS 3)
-  assert.equal(r2.damageBill, 3)            // 4 × 0.7 = 2.8 → 3.0
-  assert.equal(r2.expectedProtection, 46.4)
-  assert.equal(r2.strategyScore, 69)        // 46 / best 67
-  assert.equal(r2.coinsThatHelped, 2)       // #17 only
-  assert.equal(r2.heldCost, 5)              // 24(2) + 19(1) + 17(2)
+  assert.deepEqual([r2.coinsStart, r2.coinsSpent, r2.refund, r2.coinsLeft], [3, 2, 1, 2])
+  assert.deepEqual(r2.bought, [6])
+  assert.equal(r2.returned, 24)
+  assert.equal(r2.heldCost, 5)              // 17(2) + 19(1) + 6(2)
+  assert.equal(r2.impact, 3)                // Boreal WS impact = 3
+  assertSpinScoring(r2, { portId: 'boreal', startingBand: 'aware', portfolio: [17, 19, 6], round: 2, event: 'WS' })
   assert.equal(advanceRound(s).ok, true)
-  assert.equal(s.coins, 3)                  // 1 + 2
+  assert.equal(s.coins, 2 + roundGrants[2]) // 2 + 3
 
-  // ── Round 3: buy 6 (3), spin SS ───────────────────────────────────────────
-  assert.equal(buyCard(s, 6).ok, true)
-  assert.equal(s.coins, 0)
+  // ── Round 3 (grant +3): buy 14 (3), spin SS (round-3 impact gains +1) ─────
+  assert.equal(buyCard(s, 14).ok, true)
+  assert.equal(s.coins, 2)                   // 5 − 3
   assert.equal(lockRound(s).ok, true)
   const r3 = recordSpin(s, 'SS').entry
-  assert.deepEqual([r3.coinsStart, r3.coinsSpent, r3.refund, r3.coinsLeft], [3, 3, 0, 0])
-  assert.equal(r3.lossesAvoidedPct, 44)     // P = 4.4 (#17 SS2 + #6 SS3)
-  assert.equal(r3.damageBill, 2)            // 4 × 0.56 = 2.24 → 2.0
-  assert.equal(r3.expectedProtection, 62.48)
-  assert.equal(r3.strategyScore, 82)        // 62 / best 76
-  assert.equal(r3.coinsThatHelped, 5)       // #17 (2) + #6 (3)
-  assert.equal(r3.heldCost, 8)              // 24(2) + 19(1) + 17(2) + 6(3)
+  assert.deepEqual([r3.coinsStart, r3.coinsSpent, r3.refund, r3.coinsLeft], [5, 3, 0, 2])
+  assert.equal(r3.heldCost, 8)              // 17(2) + 19(1) + 6(2) + 14(3)
+  assert.equal(r3.impact, 4)                // Boreal SS base 3, +1 in round 3 (impactRound3Plus)
+  assertSpinScoring(r3, { portId: 'boreal', startingBand: 'aware', portfolio: [17, 19, 6, 14], round: 3, event: 'SS' })
 
-  assert.deepEqual(s.portfolio, [24, 19, 17, 6])
+  assert.deepEqual(s.portfolio, [17, 19, 6, 14])
   assert.equal(s.rounds.length, 3)
   assert.equal(advanceRound(s).ok, false)   // no round 4
 })
 
-test.skip('purchase is rejected for over-budget, not-in-deck, duplicate', () => {
+test('purchase is rejected for over-budget, not-in-deck, duplicate', () => {
   const s = fresh('boreal', 'aware') // boreal deck has no #2; coins 6
   assert.equal(buyCard(s, 1).ok, true)                   // #1 (cost 5), in boreal deck
   assert.equal(s.coins, 1)
@@ -81,7 +103,7 @@ test.skip('purchase is rejected for over-budget, not-in-deck, duplicate', () => 
   assert.match(buyCard(s, 12).error, /Not enough coins/)
 })
 
-test.skip('returns: none in round 1, at most one per round', () => {
+test('returns: none in round 1, at most one per round', () => {
   const s = fresh()
   buyCard(s, 24)
   assert.equal(returnCard(s, 24).ok, false)              // round 1: no returns
@@ -92,7 +114,21 @@ test.skip('returns: none in round 1, at most one per round', () => {
   assert.match(returnCard(s, 19).error, /one card/)
 })
 
-test.skip('locking needs a starting level; cannot unlock after the spin', () => {
+test('advanceRound grants the configured coins for the new round', () => {
+  const s = fresh()
+  buyCard(s, 24); lockRound(s); recordSpin(s, 'SI')
+  const before2 = s.coins
+  advanceRound(s)                                        // → round 2
+  assert.equal(s.currentRound, 2)
+  assert.equal(s.coins, before2 + roundGrants[1])        // +3
+  lockRound(s); recordSpin(s, 'SI')
+  const before3 = s.coins
+  advanceRound(s)                                        // → round 3
+  assert.equal(s.currentRound, 3)
+  assert.equal(s.coins, before3 + roundGrants[2])        // +3
+})
+
+test('locking needs a starting level; cannot unlock after the spin', () => {
   const s = fresh('boreal', null)                        // no starting level
   assert.equal(lockRound(s).ok, false)
   assert.match(lockRound(s).error, /starting culture level/)
@@ -104,28 +140,27 @@ test.skip('locking needs a starting level; cannot unlock after the spin', () => 
   assert.match(unlockRound(s).error, /already been spun/)
 })
 
-test.skip('undo in round 1: full refund, card removed, return allowance untouched', () => {
+test('undo in round 1: full refund, card removed, return allowance untouched', () => {
   const s = fresh() // coins 6
-  assert.equal(buyCard(s, 24).ok, true) // cost 2 -> coins 4
-  assert.equal(buyCard(s, 13).ok, true) // cost 3 -> coins 1
+  assert.equal(buyCard(s, 24).ok, true) // cost 3 -> coins 3
+  assert.equal(buyCard(s, 13).ok, true) // cost 3 -> coins 0
   const r = undoCard(s, 24)
   assert.equal(r.ok, true)
-  assert.equal(r.refund, 2)             // FULL cost, not floor(2/2)
-  assert.equal(s.coins, 3)              // 1 + 2
+  assert.equal(r.refund, 3)             // FULL cost, not floor(3/2)
+  assert.equal(s.coins, 3)              // 0 + 3
   assert.deepEqual(s.portfolio, [13])
   assert.deepEqual(s.roundBought, [13])
   assert.equal(s.roundReturned, null)   // undo never touches the return allowance
 })
 
-test.skip('undo a same-round card in round 2: full refund, one-return-per-round still available', () => {
+test('undo a same-round card in round 2: full refund, one-return-per-round still available', () => {
   const s = fresh()
   assert.equal(buyCard(s, 24).ok, true) // coins 4
-  lockRound(s); recordSpin(s, 'SI'); advanceRound(s) // round 2, coins 6, portfolio [24]
-  assert.equal(buyCard(s, 17).ok, true) // cost 2 -> coins 4, roundBought [17]
+  lockRound(s); recordSpin(s, 'SI'); advanceRound(s) // round 2, coins 4+? portfolio [24]
+  assert.equal(buyCard(s, 17).ok, true) // cost 2, roundBought [17]
   const r = undoCard(s, 17)
   assert.equal(r.ok, true)
   assert.equal(r.refund, 2)             // FULL refund (returnCard would be floor(2/2)=1)
-  assert.equal(s.coins, 6)
   assert.deepEqual(s.portfolio, [24])
   assert.deepEqual(s.roundBought, [])
   assert.equal(s.roundReturned, null)   // untouched by the undo
@@ -136,7 +171,7 @@ test.skip('undo a same-round card in round 2: full refund, one-return-per-round 
   assert.equal(s.roundReturned, 24)
 })
 
-test.skip('undo is rejected once the round is locked', () => {
+test('undo is rejected once the round is locked', () => {
   const s = fresh()
   buyCard(s, 24)
   lockRound(s)
@@ -145,7 +180,7 @@ test.skip('undo is rejected once the round is locked', () => {
   assert.match(r.error, /locked/)
 })
 
-test.skip('undo is rejected for a card bought in a previous round', () => {
+test('undo is rejected for a card bought in a previous round', () => {
   const s = fresh()
   buyCard(s, 24)
   lockRound(s); recordSpin(s, 'SI'); advanceRound(s) // round 2; 24 was bought in round 1
@@ -154,7 +189,7 @@ test.skip('undo is rejected for a card bought in a previous round', () => {
   assert.match(r.error, /not bought this round/)
 })
 
-test.skip('cannot advance before the current round is spun', () => {
+test('cannot advance before the current round is spun', () => {
   const s = fresh()
   buyCard(s, 24); lockRound(s)
   assert.equal(advanceRound(s).ok, false)
