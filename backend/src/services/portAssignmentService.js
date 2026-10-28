@@ -2,7 +2,7 @@ import { PORTS } from '../config/ports/index.js'
 
 // Team / port assignment for session creation. Pure and testable (no DB).
 //
-// Teams are named Team A … Team H (max 8). Each team gets a RANDOM port from the
+// Teams are named Team A … Team F (max 6). Each team gets a RANDOM port from the
 // catalogue with no repeats between teams. Ports are assigned server-side (the
 // client never picks them) and stay hidden on the projected screen until the
 // Roulette tab.
@@ -10,7 +10,7 @@ import { PORTS } from '../config/ports/index.js'
 export const MIN_TEAMS = 2
 export const MAX_TEAMS = 6 // D13: at most 6 tables, one per port, no repeats
 
-// Team A, Team B, … for a count in [MIN_TEAMS, MAX_TEAMS]. Letters A–H.
+// Team A, Team B, … for a count in [MIN_TEAMS, MAX_TEAMS]. Letters A–F.
 export function generateTeamNames(count) {
   return Array.from({ length: count }, (_, i) => `Team ${String.fromCharCode(65 + i)}`)
 }

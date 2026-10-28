@@ -41,6 +41,71 @@ function MeasureCardImage({ id, title }) {
   )
 }
 
+// Port illustration for a Teams-panel card. The port colour is the backdrop, so
+// a missing/slow image shows the colour (never a broken-image icon). Lazy-loaded;
+// alt names the port. The port-name tag is rendered by the caller over this.
+function PortCardImage({ src, name, colour }) {
+  const [failed, setFailed] = useState(false)
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: colour || COLOR.ice }}>
+      {src && !failed && (
+        <img src={src} alt={`Illustration of the port of ${name || 'this port'}`} loading="lazy"
+          onError={() => setFailed(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      )}
+    </div>
+  )
+}
+
+// One Teams-panel card. `horizontal` = image on the left (5–6 teams); otherwise
+// image on top (1–4 teams). `sizes` scales the type per layout. The band bar is
+// driven by g.band (getBand from the backend) — no frontend thresholds.
+function TeamCard({ g, horizontal, sizes }) {
+  const colour = g.portColour || '#C5E4FF'
+  const tagText = textOnColour(colour)
+  const hasAnswers = g.count > 0
+  const mult = (CULTURE_FACTOR[g.cultureBand] ?? 1).toFixed(1)
+  const people = g.people ?? g.count
+  const imageArea = (
+    <div style={{ position: 'relative', flex: 'none', minHeight: 0, borderRight: horizontal ? `2px solid ${COLOR.ink}` : 'none', borderBottom: horizontal ? 'none' : `2px solid ${COLOR.ink}`, width: horizontal ? '44%' : 'auto', height: horizontal ? 'auto' : sizes.imageH }}>
+      <PortCardImage src={g.portImage} name={g.portName} colour={colour} />
+      <span style={{ position: 'absolute', top: 12, left: 12, padding: '5px 9px', background: colour, color: tagText, border: `2px solid ${COLOR.ink}`, fontFamily: FONT.mono, fontSize: sizes.tagFS, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        {g.portName || '—'}
+      </span>
+    </div>
+  )
+  const textArea = (
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', padding: sizes.pad, overflow: 'hidden' }}>
+      <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: sizes.teamFS, letterSpacing: '-0.05em', lineHeight: 0.85, color: COLOR.ink }}>{g.group}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: sizes.gap, marginTop: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: sizes.capLabelFS, fontWeight: 700, letterSpacing: '0.06em' }}>CAP</span>
+          <span style={{ fontSize: sizes.capFS, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 0.9, color: COLOR.ink }}>
+            {hasAnswers ? g.avg : '—'}<span style={{ fontSize: '0.38em', fontWeight: 600, color: COLOR.ink60 }}> /100</span>
+          </span>
+        </div>
+        <span style={{ fontSize: sizes.cultureFS, fontWeight: 800, letterSpacing: '-0.02em', color: COLOR.ink }}>
+          {hasAnswers ? `${BAND_RAMP[g.cultureBand]?.label || '—'} ×${mult}` : 'No answers yet'}
+        </span>
+        <div style={{ display: 'flex', width: '100%' }}>
+          {BAND_ORDER.map((id, i) => (
+            <span key={id} style={{ flex: '1 1 0', height: sizes.bandH, background: hasAnswers && g.band === id ? COLOR.ink : '#E8EEF5', borderLeft: i === 0 ? 'none' : '2px solid #FFFFFF' }} />
+          ))}
+        </div>
+        <span style={{ fontFamily: FONT.mono, fontSize: sizes.peopleFS, fontWeight: 500, color: COLOR.ink60 }}>
+          {people} {people === 1 ? 'person' : 'people'}
+        </span>
+      </div>
+    </div>
+  )
+  return (
+    <div style={{ display: 'flex', flexDirection: horizontal ? 'row' : 'column', border: `2px solid ${COLOR.ink}`, minWidth: 0, minHeight: 0, overflow: 'hidden', background: COLOR.paper }}>
+      {imageArea}
+      {textArea}
+    </div>
+  )
+}
+
 // Read-only PARI observation board. It only reads and displays live PAR data;
 // it never triggers reveals, confirms actions, or writes anything.
 
@@ -425,6 +490,7 @@ export default function PortsControlCenter() {
         group: g,
         count,
         avg: agg?.avgScore ?? null,
+        band: agg?.band ?? null,                        // getBand(avg) from the backend (single source)
         cultureBand,                                    // effective band (PARI base + enablers)
         cultureRaised,                                  // true once an enabler raised it
         startingBand: strat?.startingBand ?? null,
@@ -436,6 +502,7 @@ export default function PortsControlCenter() {
         spun: hasSpunCurrent(strat),
         portName: portId != null ? (portById[portId]?.name || `Port ${portId}`) : (strat?.portName ?? null),
         portColour: portId != null ? (portById[portId]?.colour || null) : null,
+        portImage: portId != null ? (portById[portId]?.image || null) : null,
         portDesc: portId != null ? (portById[portId]?.description || '') : '',
         status,
       }
@@ -791,7 +858,7 @@ export default function PortsControlCenter() {
       return { text: 'Talk through the room’s culture level.', primary: { label: 'Show teams →', onClick: () => changePhase('teams'), disabled: false } }
     }
     if (phase === 'teams') {
-      return { text: 'Each team: this is your port and your CAP Index.', primary: { label: 'Start strategy →', onClick: () => changePhase('strategy'), disabled: false } }
+      return { text: 'Each team, its port and its culture level. Read them out, then go to Strategy.', primary: { label: 'Next: Strategy →', onClick: () => changePhase('strategy'), disabled: false } }
     }
     if (phase === 'strategy') {
       if (allConfirmed) return { text: 'Every team is locked.', primary: { label: 'Start the roulette →', onClick: () => changePhase('wheel'), disabled: false } }
@@ -1017,36 +1084,34 @@ export default function PortsControlCenter() {
         </div>
         )}
 
-        {/* 3 · TEAMS — phase: teams. One card per team: port + CAP Index. */}
-        {phase === 'teams' && (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, Math.max(1, groupStats.length))}, 1fr)`, gridAutoRows: '1fr', gap: 16 }}>
-            {groupStats.map(g => {
-              const bg = g.portColour || '#C5E4FF'
-              const fg = textOnColour(bg)
-              const mult = (CULTURE_FACTOR[g.cultureBand] ?? 1).toFixed(1)
-              const joined = memberCounts[g.group] ?? g.count
-              return (
-                <div key={g.group} style={{ display: 'flex', flexDirection: 'column', border: HAIRLINE, minWidth: 0, minHeight: 0 }}>
-                  <div style={{ background: bg, color: fg, padding: '14px 16px', flexShrink: 0 }}>
-                    <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(22px, 2vw, 32px)', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.portName || '—'}</div>
-                    {g.portDesc && <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, marginTop: 4, opacity: 0.9 }}>{g.portDesc}</div>}
-                  </div>
-                  <div style={{ flex: 1, minHeight: 0, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.bold }}>{g.group}</div>
-                    <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, marginTop: 4 }}>CAP Index</div>
-                    <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(44px, 6vh, 80px)', lineHeight: 1 }}>
-                      {g.avg != null ? g.avg : '—'}<span style={{ fontSize: '0.32em', fontWeight: FW.semibold, color: COLOR.ink60 }}> /100</span>
-                    </div>
-                    <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, marginTop: 4 }}>{BAND_RAMP[g.cultureBand]?.label || '—'} · scores ×{mult}{g.cultureRaised ? ' ★' : ''}</div>
-                    <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, marginTop: 'auto' }}>{g.count} of {joined} answered</div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-        )}
+        {/* 3 · TEAMS — phase: teams. One card per team: team letter, port
+            illustration, CAP average, culture level, band bar, people. Layout by
+            team count: 1–2 → 2 cols; 3 → 3 cols; 4 → 4 cols (all one row, one per
+            team); 5–6 → 3 cols × 2 rows with horizontal cards (5 leaves one empty
+            slot). Sizes scale with the viewport to keep the 1440×810 mockup
+            proportions at 720p/1080p. */}
+        {phase === 'teams' && (() => {
+          const n = Math.max(1, groupStats.length)
+          const horizontal = n >= 5
+          // 1–2 → 2 cols; 3 → 3 cols; 4 → 4 cols (one row, one per team, no empty
+          // slot); 5–6 → 3 cols × 2 rows (5 leaves one empty slot).
+          const cols = n <= 2 ? 2 : n <= 4 ? n : 3
+          const rows = n <= 4 ? 1 : 2
+          // Per-layout type/size tokens (tuned to the mockups at 1440 px wide,
+          // then scaled by vw so 1280 and 1920 keep the same proportions).
+          const sizes = n <= 2
+            ? { teamFS: 'clamp(48px, 7.8vw, 150px)', capFS: 'clamp(40px, 5vw, 96px)', cultureFS: 'clamp(20px, 2.8vw, 40px)', capLabelFS: 15, tagFS: 16, peopleFS: 15, bandH: 14, imageH: '42%', pad: '20px 24px', gap: 10 }
+            : n <= 4
+              ? { teamFS: 'clamp(34px, 5.6vw, 110px)', capFS: 'clamp(26px, 3.6vw, 64px)', cultureFS: 'clamp(16px, 1.8vw, 28px)', capLabelFS: 14, tagFS: 16, peopleFS: 14, bandH: 14, imageH: '34%', pad: '16px 18px', gap: 9 }
+              : { teamFS: 'clamp(26px, 3.2vw, 72px)', capFS: 'clamp(22px, 2.4vw, 48px)', cultureFS: 'clamp(14px, 1.5vw, 24px)', capLabelFS: 13, tagFS: 14, peopleFS: 13, bandH: 10, imageH: 'auto', pad: '14px 18px', gap: 8 }
+          return (
+            <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`, gap: 20 }}>
+              {groupStats.map(g => (
+                <TeamCard key={g.group} g={{ ...g, people: memberCounts[g.group] ?? g.count }} horizontal={horizontal} sizes={sizes} />
+              ))}
+            </div>
+          )
+        })()}
 
         {/* 2 · STRATEGY — phase: strategy. One team dictates at a time, round by
             round. Other teams' port / score / culture / cards stay hidden. */}
