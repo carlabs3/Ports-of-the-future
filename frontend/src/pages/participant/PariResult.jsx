@@ -4,6 +4,17 @@ import axios from 'axios'
 import { socket } from '../../utils/socket.js'
 import { BACKEND_URL } from '../../utils/config.js'
 import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP, BAND_ORDER } from '../../styles/tokens.js'
+import { pickExtremes } from '../../utils/areaExtremes.js'
+
+// Band ranges for the gauge. The band VALUE still comes from the server
+// (getBand via result.band); these ranges are display only (the four getBand
+// boundaries, 0–25 / 26–50 / 51–75 / 76–100) and add no second thresholding.
+const BAND_RANGES = {
+  reactive:   { lo: 0,  hi: 25 },
+  aware:      { lo: 26, hi: 50 },
+  developing: { lo: 51, hi: 75 },
+  proactive:  { lo: 76, hi: 100 },
+}
 
 // Band meaning (content). Band colours come from BAND_RAMP (tokens) — the one
 // band-colour definition. The band value itself is computed by the backend.
@@ -107,9 +118,16 @@ export default function PariResult() {
 
   const band = BAND_RAMP[result.band] || { label: result.band, bg: COLOR.ink, text: COLOR.onInk, border: HAIRLINE }
   const areas = result.areas || {}
+  const score = Math.max(0, Math.min(100, Number(result.score) || 0)) // marker position
+  const curRange = BAND_RANGES[result.band] || { lo: 0, hi: 100 }
+  // Keep the score bubble inside the bar at the extremes.
+  const bubbleShift = score <= 6 ? '0' : score >= 94 ? '-100%' : '-50%'
 
-  // Weakest area = lowest score (first on a tie). Marked in --signal.
-  const weakestId = AREA_ORDER.reduce((min, id) => (areas[id] ?? 0) < (areas[min] ?? 0) ? id : min, AREA_ORDER[0])
+  // Strongest = all areas at the max; Weakest = all at the min; none if all equal
+  // (shared rule with the facilitator Results screen).
+  const { strongest, weakest } = pickExtremes(
+    Object.fromEntries(AREA_ORDER.map(id => [id, areas[id] ?? 0]))
+  )
 
   return (
     <div style={{ background: COLOR.paper, minHeight: '100dvh', fontFamily: FONT.sans }}>
@@ -137,41 +155,72 @@ export default function PariResult() {
       {/* ═══ CONTENT ═══ */}
       <div style={{ maxWidth: 560, margin: '0 auto', padding: '28px 20px 40px' }}>
 
-        {/* 4-segment band strip */}
+        {/* Maturity band gauge: 0–100 bar split into the four bands, the
+            participant's band highlighted, a marker at the exact score. */}
         <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, margin: '0 0 10px' }}>
           Maturity band
         </p>
-        <div style={{ display: 'flex', border: HAIRLINE, marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '0 0 16px', flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, lineHeight: 1, color: COLOR.ink }}>{band.label}</span>
+          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>{curRange.lo}–{curRange.hi} of 100</span>
+        </div>
+
+        {/* Score marker, above the bar */}
+        <div style={{ position: 'relative', height: 30 }}>
+          <div style={{ position: 'absolute', left: `${score}%`, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span style={{ transform: `translateX(${bubbleShift})`, whiteSpace: 'nowrap', fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, color: COLOR.onInk, background: COLOR.ink, padding: '2px 8px', lineHeight: 1.3 }}>
+              {result.score}
+            </span>
+            <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: `6px solid ${COLOR.ink}` }} />
+          </div>
+        </div>
+
+        {/* The bar: four equal quarters, only the current band at full strength */}
+        <div style={{ display: 'flex', border: HAIRLINE }}>
           {BAND_ORDER.map((id, i) => {
             const b = BAND_RAMP[id]
             const isCurrent = id === result.band
             return (
-              <div key={id} style={{ flex: 1, borderLeft: i === 0 ? 'none' : HAIRLINE, position: 'relative' }}>
+              <div key={id} style={{ flex: 1, borderLeft: i === 0 ? 'none' : HAIRLINE, background: b.bg, opacity: isCurrent ? 1 : 0.3, height: 26, position: 'relative' }}>
                 {isCurrent && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: COLOR.ink }} />}
-                <div style={{ background: b.bg, color: b.text, padding: '18px 6px 12px', textAlign: 'center' }}>
-                  <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: isCurrent ? FW.bold : FW.regular }}>{b.label}</span>
-                </div>
               </div>
             )
           })}
         </div>
-        <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '0 0 32px' }}>
-          You are in the <strong style={{ color: COLOR.ink }}>{band.label}</strong> band.
-        </p>
 
-        {/* Area bars out of 20, weakest marked */}
+        {/* Band names + ranges under the bar */}
+        <div style={{ display: 'flex', margin: '6px 0 32px' }}>
+          {BAND_ORDER.map(id => {
+            const isCurrent = id === result.band
+            const r = BAND_RANGES[id]
+            return (
+              <div key={id} style={{ flex: 1, textAlign: 'center', padding: '0 2px' }}>
+                <div style={{ fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: isCurrent ? FW.bold : FW.regular, color: isCurrent ? COLOR.ink : COLOR.ink60, lineHeight: 1.2 }}>{BAND_RAMP[id].label}</div>
+                <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink40 }}>{r.lo}–{r.hi}</div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Area bars out of 20, strongest and weakest marked (ties mark all) */}
         <p style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, margin: '0 0 14px' }}>
           Profile by area (out of 20)
         </p>
         <div>
           {AREA_ORDER.map(id => {
             const val = areas[id] ?? 0
-            const isWeak = id === weakestId
+            const isStrong = strongest.has(id)
+            const isWeak = weakest.has(id)
             return (
               <div key={id} style={{ padding: '10px 0', borderTop: HAIRLINE }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, fontWeight: isWeak ? FW.bold : FW.regular }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, fontWeight: (isStrong || isWeak) ? FW.bold : FW.regular }}>
                     {AREA_LABELS[id]}
+                    {isStrong && (
+                      <span style={{ marginLeft: 8, fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.onInk, background: COLOR.ink, border: HAIRLINE, padding: '1px 6px' }}>
+                        Strongest
+                      </span>
+                    )}
                     {isWeak && (
                       <span style={{ marginLeft: 8, fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink, background: COLOR.signal, border: HAIRLINE, padding: '1px 6px' }}>
                         Weakest
@@ -181,7 +230,7 @@ export default function PariResult() {
                   <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, color: COLOR.ink }}>{val}/20</span>
                 </div>
                 <div style={{ position: 'relative', height: 14, background: COLOR.ice, border: HAIRLINE }}>
-                  <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${(val / 20) * 100}%`, background: isWeak ? COLOR.signal : COLOR.harbour }} />
+                  <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${(val / 20) * 100}%`, background: isWeak ? COLOR.signal : isStrong ? COLOR.ink : COLOR.harbour }} />
                 </div>
               </div>
             )

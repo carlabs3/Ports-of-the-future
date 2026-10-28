@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
 import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
+import { pickExtremes } from '../../utils/areaExtremes.js'
 import { HazardIcon } from '../../components/HazardIcons.jsx'
 import PortIllustration from '../../components/PortIllustration.jsx'
 import { socket } from '../../utils/socket.js'
@@ -381,11 +382,10 @@ export default function PortsControlCenter() {
     id, label: AREA_LABELS[id],
     value: filteredRows.length ? Math.round(mean(filteredRows.map(r => r.areas?.[id] ?? 0)) * 10) / 10 : 0,
   }))
-  const areaMin = Math.min(...areaMeans.map(a => a.value))
-  const areaMax = Math.max(...areaMeans.map(a => a.value))
-  const areaAllEqual = areaMin === areaMax
-  const weakestIds   = new Set(areaAllEqual ? [] : areaMeans.filter(a => a.value === areaMin).map(a => a.id))
-  const strongestIds = new Set(areaAllEqual ? [] : areaMeans.filter(a => a.value === areaMax).map(a => a.id))
+  // Same rule as before (ties mark all; all-equal marks none), now via the shared
+  // pure helper so the participant result page uses identical logic.
+  const { strongest: strongestIds, weakest: weakestIds } =
+    pickExtremes(Object.fromEntries(areaMeans.map(a => [a.id, a.value])))
 
   // Histogram: ten bins 0–9 … 90–99 (a score of 100 goes in the last bin).
   const histBins = Array.from({ length: 10 }, (_, i) => ({ label: `${i * 10}–${i * 10 + 9}`, count: 0 }))

@@ -4,7 +4,7 @@ import { socket } from '../../utils/socket.js'
 import api from '../../utils/api.js'
 import { BACKEND_URL } from '../../utils/config.js'
 import { useSession } from '../../context/SessionContext.jsx'
-import { COLOR, FONT, FS, FW, LS, HAIRLINE } from '../../styles/tokens.js'
+import { COLOR, FONT, FS, FW, LS, HAIRLINE, AREA_COLOR, AREA_TEXT } from '../../styles/tokens.js'
 
 // SECURITY: this screen never receives option scores. It fetches the public
 // questionnaire (texts + labels only) from the backend and submits the chosen
@@ -222,7 +222,7 @@ export default function PariCalculator() {
 
   // Flat list of the 10 questions with their owning area (for progress labels).
   const flatQuestions = areas.flatMap((area, ai) =>
-    area.questions.map(q => ({ ...q, areaIndex: ai, areaLabel: area.label }))
+    area.questions.map(q => ({ ...q, areaIndex: ai, areaId: area.id, areaLabel: area.label }))
   )
 
   // ── Submit — three resilience layers (socket + HTTP keepalive + pending) ───
@@ -464,20 +464,22 @@ export default function PariCalculator() {
   return (
     <div style={{ height: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: FONT.sans }}>
 
-      {/* Sky header: big question number + 10-segment progress */}
-      <div style={{ background: COLOR.sky, color: COLOR.ink, borderBottom: HAIRLINE, flexShrink: 0 }}>
+      {/* Header: the question's area colour; number + progress inherit a readable
+          text colour (currentColor) so they stay visible on every area, incl. the
+          ink governance background. Progress track = same colour at low opacity. */}
+      <div style={{ background: AREA_COLOR[current.areaId] || COLOR.sky, color: AREA_TEXT[current.areaId] || COLOR.ink, borderBottom: HAIRLINE, flexShrink: 0 }}>
         <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '18px 20px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
             <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.display, letterSpacing: LS.display, lineHeight: 1 }}>
               {qNumber}
             </span>
-            <span style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase' }}>
+            <span style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', textAlign: 'right' }}>
               {current.areaLabel}
             </span>
           </div>
           <div style={{ display: 'flex', gap: 4 }}>
             {flatQuestions.map((_, i) => (
-              <div key={i} style={{ flex: 1, height: 6, background: i <= stepIndex ? COLOR.ink : 'rgba(11,27,51,0.22)' }} />
+              <div key={i} style={{ flex: 1, height: 6, background: 'currentColor', opacity: i <= stepIndex ? 1 : 0.28 }} />
             ))}
           </div>
         </div>

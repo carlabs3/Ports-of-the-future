@@ -86,3 +86,14 @@ export const AREA_COLOR = {
   measures:     COLOR.signal,
   preparedness: COLOR.ice,
 }
+
+// Readable text colour on each AREA_COLOR, per the design rule (tokens.css:8):
+// white only on the dark grounds (ink, harbour); ink on the light ones (sky,
+// signal, ice). Kept beside AREA_COLOR so a colour change updates both here.
+export const AREA_TEXT = {
+  governance:   COLOR.onInk,     // on ink
+  organisation: COLOR.onHarbour, // on harbour
+  budget:       COLOR.ink,       // on sky
+  measures:     COLOR.ink,       // on signal
+  preparedness: COLOR.ink,       // on ice
+}
