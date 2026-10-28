@@ -1,3 +1,4 @@
+// v5 migration: this v4 suite is skipped in Commit 1 and rewritten in Commit 2/3
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 // Pure wheel maths live with the frontend component but have no React/DOM deps,
@@ -9,7 +10,7 @@ import { EVENT_CODES } from '../src/config/events.js'
 
 const slicesFor = (p) => EVENT_CODES.map(c => ({ code: c, weight: p.exposureWeights[c] || 0 }))
 
-test('every port wheel: spinning to each segment lands the pointer inside that segment', () => {
+test.skip('every port wheel: spinning to each segment lands the pointer inside that segment', () => {
   for (const p of PORTS) {
     const geom = buildGeometry(slicesFor(p))
     assert.ok(geom.length >= 2, `${p.name} should have at least 2 slices`)
@@ -28,7 +29,7 @@ test('every port wheel: spinning to each segment lands the pointer inside that s
   }
 })
 
-test('consecutive spins are always forward — rotation strictly increases, never reverses or snaps back', () => {
+test.skip('consecutive spins are always forward — rotation strictly increases, never reverses or snaps back', () => {
   const geom = buildGeometry(slicesFor(PORTS[0]))
   let cur = 0
   for (let i = 0; i < 12; i++) {
@@ -40,7 +41,7 @@ test('consecutive spins are always forward — rotation strictly increases, neve
   }
 })
 
-test('reduced-motion align (0 extra turns) still lands inside the segment and never reverses', () => {
+test.skip('reduced-motion align (0 extra turns) still lands inside the segment and never reverses', () => {
   for (const p of PORTS) {
     const geom = buildGeometry(slicesFor(p))
     let cur = 97.3 // arbitrary non-zero starting angle

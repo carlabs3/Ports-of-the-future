@@ -38,21 +38,31 @@ Rollout: config + `validateConfig` (commit 1, done) → scoring (2) → rounds/c
 colours (7). Sections below that still describe v3 behaviour (single-round draw,
 "luck vs strategy" debrief, world-zone profile) are updated as those commits land.
 
-## Config (v4)
+## Config (v5)
 
 - **6 ports** (`config/ports/*`), `id` a **string slug** (`nord-maris`, `meridia`,
   `riu-verd`, `boreal`, `coralia`, `sabkha`), each with `name`, `climateZone`,
-  `coastalSetting`, `size`, `governance`, `deck` (13–15 measure ids, always
-  including the 6 shared cards 8/10/14/19/20/23), a `colour` (D17), and secret
-  `exposureWeights` (sum 10).
-- **26 measures** (`config/measures.js`); #19/#20 are enablers with no protection
-  and `raisesCultureLevel: true`.
-- **7 events** (`config/events.js`), names per Appendix C.
-- `validateConfig()` fail-fasts at boot on: weights≠10, deck size 13–15, missing
-  shared card, unknown deck card, measure count≠26, cost∉[1,5], score∉[0,10],
-  enabler-with-protection, and the enabler flag.
-- New sessions store `configVersion: 'v4'`; older sessions are flagged `isLegacy`
-  on `/info` and must not crash the server (ports simply don't resolve).
+  `coastalSetting`, `size`, `governance`, `colour`, `image`, `description`, and
+  `deck` (always including the 6 shared cards 8/10/14/19/20/23; **85 cards** across
+  all ports). SECRET (never served before the moment allowed, D3/D4): per-round
+  **`wheels`** `{ 1|2|3: { year, likelihoods } }` — likelihoods are **percent in
+  steps of 5, summing to 100** (replaces the v4 single `exposureWeights` summing
+  to 10); and per-port **`impacts`** (coins 1–5 per event, used in rounds 1–2) plus
+  **`impactRound3Plus`** (the two events that gain +1 impact in round 3 / 2036).
+- **28 measures** (`config/measures.js`, Appendix A); #19/#20 are enablers with no
+  protection and `raisesCultureLevel: true`. New: #27 Snow & ice clearance fleet,
+  #28 Harbour ice management.
+- **7 events** (`config/events.js`), single names per Appendix D (no global
+  `lossValue` any more — damage is per port and per round).
+- **`roundGrants = [6, 3, 3]`** in `config/game.js` (D2): per-round coin grants →
+  cumulative budgets 6 / 9 / 12.
+- `validateConfig()` fail-fasts at boot on: a wheel's likelihoods not summing to
+  100; a likelihood not a multiple of 5; an event with likelihood > 0 but no
+  impact; an impact outside 1–5 (incl. after the round-3 +1); a deck referencing a
+  missing measure or missing a shared card; total card count ≠ 85; measure
+  count ≠ 28; cost ∉ [1,5]; protection score ∉ [0,10]; the enabler flag/rule.
+- New sessions store `configVersion: 'v5'` (D10); older sessions keep their stored
+  spin results — nothing is recomputed from live config at read time.
 
 ## Stack & layout
 

@@ -1,4 +1,4 @@
-// See 01-nord-maris.js for field conventions. exposureWeights is SECRET (sum 10).
+// See 01-nord-maris.js for field conventions. wheels + impacts are SECRET (v5).
 export default {
   id: 'riu-verd',
   name: 'Riu Verd',
@@ -10,5 +10,11 @@ export default {
   image: '/ports/riu-verd.webp',
   description: 'River port in Southern Europe',
   deck: [8, 10, 14, 19, 20, 23, 3, 5, 7, 9, 11, 17, 21, 22, 25],
-  exposureWeights: { SS: 0, RF: 3, HW: 2, WS: 0, DR: 4, WF: 1, SI: 0 },
+  wheels: {
+    1: { year: 2026, likelihoods: { RF: 30, HW: 20, DR: 40, WF: 10 } },
+    2: { year: 2031, likelihoods: { RF: 25, HW: 25, DR: 40, WF: 10 } },
+    3: { year: 2036, likelihoods: { RF: 20, HW: 25, DR: 45, WF: 10 } },
+  },
+  impacts: { RF: 4, HW: 3, DR: 5, WF: 2 },
+  impactRound3Plus: ['RF', 'HW'],
 }

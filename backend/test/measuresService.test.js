@@ -10,7 +10,7 @@ import { getPublicMeasures, costOfMeasures, validateMeasureSelection, MEASURE_BU
 test('getPublicMeasures exposes id/name/cost/raisesCultureLevel/protection — and only those', () => {
   const pub = getPublicMeasures()
   const EVENT_CODES = ['SS', 'RF', 'HW', 'WS', 'DR', 'WF', 'SI']
-  assert.equal(pub.length, 26)
+  assert.equal(pub.length, 28)
   for (const m of pub) {
     assert.deepEqual(Object.keys(m).sort(), ['cost', 'id', 'name', 'protection', 'raisesCultureLevel'])
     assert.equal(typeof m.id, 'number')

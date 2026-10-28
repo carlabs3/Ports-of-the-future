@@ -1,7 +1,8 @@
 // Fail-fast validator for the domain catalogues (events / measures / ports).
 // Run at server startup: if any invariant is violated it throws with the full
 // list of problems, so bad data stops the server before it can serve wrong
-// scoring. Workshop v4: 26 measures, 6 ports with decks.
+// scoring. Workshop v5: 28 measures, 6 ports, 85 cards, per-round wheels (% in
+// steps of 5, sum 100) and per-port impacts (1–5, +1 for two events in round 3).
 import { EVENTS, EVENT_CODES } from './events.js'
 import { MEASURES, SHARED_MEASURE_IDS } from './measures.js'
 import { PORTS } from './ports/index.js'
@@ -13,22 +14,21 @@ export function validateConfig({ events = EVENTS, measures = MEASURES, ports = P
   const validCodes = new Set(EVENT_CODES)
 
   // ── events ────────────────────────────────────────────────────────────────
+  // v5: no global lossValue — damage is per port and per round (see ports).
   if (events.length !== 7) errors.push(`events: expected 7, got ${events.length}`)
   const seenCodes = new Set()
   for (const e of events) {
-    if (!isInt(e.lossValue) || e.lossValue < 1 || e.lossValue > 5) {
-      errors.push(`event ${e.code}: lossValue must be an integer 1–5, got ${e.lossValue}`)
-    }
     if (seenCodes.has(e.code)) errors.push(`event code duplicated: ${e.code}`)
     seenCodes.add(e.code)
+    if (!validCodes.has(e.code)) errors.push(`event has unknown code "${e.code}"`)
   }
 
   // ── measures ──────────────────────────────────────────────────────────────
-  const COUNT = 26
+  const COUNT = 28
   if (measures.length !== COUNT) errors.push(`measures: expected ${COUNT}, got ${measures.length}`)
-  const ids = measures.map(m => m.id).sort((a, b) => a - b)
+  const sortedIds = measures.map(m => m.id).sort((a, b) => a - b)
   for (let i = 0; i < COUNT; i++) {
-    if (ids[i] !== i + 1) { errors.push(`measures: ids must be 1..${COUNT} with no gaps (missing/duplicate near ${i + 1})`); break }
+    if (sortedIds[i] !== i + 1) { errors.push(`measures: ids must be 1..${COUNT} with no gaps (missing/duplicate near ${i + 1})`); break }
   }
   const measureIds = new Set(measures.map(m => m.id))
   for (const m of measures) {
@@ -54,24 +54,14 @@ export function validateConfig({ events = EVENTS, measures = MEASURES, ports = P
   // ── ports ─────────────────────────────────────────────────────────────────
   if (ports.length !== 6) errors.push(`ports: expected 6, got ${ports.length}`)
   const seenPortIds = new Set()
+  let totalCards = 0
   for (const p of ports) {
     if (seenPortIds.has(p.id)) errors.push(`port id duplicated: ${p.id}`)
     seenPortIds.add(p.id)
 
-    // exposure weights sum to exactly 10
-    const w = p.exposureWeights || {}
-    for (const code of Object.keys(w)) {
-      if (!validCodes.has(code)) errors.push(`port ${p.name}: exposureWeights has unknown event code "${code}"`)
-      if (!isInt(w[code]) || w[code] < 0) errors.push(`port ${p.name}: exposureWeights.${code} must be a non-negative integer, got ${w[code]}`)
-    }
-    const sum = Object.values(w).reduce((s, v) => s + (Number(v) || 0), 0)
-    if (sum !== 10) errors.push(`port ${p.name}: exposureWeights must sum to exactly 10, got ${sum}`)
-
-    // deck: 13–15 cards, no duplicates, every id exists, all 6 shared present
+    // deck: no duplicates, every id exists, all 6 shared present.
     const deck = p.deck || []
-    if (deck.length < 13 || deck.length > 15) {
-      errors.push(`port ${p.name}: deck must have 13–15 cards, got ${deck.length}`)
-    }
+    totalCards += deck.length
     const deckSet = new Set(deck)
     if (deckSet.size !== deck.length) errors.push(`port ${p.name}: deck has duplicate card ids`)
     for (const id of deck) {
@@ -80,11 +70,49 @@ export function validateConfig({ events = EVENTS, measures = MEASURES, ports = P
     for (const id of SHARED_MEASURE_IDS) {
       if (!deckSet.has(id)) errors.push(`port ${p.name}: deck is missing shared card #${id}`)
     }
+
+    // wheels: one per round (1/2/3); likelihoods are non-negative multiples of 5
+    // and sum to exactly 100. Collect every event that can occur in any round.
+    const wheels = p.wheels || {}
+    const occurs = new Set()
+    for (const round of [1, 2, 3]) {
+      const w = wheels[round]
+      if (!w || typeof w.likelihoods !== 'object') { errors.push(`port ${p.name}: missing wheel for round ${round}`); continue }
+      let sum = 0
+      for (const [code, val] of Object.entries(w.likelihoods)) {
+        if (!validCodes.has(code)) errors.push(`port ${p.name} round ${round}: wheel has unknown event code "${code}"`)
+        if (!isInt(val) || val < 0 || val % 5 !== 0) errors.push(`port ${p.name} round ${round}: likelihood ${code}=${val} must be a non-negative multiple of 5`)
+        sum += Number(val) || 0
+        if ((Number(val) || 0) > 0) occurs.add(code)
+      }
+      if (sum !== 100) errors.push(`port ${p.name} round ${round}: likelihoods must sum to 100, got ${sum}`)
+    }
+
+    // impacts: integers 1–5 for every event that can occur; the two round-3 +1
+    // events must have an impact and must not exceed 5 after the increase.
+    const impacts = p.impacts || {}
+    for (const [code, val] of Object.entries(impacts)) {
+      if (!validCodes.has(code)) errors.push(`port ${p.name}: impact has unknown event code "${code}"`)
+      if (!isInt(val) || val < 1 || val > 5) errors.push(`port ${p.name}: impact ${code}=${val} must be an integer 1–5`)
+    }
+    for (const code of occurs) {
+      const imp = impacts[code]
+      if (!isInt(imp) || imp < 1) errors.push(`port ${p.name}: event ${code} has a likelihood above 0 but no impact`)
+    }
+    for (const code of (p.impactRound3Plus || [])) {
+      if (!validCodes.has(code)) errors.push(`port ${p.name}: impactRound3Plus has unknown event code "${code}"`)
+      const imp = impacts[code]
+      if (!isInt(imp)) errors.push(`port ${p.name}: impactRound3Plus event ${code} has no base impact`)
+      else if (imp + 1 > 5) errors.push(`port ${p.name}: impact ${code} would exceed 5 after the round-3 +1 (base ${imp})`)
+    }
   }
+
+  const EXPECTED_CARDS = 85
+  if (totalCards !== EXPECTED_CARDS) errors.push(`total card count must be ${EXPECTED_CARDS}, got ${totalCards}`)
 
   if (errors.length > 0) {
     throw new Error(`Config validation failed (${errors.length}):\n - ${errors.join('\n - ')}`)
   }
 
-  return { events: events.length, measures: measures.length, ports: ports.length }
+  return { events: events.length, measures: measures.length, ports: ports.length, cards: totalCards }
 }

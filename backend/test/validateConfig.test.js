@@ -1,65 +1,119 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { validateConfig } from '../src/config/validateConfig.js'
-import { MEASURES_BY_ID } from '../src/config/measures.js'
-import { MEASURES } from '../src/config/measures.js'
-import { PORTS_BY_ID } from '../src/config/ports/index.js'
-import { PORTS } from '../src/config/ports/index.js'
+import { MEASURES, MEASURES_BY_ID } from '../src/config/measures.js'
+import { PORTS, PORTS_BY_ID } from '../src/config/ports/index.js'
 
-test('validateConfig does not throw on the real data', () => {
-  assert.doesNotThrow(() => validateConfig())
+// Deep clone the real ports so a fixture can break one field without touching the
+// live config (ports are plain data — JSON clone is safe).
+const clonePorts = () => JSON.parse(JSON.stringify(PORTS))
+const cloneMeasures = () => JSON.parse(JSON.stringify(MEASURES))
+
+test('validateConfig does not throw on the real v5 data', () => {
+  const r = validateConfig()
+  assert.deepEqual(r, { events: 7, measures: 28, ports: 6, cards: 85 })
 })
 
-test('spot-check measure transcription (v4, 26 measures)', () => {
-  assert.equal(MEASURES.length, 26)
-  assert.equal(MEASURES_BY_ID[1].protection.SS, 8)
-  assert.equal(MEASURES_BY_ID[1].cost, 5)
-  assert.equal(MEASURES_BY_ID[15].protection.RF, 7)
-  assert.equal(MEASURES_BY_ID[16].protection.DR, 6) // new: Alternative water supply & reuse
-  assert.equal(MEASURES_BY_ID[24].protection.SI, 7)
-  assert.equal(MEASURES_BY_ID[26].protection.HW, 5) // new: Cool surfaces & shaded yards
-  assert.equal(MEASURES_BY_ID[19].raisesCultureLevel, true)
-  assert.equal(MEASURES_BY_ID[20].raisesCultureLevel, true)
+test('spot-check measures (v5, 28, with new costs and #27/#28)', () => {
+  assert.equal(MEASURES.length, 28)
+  assert.equal(MEASURES_BY_ID[6].cost, 2)   // was 3
+  assert.equal(MEASURES_BY_ID[9].cost, 4)   // was 3
+  assert.equal(MEASURES_BY_ID[24].cost, 3)  // was 2
+  assert.equal(MEASURES_BY_ID[26].cost, 1)  // was 2
+  assert.equal(MEASURES_BY_ID[27].name, 'Snow & ice clearance fleet')
+  assert.equal(MEASURES_BY_ID[27].cost, 2)
+  assert.equal(MEASURES_BY_ID[27].protection.SI, 4)
+  assert.equal(MEASURES_BY_ID[28].name, 'Harbour ice management')
+  assert.equal(MEASURES_BY_ID[28].cost, 3)
+  assert.equal(MEASURES_BY_ID[28].protection.SI, 5)
   const raisers = MEASURES.filter(m => m.raisesCultureLevel).map(m => m.id).sort((a, b) => a - b)
   assert.deepEqual(raisers, [19, 20])
 })
 
-test('spot-check port transcription (v4, 6 ports, string ids)', () => {
+test('spot-check ports (v5, decks + wheels + impacts)', () => {
   assert.equal(PORTS.length, 6)
-  assert.equal(PORTS_BY_ID['boreal'].exposureWeights.SI, 4)
-  assert.equal(PORTS_BY_ID['riu-verd'].exposureWeights.DR, 4)
+  // Deck changes: Nord-Maris loses #24, gains #27; Boreal gains #27 and #28.
+  assert.ok(PORTS_BY_ID['nord-maris'].deck.includes(27))
+  assert.ok(!PORTS_BY_ID['nord-maris'].deck.includes(24))
+  assert.ok(PORTS_BY_ID['boreal'].deck.includes(27))
+  assert.ok(PORTS_BY_ID['boreal'].deck.includes(28))
+  // Three wheels per port, each summing to 100, with a year.
   for (const p of PORTS) {
-    assert.equal(Object.values(p.exposureWeights).reduce((s, v) => s + v, 0), 10, `${p.name} weights`)
+    for (const round of [1, 2, 3]) {
+      const w = p.wheels[round]
+      assert.ok(typeof w.year === 'number', `${p.name} round ${round} year`)
+      assert.equal(Object.values(w.likelihoods).reduce((s, v) => s + v, 0), 100, `${p.name} round ${round} sum`)
+    }
   }
+  // Appendix E/F spot values.
+  assert.equal(PORTS_BY_ID['boreal'].wheels[1].likelihoods.SI, 40)
+  assert.equal(PORTS_BY_ID['boreal'].wheels[1].year, 2026)
+  assert.equal(PORTS_BY_ID['nord-maris'].impacts.SS, 5)
+  assert.deepEqual(PORTS_BY_ID['boreal'].impactRound3Plus, ['SS', 'RF'])
 })
 
-test('negative: a port whose weights sum to 9 fails validation', () => {
-  const broken = PORTS.map(p => ({ ...p, exposureWeights: { ...p.exposureWeights } }))
-  const firstNonZero = Object.keys(broken[0].exposureWeights).find(c => broken[0].exposureWeights[c] > 0)
-  broken[0].exposureWeights[firstNonZero] -= 1
-  assert.throws(() => validateConfig({ ports: broken }), /sum to exactly 10/)
+// ── negatives: one broken fixture per validator rule ────────────────────────
+
+test('negative: a likelihood that is not a multiple of 5 fails', () => {
+  const ports = clonePorts()
+  ports[0].wheels[1].likelihoods[Object.keys(ports[0].wheels[1].likelihoods)[0]] = 7
+  assert.throws(() => validateConfig({ ports }), /multiple of 5/)
 })
 
-test('negative: a deck missing a shared card fails validation', () => {
-  const broken = PORTS.map(p => ({ ...p, deck: [...p.deck] }))
-  broken[0].deck = broken[0].deck.filter(id => id !== 8) // drop shared #8
-  assert.throws(() => validateConfig({ ports: broken }), /missing shared card #8/)
+test('negative: a wheel whose likelihoods do not sum to 100 fails', () => {
+  const ports = clonePorts()
+  const codes = Object.keys(ports[0].wheels[2].likelihoods)
+  ports[0].wheels[2].likelihoods[codes[0]] -= 5 // now sums to 95, still multiples of 5
+  assert.throws(() => validateConfig({ ports }), /sum to 100/)
 })
 
-test('negative: a deck with a non-existent card fails validation', () => {
-  const broken = PORTS.map(p => ({ ...p, deck: [...p.deck] }))
-  broken[0].deck.push(999)
-  assert.throws(() => validateConfig({ ports: broken }), /does not exist/)
+test('negative: an impact outside 1–5 fails', () => {
+  const ports = clonePorts()
+  ports[0].impacts[Object.keys(ports[0].impacts)[0]] = 6
+  assert.throws(() => validateConfig({ ports }), /impact .* must be an integer 1–5/)
 })
 
-test('negative: a deck outside 13–15 cards fails validation', () => {
-  const broken = PORTS.map(p => ({ ...p, deck: [...p.deck] }))
-  broken[0].deck = broken[0].deck.slice(0, 10)
-  assert.throws(() => validateConfig({ ports: broken }), /13–15 cards/)
+test('negative: an event with a likelihood above 0 but no impact fails', () => {
+  const ports = clonePorts()
+  // Nord-Maris SS has likelihood 40 in round 1; remove its impact.
+  const nm = ports.find(p => p.id === 'nord-maris')
+  delete nm.impacts.SS
+  assert.throws(() => validateConfig({ ports }), /likelihood above 0 but no impact/)
 })
 
-test('negative: a cost above 5 fails validation', () => {
-  const broken = MEASURES.map(m => ({ ...m, protection: { ...m.protection } }))
-  broken[0].cost = 6
-  assert.throws(() => validateConfig({ measures: broken }), /cost must be an integer 1–5/)
+test('negative: a round-3 +1 event that would exceed 5 fails', () => {
+  const ports = clonePorts()
+  const nm = ports.find(p => p.id === 'nord-maris') // RF is +1 in round 3
+  nm.impacts.RF = 5 // 5 + 1 = 6
+  assert.throws(() => validateConfig({ ports }), /exceed 5 after the round-3/)
+})
+
+test('negative: a deck missing a shared card fails', () => {
+  const ports = clonePorts()
+  ports[0].deck = ports[0].deck.filter(id => id !== 8)
+  assert.throws(() => validateConfig({ ports }), /missing shared card #8/)
+})
+
+test('negative: a deck with a non-existent card fails', () => {
+  const ports = clonePorts()
+  ports[0].deck.push(999)
+  assert.throws(() => validateConfig({ ports }), /does not exist/)
+})
+
+test('negative: a total card count other than 85 fails', () => {
+  const ports = clonePorts()
+  ports[0].deck.pop() // 84 total (but keep shared cards intact)
+  // dropping a non-shared card keeps the deck valid except for the total
+  assert.throws(() => validateConfig({ ports }), /total card count must be 85/)
+})
+
+test('negative: a measure cost above 5 fails', () => {
+  const measures = cloneMeasures()
+  measures[0].cost = 6
+  assert.throws(() => validateConfig({ measures }), /cost must be an integer 1–5/)
+})
+
+test('negative: a measure count other than 28 fails', () => {
+  const measures = cloneMeasures().slice(0, 27)
+  assert.throws(() => validateConfig({ measures }), /expected 28/)
 })

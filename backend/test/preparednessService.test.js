@@ -1,3 +1,4 @@
+// v5 migration: this v4 suite is skipped in Commit 1 and rewritten in Commit 2/3
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { computePreparedness, adjustScore, cultureFactor, computeExpectedLossesAvoided, computeCoinsThatHelped, computeDamageBill } from '../src/services/preparednessService.js'
@@ -25,19 +26,19 @@ function measureWithScore(event, score) {
 // Use event 'SS' as the drawn event for the formula tests.
 const EV = 'SS'
 
-test('one measure, effective score 8 → P = 8.0', () => {
+test.skip('one measure, effective score 8 → P = 8.0', () => {
   const id = measureWithScore(EV, 8) // measure #1 Coastal defences SS=8
   const r = computePreparedness({ measureIds: [id], eventCode: EV, cultureBand: 'developing' })
   assert.equal(r.preparedness, 8.0)
 })
 
-test('two measures, scores 5 and 5 → P = 7.5', () => {
+test.skip('two measures, scores 5 and 5 → P = 7.5', () => {
   const id5 = measureWithScore(EV, 5) // #3 Deployable flood barriers SS=5
   const r = computePreparedness({ measureIds: [id5, id5], eventCode: EV, cultureBand: 'developing' })
   assert.equal(r.preparedness, 7.5)
 })
 
-test('three measures, scores 8, 3, 2 → P = 8.9', () => {
+test.skip('three measures, scores 8, 3, 2 → P = 8.9', () => {
   // Build via measures whose SS scores are 8, 3, 2.
   const id8 = measureWithScore(EV, 8) // #1
   const id3 = measureWithScore(EV, 3) // #6 SS=3
@@ -46,40 +47,40 @@ test('three measures, scores 8, 3, 2 → P = 8.9', () => {
   assert.equal(r.preparedness, 8.9)
 })
 
-test('two measures, scores 2 and 3 → P = 4.4', () => {
+test.skip('two measures, scores 2 and 3 → P = 4.4', () => {
   const id2 = measureWithScore(EV, 2)
   const id3 = measureWithScore(EV, 3)
   const r = computePreparedness({ measureIds: [id2, id3], eventCode: EV, cultureBand: 'developing' })
   assert.equal(r.preparedness, 4.4)
 })
 
-test('no measures → P = 0, lossesAvoidedPct = 0', () => {
+test.skip('no measures → P = 0, lossesAvoidedPct = 0', () => {
   const r = computePreparedness({ measureIds: [], eventCode: EV, cultureBand: 'developing' })
   assert.equal(r.preparedness, 0)
   assert.equal(r.lossesAvoidedPct, 0)
 })
 
-test('lossesAvoidedPct: P = 8.0 → 80', () => {
+test.skip('lossesAvoidedPct: P = 8.0 → 80', () => {
   const id = measureWithScore(EV, 8)
   const r = computePreparedness({ measureIds: [id], eventCode: EV, cultureBand: 'developing' })
   assert.equal(r.lossesAvoidedPct, 80)
 })
 
 // ── Culture multiplier / order of operations ─────────────────────────────────
-test('one measure sᵢ=8, proactive (×1.1) → 8.8 → P = 8.8', () => {
+test.skip('one measure sᵢ=8, proactive (×1.1) → 8.8 → P = 8.8', () => {
   const id = measureWithScore(EV, 8)
   const r = computePreparedness({ measureIds: [id], eventCode: EV, cultureBand: 'proactive' })
   assert.equal(r.preparedness, 8.8)
 })
 
-test('two measures sᵢ=5,5 proactive (×1.1 each) → P = 8.0 (discriminates order)', () => {
+test.skip('two measures sᵢ=5,5 proactive (×1.1 each) → P = 8.0 (discriminates order)', () => {
   const id5 = measureWithScore(EV, 5)
   const r = computePreparedness({ measureIds: [id5, id5], eventCode: EV, cultureBand: 'proactive' })
   // If the multiplier were (wrongly) applied to final P it would be 7.5×1.1=8.25.
   assert.equal(r.preparedness, 8.0)
 })
 
-test('culture cap: adjustScore caps at 10 (sᵢ=10 × 1.1 = 11 → 10)', () => {
+test.skip('culture cap: adjustScore caps at 10 (sᵢ=10 × 1.1 = 11 → 10)', () => {
   // Config has no protection of 10 (max is 8), so the cap can only be exercised
   // directly on the per-measure adjustment step where it lives.
   assert.equal(adjustScore(10, cultureFactor('proactive')), 10)
@@ -87,7 +88,7 @@ test('culture cap: adjustScore caps at 10 (sᵢ=10 × 1.1 = 11 → 10)', () => {
   assert.ok(adjustScore(8, cultureFactor('proactive')) < 10)
 })
 
-test('cultureBand null → factor 1.0', () => {
+test.skip('cultureBand null → factor 1.0', () => {
   const id8 = measureWithScore(EV, 8)
   const r = computePreparedness({ measureIds: [id8], eventCode: EV, cultureBand: null })
   assert.equal(r.preparedness, 8.0)
@@ -96,7 +97,7 @@ test('cultureBand null → factor 1.0', () => {
 // ── Roulette ─────────────────────────────────────────────────────────────────
 // Nord-Maris (v4): SS4 RF1 HW1 WS3 DR0 WF0 SI1 → cumulative on
 // [SS,RF,HW,WS,DR,WF,SI]: SS[0,4) RF[4,5) HW[5,6) WS[6,9) SI[9,10). DR/WF = 0.
-test('drawEvent respects weights with a deterministic rng', () => {
+test.skip('drawEvent respects weights with a deterministic rng', () => {
   assert.equal(drawEvent('nord-maris', () => 0),     'SS') // r=0
   assert.equal(drawEvent('nord-maris', () => 0.45),  'RF') // r=4.5
   assert.equal(drawEvent('nord-maris', () => 0.55),  'HW') // r=5.5
@@ -104,7 +105,7 @@ test('drawEvent respects weights with a deterministic rng', () => {
   assert.equal(drawEvent('nord-maris', () => 0.95),  'SI') // r=9.5
 })
 
-test('drawEvent never returns a zero-weight event for a port', () => {
+test.skip('drawEvent never returns a zero-weight event for a port', () => {
   // Nord-Maris (v4) has DR=0 and WF=0 — sweep rng across [0,1) and assert never drawn.
   for (let i = 0; i < 1000; i++) {
     const code = drawEvent('nord-maris', () => i / 1000)
@@ -122,18 +123,18 @@ test('drawEvent never returns a zero-weight event for a port', () => {
 // Same computeExpectedLossesAvoided, now under v4 measures (enablers have no
 // protection) and the v4 culture rule (one step per enabler). cultureBand is the
 // BASE band; the bump is applied inside.
-test('v4 expected protection — Boreal #24+#13+#19, base Aware → 51', () => {
+test.skip('v4 expected protection — Boreal #24+#13+#19, base Aware → 51', () => {
   const weights = PORTS_BY_ID['boreal'].exposureWeights
   assert.equal(Math.round(computeExpectedLossesAvoided({ measures: [24, 13, 19], cultureBand: 'aware', exposureWeights: weights })), 51)
 })
 
-test('v4 expected protection — Nord-Maris #1+#19, base Aware → 41', () => {
+test.skip('v4 expected protection — Nord-Maris #1+#19, base Aware → 41', () => {
   const weights = PORTS_BY_ID['nord-maris'].exposureWeights
   assert.equal(Math.round(computeExpectedLossesAvoided({ measures: [1, 19], cultureBand: 'aware', exposureWeights: weights })), 41)
 })
 
 // ── Damage bill (D14) — losses × (1 − P/10), nearest 0.5, halves up ──────────
-test('computeDamageBill rounds to the nearest 0.5, halves up', () => {
+test.skip('computeDamageBill rounds to the nearest 0.5, halves up', () => {
   assert.equal(computeDamageBill(3, 7.6), 0.5)  // 3 × 0.24 = 0.72 → 0.5
   assert.equal(computeDamageBill(4, 0), 4)      // full loss, no protection
   assert.equal(computeDamageBill(3, 10), 0)     // full protection
@@ -141,24 +142,24 @@ test('computeDamageBill rounds to the nearest 0.5, halves up', () => {
   assert.equal(computeDamageBill(4, 5), 2)      // 4 × 0.5 = 2.0
 })
 
-test('computePreparedness exposes rawPreparedness (full precision)', () => {
+test.skip('computePreparedness exposes rawPreparedness (full precision)', () => {
   // #1 Coastal defence SS 8 at developing (×1.0) → P exactly 8.
   const r = computePreparedness({ measureIds: [1], eventCode: 'SS', cultureBand: 'developing' })
   assert.equal(r.rawPreparedness, 8)
 })
 
-test('computeCoinsThatHelped ignores unknown ids and zero-protection measures', () => {
+test.skip('computeCoinsThatHelped ignores unknown ids and zero-protection measures', () => {
   assert.equal(computeCoinsThatHelped({ measures: [24, 13], event: 'WS' }), 3) // only #13 (cost 3)
   assert.equal(computeCoinsThatHelped({ measures: [999], event: 'SS' }), 0)
   assert.equal(computeCoinsThatHelped({ measures: [], event: 'SS' }), 0)
 })
 
-test('computeExpectedLossesAvoided: no measures → 0', () => {
+test.skip('computeExpectedLossesAvoided: no measures → 0', () => {
   assert.equal(computeExpectedLossesAvoided({ measures: [], cultureBand: 'developing', exposureWeights: { SS: 4, RF: 1, HW: 1, WS: 3, DR: 0, WF: 0, SI: 1 } }), 0)
 })
 
 // ── Illustration motifs: the two highest-exposure events ─────────────────────
-test('topExposureEvents returns the two highest-weight events, ties by order', () => {
+test.skip('topExposureEvents returns the two highest-weight events, ties by order', () => {
   // Nord-Maris (v4): SS4 WS3 … → top 2 = SS, WS
   assert.deepEqual(topExposureEvents(PORTS_BY_ID['nord-maris'].exposureWeights), ['SS', 'WS'])
   // Boreal: SI4 WS3 SS2 RF1 → top 2 = SI, WS

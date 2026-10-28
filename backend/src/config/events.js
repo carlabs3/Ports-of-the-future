@@ -1,22 +1,23 @@
-// Extreme weather events (EWE) — the 7 "roulette" events.
-// Source of truth for phase-2 scoring. Transcribe EXACTLY.
-// Chronic hazards (sea-level rise, erosion) are NOT roulette events and are
-// intentionally absent here.
+// Extreme weather events (EWE) — the 7 "roulette" events (workshop v5).
+// Source of truth: this prompt's Appendix D (names) and docs/workshop-v5.md
+// section 4 ("What happens"). Chronic hazards (sea-level rise, erosion) are NOT
+// roulette events and are intentionally absent.
 //
-// lossValue = damage tokens (1–5) inflicted when the event hits unprotected.
+// v5: there is NO global lossValue any more. Damage depends on the PORT and the
+// ROUND — see each port's `impacts` / `impactRound3Plus` and the scoring service.
 
-// Canonical event-code order, reused as the column order for measure
-// protection and port exposure weights.
+// Canonical event-code order, reused as the column order for measure protection
+// and the per-port wheels and impacts.
 export const EVENT_CODES = ['SS', 'RF', 'HW', 'WS', 'DR', 'WF', 'SI']
 
 export const EVENTS = [
-  { code: 'SS', name: 'Storm surge & coastal flooding', lossValue: 4 },
-  { code: 'RF', name: 'Heavy rain & river flooding',    lossValue: 4 },
-  { code: 'HW', name: 'Heatwave',                        lossValue: 3 },
-  { code: 'WS', name: 'Windstorm & cyclone',            lossValue: 4 },
-  { code: 'DR', name: 'Drought & water scarcity',       lossValue: 3 },
-  { code: 'WF', name: 'Wildfire',                        lossValue: 3 },
-  { code: 'SI', name: 'Snow, ice & cold snap',          lossValue: 3 },
+  { code: 'SS', name: 'Storm surge',    description: 'Low pressure and strong onshore winds push the sea above its normal level and over quays and dikes.' },
+  { code: 'RF', name: 'River flooding', description: 'Long or intense rain makes rivers, canals and torrents overflow onto port land.' },
+  { code: 'HW', name: 'Heatwave',       description: 'Several days of very high temperatures, often with warm nights and high humidity.' },
+  { code: 'WS', name: 'Windstorm',      description: 'Sustained high winds and violent gusts, from winter storms, tropical cyclones or local winds.' },
+  { code: 'DR', name: 'Drought',        description: 'A long dry spell lowers rivers and puts pressure on the water supply.' },
+  { code: 'WF', name: 'Wildfire',       description: 'Fire in the vegetation around the port or along its access roads and railways.' },
+  { code: 'SI', name: 'Snow & ice',     description: 'Heavy snow, freezing rain or days of deep frost that stop surface operations.' },
 ]
 
 // Indexable by code.

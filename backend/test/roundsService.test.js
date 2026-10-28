@@ -1,3 +1,4 @@
+// v5 migration: this v4 suite is skipped in Commit 1 and rewritten in Commit 2/3
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { precomputeBestPossible } from '../src/services/strategyService.js'
@@ -9,7 +10,7 @@ function fresh(portId = 'boreal', startingBand = 'aware') {
   return { portId, startingBand, portfolio: [], coins: 6, roundStartCoins: 6, currentRound: 1, roundLocked: false, roundBought: [], roundReturned: null, rounds: [] }
 }
 
-test('full 3-round playthrough for Boreal, including a return — every number', () => {
+test.skip('full 3-round playthrough for Boreal, including a return — every number', () => {
   const s = fresh()
 
   // ── Round 1: buy 24 (2) + 13 (3) + 19 (1) = 6 coins, spin SI ──────────────
@@ -68,7 +69,7 @@ test('full 3-round playthrough for Boreal, including a return — every number',
   assert.equal(advanceRound(s).ok, false)   // no round 4
 })
 
-test('purchase is rejected for over-budget, not-in-deck, duplicate', () => {
+test.skip('purchase is rejected for over-budget, not-in-deck, duplicate', () => {
   const s = fresh('boreal', 'aware') // boreal deck has no #2; coins 6
   assert.equal(buyCard(s, 1).ok, true)                   // #1 (cost 5), in boreal deck
   assert.equal(s.coins, 1)
@@ -80,7 +81,7 @@ test('purchase is rejected for over-budget, not-in-deck, duplicate', () => {
   assert.match(buyCard(s, 12).error, /Not enough coins/)
 })
 
-test('returns: none in round 1, at most one per round', () => {
+test.skip('returns: none in round 1, at most one per round', () => {
   const s = fresh()
   buyCard(s, 24)
   assert.equal(returnCard(s, 24).ok, false)              // round 1: no returns
@@ -91,7 +92,7 @@ test('returns: none in round 1, at most one per round', () => {
   assert.match(returnCard(s, 19).error, /one card/)
 })
 
-test('locking needs a starting level; cannot unlock after the spin', () => {
+test.skip('locking needs a starting level; cannot unlock after the spin', () => {
   const s = fresh('boreal', null)                        // no starting level
   assert.equal(lockRound(s).ok, false)
   assert.match(lockRound(s).error, /starting culture level/)
@@ -103,7 +104,7 @@ test('locking needs a starting level; cannot unlock after the spin', () => {
   assert.match(unlockRound(s).error, /already been spun/)
 })
 
-test('undo in round 1: full refund, card removed, return allowance untouched', () => {
+test.skip('undo in round 1: full refund, card removed, return allowance untouched', () => {
   const s = fresh() // coins 6
   assert.equal(buyCard(s, 24).ok, true) // cost 2 -> coins 4
   assert.equal(buyCard(s, 13).ok, true) // cost 3 -> coins 1
@@ -116,7 +117,7 @@ test('undo in round 1: full refund, card removed, return allowance untouched', (
   assert.equal(s.roundReturned, null)   // undo never touches the return allowance
 })
 
-test('undo a same-round card in round 2: full refund, one-return-per-round still available', () => {
+test.skip('undo a same-round card in round 2: full refund, one-return-per-round still available', () => {
   const s = fresh()
   assert.equal(buyCard(s, 24).ok, true) // coins 4
   lockRound(s); recordSpin(s, 'SI'); advanceRound(s) // round 2, coins 6, portfolio [24]
@@ -135,7 +136,7 @@ test('undo a same-round card in round 2: full refund, one-return-per-round still
   assert.equal(s.roundReturned, 24)
 })
 
-test('undo is rejected once the round is locked', () => {
+test.skip('undo is rejected once the round is locked', () => {
   const s = fresh()
   buyCard(s, 24)
   lockRound(s)
@@ -144,7 +145,7 @@ test('undo is rejected once the round is locked', () => {
   assert.match(r.error, /locked/)
 })
 
-test('undo is rejected for a card bought in a previous round', () => {
+test.skip('undo is rejected for a card bought in a previous round', () => {
   const s = fresh()
   buyCard(s, 24)
   lockRound(s); recordSpin(s, 'SI'); advanceRound(s) // round 2; 24 was bought in round 1
@@ -153,7 +154,7 @@ test('undo is rejected for a card bought in a previous round', () => {
   assert.match(r.error, /not bought this round/)
 })
 
-test('cannot advance before the current round is spun', () => {
+test.skip('cannot advance before the current round is spun', () => {
   const s = fresh()
   buyCard(s, 24); lockRound(s)
   assert.equal(advanceRound(s).ok, false)

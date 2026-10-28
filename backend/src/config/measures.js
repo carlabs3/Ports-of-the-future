@@ -1,4 +1,4 @@
-// Adaptation measures — the 26 buyable cards (workshop v4, Appendix B).
+// Adaptation measures — the 28 buyable solution cards (workshop v5, Appendix A).
 // Source of truth for scoring. Transcribe EXACTLY.
 //
 // protection: tokens of protection per event code (SS RF HW WS DR WF SI).
@@ -18,13 +18,13 @@ export const MEASURES = [
     description: "Green roofs, rain gardens and permeable paving let rain soak into the ground instead of rushing into the drains. They cut flooding from heavy rain up to the storm they were sized for, and planted areas take a few degrees off the hottest afternoons. A true cloudburst will still overwhelm them." },
   { id: 5,  name: 'Nature-based coastal & riverbank protection', cost: 2, raisesCultureLevel: false, protection: { SS: 4, RF: 3, HW: 0, WS: 2, DR: 0, WF: 0, SI: 0 },
     description: "Restored wetlands, mangroves, salt marsh and planted riverbanks, sometimes built with dredged sediment, stabilise the shoreline and slow incoming water. They reduce erosion, soften surges and river floods, and bring biodiversity back. They protect less than concrete and take years to mature, but they grow stronger over time instead of weaker." },
-  { id: 6,  name: 'Structural health monitoring', cost: 3, raisesCultureLevel: false, protection: { SS: 3, RF: 3, HW: 2, WS: 3, DR: 0, WF: 0, SI: 3 },
+  { id: 6,  name: 'Structural health monitoring', cost: 2, raisesCultureLevel: false, protection: { SS: 3, RF: 3, HW: 2, WS: 3, DR: 0, WF: 0, SI: 3 },
     description: "Sensors on locks, quay walls, cranes and rail track measure stress, vibration and deformation around the clock. Monitoring stops no storm, but it shows where a structure is close to failing, so it can be repaired before a flood, gale, heatwave or hard freeze finishes the job." },
   { id: 7,  name: 'Digital twin & predictive maintenance', cost: 4, raisesCultureLevel: false, protection: { SS: 3, RF: 3, HW: 2, WS: 2, DR: 3, WF: 0, SI: 3 },
     description: "A virtual replica of a critical asset, such as a lock or a rail network, fed with live data. It predicts how the asset degrades under heat, frost, floods or low water and schedules maintenance before failure. Especially useful in river ports, where it helps run the lock when water levels turn critical." },
   { id: 8,  name: 'Early warning & forecasting system', cost: 2, raisesCultureLevel: false, protection: { SS: 2, RF: 2, HW: 2, WS: 2, DR: 2, WF: 2, SI: 2 },
     description: "Port-specific weather alerts with operational thresholds for wind, rain, heat, frost and water levels. A warning stops nothing on its own, but a few hours of notice let the port secure cargo, stop cranes, move equipment and protect people. It helps a little against every hazard." },
-  { id: 9,  name: 'Real-time operations platform', cost: 3, raisesCultureLevel: false, protection: { SS: 3, RF: 3, HW: 0, WS: 3, DR: 3, WF: 0, SI: 3 },
+  { id: 9,  name: 'Real-time operations platform', cost: 4, raisesCultureLevel: false, protection: { SS: 3, RF: 3, HW: 0, WS: 3, DR: 3, WF: 0, SI: 3 },
     description: "A shared digital platform that reroutes vessels, trains and trucks before and during a disruption, anticipates congestion and organises the recovery. It doesn't protect assets: it keeps cargo moving while the weather does its worst, cutting the operational losses of floods, storms, low water and ice." },
   { id: 10, name: 'Emergency response plan & drills', cost: 2, raisesCultureLevel: false, protection: { SS: 3, RF: 3, HW: 3, WS: 3, DR: 0, WF: 2, SI: 3 },
     description: "A plan that assigns roles, evacuation routes, communication chains and equipment-protection steps for each hazard, tested in regular drills. It protects people first and assets second, and reduces losses in almost every type of event. An untested plan is paper; a drilled one saves time, cargo and lives." },
@@ -54,12 +54,16 @@ export const MEASURES = [
     description: "Basins and tanks catch peak rainfall before it floods the port, then hold that water for dry periods: dust suppression, cooling, firefighting reserves. One infrastructure for two opposite problems, too much water and too little." },
   { id: 23, name: 'Parametric climate insurance', cost: 1, raisesCultureLevel: false, protection: { SS: 1, RF: 1, HW: 1, WS: 1, DR: 1, WF: 1, SI: 1 },
     description: "Insurance that pays out automatically when a measured trigger is crossed (wind speed, water level, temperature), without a long loss assessment. It prevents nothing physically, but it turns a financial shock into a manageable one and pays for a fast recovery. Transferring risk is not the same as reducing it." },
-  { id: 24, name: 'Winterisation package', cost: 2, raisesCultureLevel: false, protection: { SS: 0, RF: 0, HW: 0, WS: 0, DR: 0, WF: 0, SI: 7 },
+  { id: 24, name: 'Winterisation package', cost: 3, raisesCultureLevel: false, protection: { SS: 0, RF: 0, HW: 0, WS: 0, DR: 0, WF: 0, SI: 7 },
     description: "De-icing systems for cranes and gantries, heated rail switches, snow-clearing equipment, insulated pipes and cold-weather gear for staff. During an ice storm it makes the difference between a paralysed port and a working one. Entirely specific: it does nothing the rest of the year." },
   { id: 25, name: 'Firebreaks & vegetation management', cost: 2, raisesCultureLevel: false, protection: { SS: 0, RF: 0, HW: 1, WS: 0, DR: 0, WF: 6, SI: 0 },
     description: "Cleared buffer strips, managed vegetation along the perimeter and access corridors, and joint plans with regional fire services. Wildfire reaches a port through its surroundings: access roads, power lines, the edge of fuel storage. Managing that interface keeps the flames, and most of the disruption, at a distance." },
-  { id: 26, name: 'Cool surfaces & shaded yards', cost: 2, raisesCultureLevel: false, protection: { SS: 0, RF: 0, HW: 5, WS: 0, DR: 0, WF: 0, SI: 0 },
+  { id: 26, name: 'Cool surfaces & shaded yards', cost: 1, raisesCultureLevel: false, protection: { SS: 0, RF: 0, HW: 5, WS: 0, DR: 0, WF: 0, SI: 0 },
     description: "Reflective coatings on yards and roofs, shade structures over work areas and reefer stacks, light-coloured paving. Surface temperatures drop by several degrees, equipment overheats less and outdoor work stays possible for longer. A targeted answer to heat, with nothing to offer against water or wind." },
+  { id: 27, name: 'Snow & ice clearance fleet', cost: 2, raisesCultureLevel: false, protection: { SS: 0, RF: 0, HW: 0, WS: 0, DR: 0, WF: 0, SI: 4 },
+    description: "Modern snow ploughs, gritting stock, de-icing for yards and access roads, and an agreement with the municipality so the port road is cleared first. Trucks keep moving and staff can get to work. It doesn't help frozen cranes or iced-up berths." },
+  { id: 28, name: 'Harbour ice management', cost: 3, raisesCultureLevel: false, protection: { SS: 0, RF: 0, HW: 0, WS: 0, DR: 0, WF: 0, SI: 5 },
+    description: "Air-bubbler systems that keep berths free of ice, plus a shared contract for an ice-class tug. Ferries and cargo ships can still dock when the harbour freezes over. Only useful where sea ice forms." },
 ]
 
 // Shared cards that must be in every port's deck (v4 Appendix A).
