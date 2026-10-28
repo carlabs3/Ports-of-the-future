@@ -23,6 +23,24 @@ function textOnColour(hex) {
   return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#0B1B33' : '#FFFFFF'
 }
 
+// Strategy card image (800×450 webp in /public/solutions, named by measure id).
+// Lazy-loaded; alt is the card title; a missing file falls back to the title on
+// a plain panel with no broken-image icon.
+function MeasureCardImage({ id, title }) {
+  const [failed, setFailed] = useState(false)
+  const src = `/solutions/measure-${String(id).padStart(2, '0')}.webp`
+  return (
+    <div style={{ width: '100%', aspectRatio: '16 / 9', background: COLOR.ice, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {failed ? (
+        <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, textAlign: 'center', padding: '8px 10px', lineHeight: 1.25 }}>{title}</span>
+      ) : (
+        <img src={src} alt={title} loading="lazy" onError={() => setFailed(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      )}
+    </div>
+  )
+}
+
 // Read-only PARI observation board. It only reads and displays live PAR data;
 // it never triggers reveals, confirms actions, or writes anything.
 
@@ -79,42 +97,6 @@ const cardTitle = {
 // Read-aloud helpers (Strategy tab).
 const COIN_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve']
 const andList = (arr) => arr.length <= 1 ? arr.join('') : `${arr.slice(0, -1).join(', ')} and ${arr[arr.length - 1]}`
-
-// Hazard colours for the card chips — these match the printed cards. Only the
-// chip's square carries the colour (for contrast); the text stays ink/white.
-const EVENT_ORDER = ['SS', 'RF', 'HW', 'WS', 'DR', 'WF', 'SI']
-const EVENT_COLOR = { SS: '#77AEF1', RF: '#4177C0', HW: '#E3BF40', WS: '#5C6B7A', DR: '#C5E4FF', WF: '#0B1B33', SI: '#7B6FE0' }
-
-// The hazard chips for one measure. Enablers → one "+1 culture level" chip. A
-// measure with the same value on all 7 hazards → one "All 7 events N" chip.
-// Otherwise one chip per hazard it protects (value > 0), in canonical order.
-function measureChips(m) {
-  if (!m) return []
-  if (m.raisesCultureLevel) return [{ kind: 'enabler' }]
-  const vals = EVENT_ORDER.map(c => m.protection?.[c] ?? 0)
-  if (vals[0] > 0 && vals.every(v => v === vals[0])) return [{ kind: 'all', value: vals[0] }]
-  return EVENT_ORDER.filter(c => (m.protection?.[c] ?? 0) > 0).map(c => ({ kind: 'event', code: c, value: m.protection[c] }))
-}
-
-// One hazard chip. The colour lives only in the square; the text stays ink (or
-// white on a selected/owned dark card) so it always reads.
-function Chip({ chip, dark }) {
-  const base = {
-    display: 'inline-flex', alignItems: 'center', gap: 4,
-    fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold,
-    padding: '2px 6px', whiteSpace: 'nowrap',
-    border: `1px solid ${dark ? 'rgba(255,255,255,0.4)' : COLOR.ink}`,
-    color: dark ? COLOR.onInk : COLOR.ink, background: 'transparent',
-  }
-  if (chip.kind === 'enabler') return <span style={base}>★ +1 culture level</span>
-  if (chip.kind === 'all') return <span style={base}>All 7 events {chip.value}</span>
-  return (
-    <span style={base}>
-      <span style={{ width: 9, height: 9, display: 'inline-block', background: EVENT_COLOR[chip.code] || COLOR.ink, border: `1px solid ${dark ? 'rgba(255,255,255,0.35)' : 'rgba(11,27,51,0.2)'}` }} />
-      {chip.code} {chip.value}
-    </span>
-  )
-}
 
 // Mono section label (tokens). Shared by the rebuilt tabs.
 const uiLabel = {
@@ -499,6 +481,21 @@ export default function PortsControlCenter() {
   useEffect(() => {
     if (phase === 'debrief') fetchDebrief()
   }, [phase, fetchDebrief])
+
+  // On entering the Strategy phase, auto-select Team A (the team named "Team A",
+  // or "A"; otherwise the alphabetically-first team). Runs once per entry — if the
+  // facilitator has already picked a team (editingGroup set), that choice is kept,
+  // and closing the panel afterwards does not re-select. Waits for groups to load.
+  const strategyAutoPicked = useRef(false)
+  useEffect(() => {
+    if (phase !== 'strategy') { strategyAutoPicked.current = false; return }
+    if (strategyAutoPicked.current) return
+    if (editingGroup) { strategyAutoPicked.current = true; return } // keep remembered choice
+    const names = groupStats.map(g => g.group)
+    if (names.length === 0) return // groups not loaded yet
+    const pick = names.find(n => n === 'Team A' || n === 'A') || [...names].sort((a, b) => a.localeCompare(b))[0]
+    if (pick) { setEditingGroup(pick); strategyAutoPicked.current = true }
+  }, [phase, groupStats, editingGroup])
 
   // ── Strategy / round helpers (v4) ───────────────────────────────────────────
   // The team currently being dictated to.
@@ -1180,27 +1177,26 @@ export default function PortsControlCenter() {
                       const bg = unaffordable ? '#F3F5F8' : dark ? COLOR.ink : COLOR.paper
                       const fg = dark ? COLOR.onInk : (unaffordable ? '#5C6B7A' : COLOR.ink)
                       const border = unaffordable ? '2px dashed #5C6B7A' : `2px solid ${COLOR.ink}`
-                      const line = owned ? 'Owned'
+                      // Status line only when there is something to say; never a
+                      // coin amount or protection score (image + title only).
+                      const status = owned ? 'Owned'
                         : selected ? '✓ Selected · tap to remove'
-                          : unaffordable ? `${m.cost} coins · not enough left`
-                            : `${m.cost} coin${m.cost !== 1 ? 's' : ''}`
+                          : unaffordable ? 'Not enough coins'
+                            : null
                       return (
                         <div key={m.id} style={{ display: 'flex', flexDirection: 'column' }}>
                           <button type="button" aria-pressed={held} onClick={() => onCardTap(m)} disabled={tapDisabled}
-                            style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', border, borderRadius: 0, background: bg, color: fg, padding: '12px 14px', minHeight: 148, cursor: tapDisabled ? 'default' : 'pointer' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                              <span style={{ fontFamily: FONT.mono, fontWeight: FW.bold, fontSize: FS.body }}>#{m.id}</span>
-                              <span style={{ display: 'flex', gap: 3 }} title={`${m.cost} coins`}>
-                                {Array.from({ length: m.cost }).map((_, i) => (
-                                  <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: dark ? COLOR.onInk : COLOR.ink }} />
-                                ))}
-                              </span>
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', textAlign: 'left', border, borderRadius: 0, background: bg, color: fg, padding: 0, minHeight: 148, cursor: tapDisabled ? 'default' : 'pointer', opacity: unaffordable ? 0.75 : 1 }}>
+                            <MeasureCardImage id={m.id} title={m.name} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                                <span style={{ fontFamily: FONT.sans, fontWeight: FW.semibold, fontSize: FS.sm, lineHeight: 1.25 }}>{m.name}</span>
+                                <span style={{ fontFamily: FONT.mono, fontWeight: FW.bold, fontSize: FS.micro, flexShrink: 0, color: dark ? 'rgba(255,255,255,0.85)' : COLOR.ink60 }}>#{m.id}</span>
+                              </div>
+                              {status && (
+                                <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, marginTop: 'auto', color: dark ? 'rgba(255,255,255,0.8)' : (unaffordable ? '#5C6B7A' : COLOR.ink60) }}>{status}</span>
+                              )}
                             </div>
-                            <span style={{ fontFamily: FONT.sans, fontWeight: FW.semibold, fontSize: FS.sm, lineHeight: 1.25 }}>{m.name}</span>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 'auto' }}>
-                              {measureChips(m).map((c, i) => <Chip key={i} chip={c} dark={dark} />)}
-                            </div>
-                            <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: dark ? 'rgba(255,255,255,0.8)' : (unaffordable ? '#5C6B7A' : COLOR.ink60) }}>{line}</span>
                           </button>
                           {owned && canReturn && (
                             <button type="button" onClick={() => onReturnCard(m)} disabled={busy}
