@@ -1352,7 +1352,7 @@ export default function PortsControlCenter() {
                             <div style={bigNum}>{Math.round(e.lossesAvoidedPct ?? 0)}%</div>
                             <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>of losses avoided</p>
                           </div>
-                          <p style={sideLine}>Damage {e.damageBill != null ? e.damageBill.toFixed(1) : '—'} of {e.impact ?? '—'} impact</p>
+                          <p style={sideLine}>Damage: {e.damageBill != null ? e.damageBill.toFixed(1) : '—'} coins (instead of {e.impact ?? '—'})</p>
                         </div>
                         <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                           <div>

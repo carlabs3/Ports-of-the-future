@@ -119,7 +119,7 @@ export default function JoinSession() {
       <div style={s.hero}>
         <div style={s.heroInner}>
           <h1 style={s.title}>Ports of the Future</h1>
-          <p style={s.tagline}>Port Adaptation Readiness Index</p>
+          <p style={s.tagline}>CAP Index</p>
         </div>
       </div>
 

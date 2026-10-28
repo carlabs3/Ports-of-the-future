@@ -209,7 +209,7 @@ export default function FacilitatorDashboard() {
                       style={{ flex: 1 }}
                     >
                       <button style={{ ...s.btnOpen, width: '100%' }}>
-                        {session.status === 'closed' ? 'View results' : 'Control centre (PAR)'} →
+                        {session.status === 'closed' ? 'View results' : 'Control centre (CAP)'} →
                       </button>
                     </Link>
                   )}

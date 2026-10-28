@@ -358,7 +358,7 @@ export default function parRouter(io) {
       res.json({ individual, demographics, groups: computeParGroups(individual) })
     } catch (err) {
       console.error('PAR results error:', err.message)
-      res.status(500).json({ error: 'Error al obtener resultados PAR' })
+      res.status(500).json({ error: 'Error al obtener resultados CAP' })
     }
   })
 
