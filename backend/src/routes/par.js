@@ -7,7 +7,7 @@ import Session from '../models/Session.js'
 import { PORTS, PORTS_BY_ID } from '../config/ports/index.js'
 import { MEASURES_BY_ID } from '../config/measures.js'
 import { getPublicQuestionnaire } from '../services/questionnaireService.js'
-import { persistParSubmission, buildParRanking, computeParGroups } from '../services/parSubmissionService.js'
+import { persistParSubmission, buildParRanking, computeParGroups, computeCapBreakdowns } from '../services/parSubmissionService.js'
 import { getPublicMeasures } from '../services/measuresService.js'
 import { computeCultureBand, applyCultureMeasureBonus, BAND_ORDER } from '../services/cultureService.js'
 import { drawEvent } from '../services/wheelService.js'
@@ -334,7 +334,7 @@ export default function parRouter(io) {
         climateZone: d.climateZone || '',
         coastalSetting: d.coastalSetting || '',
       }))
-      res.json({ individual, demographics, groups: computeParGroups(individual) })
+      res.json({ individual, demographics, groups: computeParGroups(individual), breakdowns: computeCapBreakdowns(docs) })
     } catch (err) {
       console.error('PAR results error:', err.message)
       res.status(500).json({ error: 'Error al obtener resultados CAP' })
