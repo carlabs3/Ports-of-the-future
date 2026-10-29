@@ -5,7 +5,7 @@ import { applyCultureMeasureBonus } from './cultureService.js'
 import {
   computePreparedness, computeCoinsThatHelped, expectedProtection, impactsForRound,
 } from './preparednessService.js'
-import { computeStrategyScore } from './strategyService.js'
+import { computeStrategyScoreRaw } from './strategyService.js'
 
 // Round rules (workshop v5). Pure state transitions on a plain `state` object so
 // the whole 3-round flow is testable without a DB. The endpoints map the Mongoose
@@ -92,6 +92,8 @@ export function recordSpin(state, event) {
   const impact = impacts[event] ?? 0
   const damage = impact * (1 - prep.rawPreparedness / 10) // full precision (D1)
   const expected = expectedProtection({ measures: state.portfolio, effectiveBand: effBand, likelihoods, impacts })
+  // Raw strategy ratio (exp ÷ best, unrounded); strategyScore is its rounded %.
+  const strategyRaw = computeStrategyScoreRaw({ expectedProtection: expected, portId: state.portId, round, startingBand: state.startingBand })
 
   const coinsSpent = state.roundBought.reduce((s, id) => s + (MEASURES_BY_ID[id]?.cost || 0), 0)
   const refund = state.roundReturned != null ? Math.floor((MEASURES_BY_ID[state.roundReturned]?.cost || 0) / 2) : 0
@@ -112,7 +114,8 @@ export function recordSpin(state, event) {
     damageBill:          damage,          // full precision (display rounds to 1 dp)
     impact,                               // the drawn event's impact this round (v5)
     expectedProtection:  expected,
-    strategyScore:       computeStrategyScore({ expectedProtection: expected, portId: state.portId, round, startingBand: state.startingBand }),
+    strategyScore:       Math.round(strategyRaw * 100), // rounded whole % (back-compat)
+    strategyScoreRaw:    strategyRaw,                    // unrounded ratio (ranking + /10 display)
     coinsThatHelped:     computeCoinsThatHelped({ measures: state.portfolio, event }),
     heldCost,
     cultureLevel:        effBand,

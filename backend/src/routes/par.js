@@ -266,7 +266,11 @@ export default function parRouter(io) {
       const ranking = computeFinalRanking(strategies.map(s => ({
         group:          s.group,
         portId:         s.portId,
-        strategyScores: s.rounds.map(r => r.strategyScore).filter(v => v != null),
+        // Unrounded per-round raw ratios (exp÷best); fall back to strategyScore/100
+        // for rounds saved before strategyScoreRaw existed (D10 — no migration).
+        strategyRaws:   s.rounds
+          .map(r => r.strategyScoreRaw != null ? r.strategyScoreRaw : (r.strategyScore != null ? r.strategyScore / 100 : null))
+          .filter(v => v != null),
         damages:        s.rounds.map(r => r.damageBill),
       })))
       const rankByGroup = Object.fromEntries(ranking.map(r => [r.group, r]))

@@ -7,7 +7,6 @@ import { expectedProtection, impactsForRound } from './preparednessService.js'
 // Strategy scoring (v5, Appendix C) — pure, server-side. Reuses expectedProtection
 // (and through it the single preparedness formula); no second copy of the maths.
 
-const round1 = x => Math.round(x * 10) / 10
 const mean = a => a.reduce((s, v) => s + v, 0) / a.length
 
 // ── Best possible expected protection ──────────────────────────────────────
@@ -63,29 +62,43 @@ export function bestPossibleExpectedProtection(portId, round, startingBand) {
 }
 
 // ── Strategy score ─────────────────────────────────────────────────────────
-// expected protection ÷ best possible, as a whole %. Both inputs are UNROUNDED;
-// the ratio is rounded ONCE, half-up (D9). The denominator uses the team's
-// STARTING culture level and the round's budget; it does not change on a return.
-export function computeStrategyScore({ expectedProtection: exp, portId, round, startingBand }) {
+// Raw strategy = expected protection ÷ best possible (0..1), UNROUNDED. The
+// denominator uses the team's STARTING culture level and the round's budget; it
+// does not change on a return. computeStrategyScore is the rounded whole-% form
+// (D9) kept for back-compat; the display derives both the % and the /10 score
+// from the raw value.
+export function computeStrategyScoreRaw({ expectedProtection: exp, portId, round, startingBand }) {
   const best = bestPossibleExpectedProtection(portId, round, startingBand)
   if (!best) return 0
-  return Math.round((exp / best) * 100)
+  return exp / best
+}
+
+export function computeStrategyScore(args) {
+  return Math.round(computeStrategyScoreRaw(args) * 100)
 }
 
 // ── Final ranking ──────────────────────────────────────────────────────────
-// Average of the 3 strategy scores, highest first; ties share a rank. Luck = sum
-// of the 3 damages (shown next to the ranking, never used to rank).
+// Final score = mean of the three rounds' RAW strategy ratios (×100), kept
+// UNROUNDED here and rounded only for display (fixes the earlier D9 violation of
+// averaging pre-rounded scores). Highest first. Two teams share a rank only when
+// their unrounded means are exactly equal — never because they round the same.
+// `strategyRaws` are the per-round raw ratios (0..1); callers fall back to
+// strategyScore/100 for entries saved before strategyScoreRaw existed. Luck =
+// sum of the 3 damages (shown next to the ranking, never used to rank).
 export function computeFinalRanking(teams = []) {
-  const rows = teams.map(t => ({
-    group: t.group,
-    portId: t.portId ?? null,
-    finalScore: (t.strategyScores && t.strategyScores.length) ? round1(mean(t.strategyScores)) : 0,
-    totalDamage: (t.damages || []).reduce((s, d) => s + (Number(d) || 0), 0),
-  }))
+  const rows = teams.map(t => {
+    const raws = (t.strategyRaws || []).filter(v => v != null)
+    return {
+      group: t.group,
+      portId: t.portId ?? null,
+      finalScore: raws.length ? mean(raws) * 100 : 0, // unrounded (display rounds)
+      totalDamage: (t.damages || []).reduce((s, d) => s + (Number(d) || 0), 0),
+    }
+  })
   rows.sort((a, b) => b.finalScore - a.finalScore)
   let rank = 0, prev = null
   rows.forEach((row, i) => {
-    if (row.finalScore !== prev) { rank = i + 1; prev = row.finalScore }
+    if (prev === null || row.finalScore !== prev) { rank = i + 1; prev = row.finalScore }
     row.rank = rank
   })
   return rows

@@ -22,7 +22,8 @@ const roundSchema = new Schema({
   damageBill:        Number,                            // full precision (v5: impact×(1−P/10))
   impact:            Number,                            // v5: the drawn event's impact this port/round (1–5)
   expectedProtection: Number,                          // %
-  strategyScore:     Number,                           // whole %
+  strategyScore:     Number,                           // whole % (round(raw×100))
+  strategyScoreRaw:  Number,                           // v5: unrounded exp÷best (ranking + /10)
   coinsThatHelped:   Number,
   heldCost:          Number,                           // total cost of cards held this round
   lossValue:         Number,                           // v4 (old sessions only): the drawn event's loss value
