@@ -29,6 +29,19 @@ export function formatScore10(ratio) {
   return `${round1((Number(ratio) || 0) * 10).toFixed(1)} / 10`
 }
 
+// F3: a team's debrief totals from its per-round raw `damageBill` + `impact`.
+// Total damage SHOWN = Σ round1(damageBill) (so it equals the three shown round
+// figures); potential = Σ impact (integers); avoided = potential − totalDamageShown;
+// avoidedPct = round(avoided / potential × 100), half up. Ranking/awards use raw
+// values, never these.
+export function debriefTotals(rounds = []) {
+  const totalDamageShown = round1(rounds.reduce((s, r) => s + round1(r.damageBill), 0))
+  const totalPotential = rounds.reduce((s, r) => s + (Number(r.impact) || 0), 0)
+  const avoidedShown = round1(totalPotential - totalDamageShown)
+  const avoidedPct = totalPotential > 0 ? Math.round((avoidedShown / totalPotential) * 100) : 0
+  return { totalDamageShown, totalPotential, avoidedShown, avoidedPct }
+}
+
 // E3: the three money figures that must add up on screen. `damage` and `impact`
 // are UNROUNDED; round damage and potential to 1 dp, then derive avoided by
 // subtraction (not a separate rounding) so damageShown + avoidedShown always

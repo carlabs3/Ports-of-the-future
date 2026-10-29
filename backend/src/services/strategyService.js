@@ -88,11 +88,16 @@ export function computeStrategyScore(args) {
 export function computeFinalRanking(teams = []) {
   const rows = teams.map(t => {
     const raws = (t.strategyRaws || []).filter(v => v != null)
+    const totalDamageRaw = (t.damages || []).reduce((s, d) => s + (Number(d) || 0), 0)
+    const totalPotential = (t.potentials || []).reduce((s, p) => s + (Number(p) || 0), 0)
     return {
       group: t.group,
       portId: t.portId ?? null,
-      finalScore: raws.length ? mean(raws) * 100 : 0, // unrounded (display rounds)
-      totalDamage: (t.damages || []).reduce((s, d) => s + (Number(d) || 0), 0),
+      finalScore: raws.length ? mean(raws) * 100 : 0,                         // unrounded (display rounds)
+      totalDamage: totalDamageRaw,                                            // kept for back-compat
+      totalDamageRaw,                                                         // Σ damageBill (F2, raw)
+      totalPotential,                                                         // Σ impact (F2)
+      avoidedPctRaw: totalPotential > 0 ? 1 - totalDamageRaw / totalPotential : 0, // F2 (raw ratio 0..1)
     }
   })
   rows.sort((a, b) => b.finalScore - a.finalScore)
@@ -102,6 +107,18 @@ export function computeFinalRanking(teams = []) {
     row.rank = rank
   })
   return rows
+}
+
+// Awards (F1), from ranking rows. Best overall strategy = highest finalScore;
+// Most losses avoided = highest avoidedPctRaw. Both on the UNROUNDED values;
+// exact ties return every winning row (the UI joins the names with " & ").
+export function computeAwards(rows = []) {
+  const winners = (key) => {
+    if (!rows.length) return []
+    const max = Math.max(...rows.map(r => Number(r[key]) || -Infinity))
+    return rows.filter(r => (Number(r[key]) || -Infinity) === max)
+  }
+  return { bestStrategy: winners('finalScore'), mostAvoided: winners('avoidedPctRaw') }
 }
 
 // Convenience: a port's per-round wheel likelihoods (server-side only).

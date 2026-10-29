@@ -96,8 +96,10 @@ export function buildDebriefTeam({ team, port, rankRow = {} }) {
     group:              team.group,
     portName:           port?.name || null,
     rank:               rankRow.rank ?? null,
-    finalScore:         rankRow.finalScore ?? 0,   // mean of the 3 strategy scores (skill)
-    totalDamage:        rankRow.totalDamage ?? 0,  // sum of the 3 damages (luck)
+    finalScore:         rankRow.finalScore ?? 0,     // mean of the 3 strategy scores (skill)
+    totalDamage:        rankRow.totalDamage ?? 0,    // sum of the 3 damages (luck)
+    totalPotential:     rankRow.totalPotential ?? 0, // Σ impact (F2)
+    avoidedPctRaw:      rankRow.avoidedPctRaw ?? 0,   // raw avoided ratio (F2 — ranking/awards)
     portfolio:          portfolioCards(team.portfolio),
     rounds,
     impactsByRound,                                 // full impact table — DEBRIEF ONLY

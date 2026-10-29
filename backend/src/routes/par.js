@@ -12,7 +12,7 @@ import { getPublicMeasures } from '../services/measuresService.js'
 import { computeCultureBand, applyCultureMeasureBonus, BAND_ORDER } from '../services/cultureService.js'
 import { drawEvent } from '../services/wheelService.js'
 import { buyCard, returnCard, undoCard, lockRound, unlockRound, recordSpin, advanceRound, ROUND_BUDGET } from '../services/roundsService.js'
-import { computeFinalRanking } from '../services/strategyService.js'
+import { computeFinalRanking, computeAwards } from '../services/strategyService.js'
 import { canRevealWheel, buildWheelPayload, buildDrawPayload, buildOutcomesTeam, buildDebriefTeam } from '../services/parPayloads.js'
 
 const BAND_LABELS = {
@@ -272,6 +272,7 @@ export default function parRouter(io) {
           .map(r => r.strategyScoreRaw != null ? r.strategyScoreRaw : (r.strategyScore != null ? r.strategyScore / 100 : null))
           .filter(v => v != null),
         damages:        s.rounds.map(r => r.damageBill),
+        potentials:     s.rounds.map(r => r.impact), // Σ impact → totalPotential (F2)
       })))
       const rankByGroup = Object.fromEntries(ranking.map(r => [r.group, r]))
 
@@ -279,7 +280,13 @@ export default function parRouter(io) {
         buildDebriefTeam({ team: s, port: PORTS_BY_ID[s.portId], rankRow: rankByGroup[s.group] || {} }))
 
       teams.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
-      res.json({ roundBudgets: ROUND_BUDGET, teams })
+
+      // Awards (F1) — the winning rows, with port name resolved for display.
+      const awardRow = r => ({ group: r.group, portName: PORTS_BY_ID[r.portId]?.name || null, finalScore: r.finalScore, avoidedPctRaw: r.avoidedPctRaw, totalDamageRaw: r.totalDamageRaw, totalPotential: r.totalPotential })
+      const won = computeAwards(ranking)
+      const awards = { bestStrategy: won.bestStrategy.map(awardRow), mostAvoided: won.mostAvoided.map(awardRow) }
+
+      res.json({ roundBudgets: ROUND_BUDGET, teams, awards })
     } catch (err) {
       console.error('PAR debrief error:', err.message)
       res.status(500).json({ error: 'Could not load the debrief' })
