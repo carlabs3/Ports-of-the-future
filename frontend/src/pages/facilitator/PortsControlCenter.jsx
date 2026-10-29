@@ -1415,6 +1415,11 @@ export default function PortsControlCenter() {
                   const { damageShown, potentialShown, avoidedShown } = damageBreakdown(e.damageBill, e.impact)
                   const score10 = (e.strategyScoreRaw ?? 0) * 10
                   const scoreStr = (Math.round(score10 * 10) / 10).toFixed(1)
+                  // H1: the four columns' big numbers share one size + sit on the
+                  // same baseline (a bottom block pushed down with margin-top:auto).
+                  const bigNum4 = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(28px, 4.2vh, 46px)', lineHeight: 1 }
+                  const col = { display: 'flex', flexDirection: 'column', padding: '14px 18px', borderRight: `2px solid ${COLOR.ink}`, borderBottom: `2px solid ${COLOR.ink}`, minWidth: 0, minHeight: 184 }
+                  const colLabel = { fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, margin: 0 }
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1, minHeight: 0 }}>
                       {/* 1 · port banner */}
@@ -1435,61 +1440,75 @@ export default function PortsControlCenter() {
                         </div>
                       </div>
 
-                      {/* 2 · three steps */}
-                      <div style={{ display: 'flex', border: `2px solid ${COLOR.ink}`, flexShrink: 0 }}>
-                        <div style={{ flex: 1, minWidth: 0, padding: '14px 18px', borderRight: `2px solid ${COLOR.ink}` }}>
-                          <div style={uiL}>1 · The wheel drew</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '8px 0' }}>
-                            <div style={{ width: 48, height: 48, flexShrink: 0, border: HAIRLINE, background: EVENT_HEX[code] || COLOR.ice, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <HazardIcon code={code} color={textOnColour(EVENT_HEX[code] || '#C5E4FF')} size={28} />
+                      {/* 2 · four columns (H1) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', border: `2px solid ${COLOR.ink}`, overflow: 'hidden', flexShrink: 0 }}>
+                        {/* 1 · the wheel drew */}
+                        <div style={col}>
+                          <div style={colLabel}>1 · The wheel drew</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0' }}>
+                            <div style={{ width: 40, height: 40, flexShrink: 0, border: HAIRLINE, background: EVENT_HEX[code] || COLOR.ice, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <HazardIcon code={code} color={textOnColour(EVENT_HEX[code] || '#C5E4FF')} size={24} />
                             </div>
-                            <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: 'clamp(22px, 2.6vw, 34px)', letterSpacing: LS.tight, lineHeight: 1 }}>{wheelOutcome.eventName || code}</div>
+                            <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: 'clamp(18px, 2vw, 26px)', letterSpacing: LS.tight, lineHeight: 1.05 }}>{wheelOutcome.eventName || code}</div>
                           </div>
-                          <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>{formatEurBn(potentialShown)} potential losses for your port</p>
+                          <div style={{ marginTop: 'auto' }}>
+                            <div style={bigNum4}>{formatEurBn(potentialShown)}</div>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '4px 0 0' }}>potential losses for your port</p>
+                          </div>
                         </div>
-                        <div style={{ flex: 1, minWidth: 0, position: 'relative', padding: '18px 18px 14px', borderRight: `2px solid ${COLOR.ink}`, background: band.bg }}>
+                        {/* 2 · your cards protected (band) */}
+                        <div style={{ ...col, position: 'relative', background: band.bg, paddingTop: 18 }}>
                           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 8, background: band.color }} />
-                          <div style={uiL}>2 · Your cards protected</div>
-                          <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(40px, 7vh, 72px)', color: band.color, lineHeight: 1, margin: '4px 0 8px' }}>{protShown}%</div>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: band.color, color: '#fff', fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, padding: '3px 8px' }}>{band.icon} {band.label}</span>
-                          <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, margin: '8px 0 0', fontWeight: 600 }}>{formatEurBn(avoidedShown)} avoided</p>
+                          <div style={colLabel}>2 · Your cards protected</div>
+                          <div style={{ marginTop: 'auto' }}>
+                            <div style={{ ...bigNum4, color: band.color }}>{protShown}%</div>
+                            <div style={{ margin: '8px 0 0' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: band.color, color: '#fff', fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, padding: '3px 8px' }}>{band.icon} {band.label}</span>
+                            </div>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, margin: '6px 0 0', fontWeight: 600 }}>{formatEurBn(avoidedShown)} avoided</p>
+                          </div>
                         </div>
-                        <div style={{ flex: 1, minWidth: 0, padding: '14px 18px' }}>
-                          <div style={uiL}>3 · Damage sustained</div>
-                          <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(26px, 3.6vh, 40px)', lineHeight: 1, margin: '6px 0 8px' }}>{formatEurBn(damageShown)} / {formatEurBn(potentialShown)}</div>
-                          <PotentialLossBar damage={e.damageBill} potential={e.impact} />
-                          <p style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, color: COLOR.ink60, margin: '6px 0 0' }}><span style={{ color: '#3A62AE' }}>■</span> damage sustained · <span style={{ color: '#9db6e0' }}>□</span> avoided</p>
+                        {/* 3 · damage sustained */}
+                        <div style={col}>
+                          <div style={colLabel}>3 · Damage sustained</div>
+                          <div style={{ marginTop: 'auto' }}>
+                            <div style={bigNum4}>{formatEurBn(damageShown)}</div>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '4px 0 8px' }}>of {formatEurBn(potentialShown)}</p>
+                            <PotentialLossBar damage={e.damageBill} potential={e.impact} />
+                            <p style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, color: COLOR.ink60, margin: '6px 0 0' }}><span style={{ color: '#3A62AE' }}>■</span> damage sustained · <span style={{ color: '#9db6e0' }}>□</span> avoided</p>
+                          </div>
+                        </div>
+                        {/* 4 · your strategy (blue) */}
+                        <div style={{ ...col, background: COLOR.harbour, color: COLOR.onHarbour }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                            <span style={{ ...colLabel, color: COLOR.onHarbour }}>4 · Your strategy</span>
+                            <span style={{ ...colLabel, color: 'rgba(255,255,255,0.7)' }}>All events</span>
+                          </div>
+                          <div style={{ marginTop: 'auto' }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                              <span style={bigNum4}>{scoreStr}</span>
+                              <span style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 700, opacity: 0.85 }}>/ 10</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 3, margin: '8px 0 0' }}>
+                              {Array.from({ length: 10 }).map((_, i) => { const fill = Math.max(0, Math.min(1, score10 - i)); return (<div key={i} style={{ flex: 1, height: 10, background: 'rgba(255,255,255,0.25)', position: 'relative' }}><div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${fill * 100}%`, background: COLOR.onHarbour }} /></div>) })}
+                            </div>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.micro, margin: '6px 0 0', opacity: 0.9, lineHeight: 1.35 }}>Same score whatever the wheel draws. 10 = the best combination possible for your port and budget.</p>
+                            <details style={{ fontFamily: FONT.sans, fontSize: FS.micro, marginTop: 4 }}>
+                              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How is this score calculated?</summary>
+                              <p style={{ margin: '6px 0 0', opacity: 0.9, lineHeight: 1.4 }}>Your strategy compares how much of the likely losses your cards would avoid, across every event on this round's wheel, with the best combination of cards your port could buy with the same budget and starting culture. It does not depend on what the wheel drew.</p>
+                            </details>
+                          </div>
                         </div>
                       </div>
 
                       {/* 3 · band legend */}
                       <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0, flexShrink: 0 }}>Protection colour: <span style={{ color: '#157347', fontWeight: 700 }}>●</span> Strong 70% and above · <span style={{ color: '#8A5A00', fontWeight: 700 }}>◐</span> Partial 40–69% · <span style={{ color: '#B42318', fontWeight: 700 }}>○</span> Weak below 40%</p>
 
-                      {/* 4 · cards + 5 · strategy box */}
-                      <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
-                        <div style={{ flex: '1 1 66%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
-                          <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, letterSpacing: LS.mono, textTransform: 'uppercase', flexShrink: 0 }}>Your cards against {wheelOutcome.eventName || code}</div>
-                          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10, alignContent: 'start' }}>
-                            {orderedIds.length === 0 ? <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No cards.</p> : orderedIds.map(id => renderCard(id, true))}
-                          </div>
-                        </div>
-                        <div style={{ flex: '1 1 34%', minWidth: 0, maxWidth: 380, border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, alignSelf: 'flex-start' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                            <span style={{ ...uiLabel, color: COLOR.onHarbour }}>Your strategy</span>
-                            <span style={{ ...uiLabel, color: 'rgba(255,255,255,0.7)' }}>All possible events</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                            <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(40px, 6vh, 60px)', lineHeight: 1 }}>{scoreStr}</span>
-                            <span style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 700, opacity: 0.85 }}>/ 10</span>
-                          </div>
-                          <div style={{ display: 'flex', gap: 3 }}>
-                            {Array.from({ length: 10 }).map((_, i) => { const fill = Math.max(0, Math.min(1, score10 - i)); return (<div key={i} style={{ flex: 1, height: 12, background: 'rgba(255,255,255,0.25)', position: 'relative' }}><div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${fill * 100}%`, background: COLOR.onHarbour }} /></div>) })}
-                          </div>
-                          <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: 0, opacity: 0.9 }}>Same score whatever the wheel draws. 10 = the best combination possible for your port and budget.</p>
-                          <details style={{ fontFamily: FONT.sans, fontSize: FS.sm }}>
-                            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How is this score calculated?</summary>
-                            <p style={{ margin: '6px 0 0', opacity: 0.9, lineHeight: 1.4 }}>Your strategy compares how much of the likely losses your cards would avoid, across every event on this round's wheel, with the best combination of cards your port could buy with the same budget and starting culture. It does not depend on what the wheel drew.</p>
-                          </details>
+                      {/* 4 · cards — full width */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0 }}>
+                        <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, letterSpacing: LS.mono, textTransform: 'uppercase', flexShrink: 0 }}>Your cards against {wheelOutcome.eventName || code}</div>
+                        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10, alignContent: 'start' }}>
+                          {orderedIds.length === 0 ? <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No cards.</p> : orderedIds.map(id => renderCard(id, true))}
                         </div>
                       </div>
                     </div>
