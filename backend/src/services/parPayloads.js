@@ -95,6 +95,8 @@ export function buildDebriefTeam({ team, port, rankRow = {} }) {
   return {
     group:              team.group,
     portName:           port?.name || null,
+    portDesc:           port?.description || '', // location line (view B header)
+    startingBand:       team.startingBand ?? null, // "started <Level>" (view B header)
     rank:               rankRow.rank ?? null,
     finalScore:         rankRow.finalScore ?? 0,     // mean of the 3 strategy scores (skill)
     totalDamage:        rankRow.totalDamage ?? 0,    // sum of the 3 damages (luck)
