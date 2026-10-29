@@ -6,7 +6,7 @@ import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
 import { pickExtremes } from '../../utils/areaExtremes.js'
 import { formatEurBn, formatPercent, formatScore10, damageBreakdown, debriefTotals } from '../../utils/format.js'
 import { cardStatus, orderCards, cultureLine } from '../../utils/postSpin.js'
-import { rankTeams, luckText } from '../../utils/debrief.js'
+import { rankTeams, getLuckLabel, sortByTeamName } from '../../utils/debrief.js'
 import PotentialLossBar from '../../components/PotentialLossBar.jsx'
 import StandingsScreen from '../../components/StandingsScreen.jsx'
 import { getProtectionBand } from '../../utils/protectionBand.js'
@@ -933,7 +933,7 @@ export default function PortsControlCenter() {
     }
     if (phase === 'debrief') {
       if (closed) return { text: 'Session ended.', primary: null }
-      const dteams = debrief?.teams || []
+      const dteams = sortByTeamName(debrief?.teams || []) // H3: team-name order
       if (debriefView === 'A') return { text: 'Announce both awards: one for decisions, one for the wheel.', primary: { label: 'Next: team by team →', onClick: advanceDebrief, disabled: false } }
       // view B: walk the teams, then "Close the session…" on the last team.
       const last = debriefTeamIdx >= dteams.length - 1
@@ -1616,6 +1616,9 @@ export default function PortsControlCenter() {
             // ── A · Room overview ────────────────────────────────────────────
             const viewA = () => {
               const ranked = rankTeams(teams, debriefSort)
+              const isStrat = debriefSort === 'strategy'
+              // The "other" ranking for the last column (raw-value rules, F1/F4).
+              const otherRank = Object.fromEntries(rankTeams(teams, isStrat ? 'avoided' : 'strategy').map(x => [x.group, x.rank]))
               const roomAvgRaw = teams.reduce((s, t) => s + (t.finalScore || 0), 0) / teams.length
               const roomAvoided = teams.reduce((s, t) => s + (totals[t.group]?.avoidedShown || 0), 0)
               const roomPotential = teams.reduce((s, t) => s + (totals[t.group]?.totalPotential || 0), 0)
@@ -1641,27 +1644,36 @@ export default function PortsControlCenter() {
                     <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono, color: COLOR.ink60 }}>2026 · 2031 · 2036</span>
                   </div>
 
-                  {/* awards */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-                    <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {headerRow('Best overall strategy', 'Your decisions', true)}
-                      <div style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 800 }}>{names(best)}{best.length === 1 && best[0].portName ? <span style={{ fontWeight: 500, opacity: 0.85 }}> · {best[0].portName}</span> : null}</div>
-                      <div style={bigNum}>{finalScore10(best[0]?.finalScore)}</div>
-                      <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: 0, opacity: 0.9 }}>Highest average strategy score over the three rounds</p>
+                  {/* awards — port photo on the left */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 16 }}>
+                    <div style={{ display: 'flex', border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, minHeight: 150, overflow: 'hidden' }}>
+                      {best[0]?.portImage && <img src={best[0].portImage} alt={`Illustration of the port of ${best[0].portName || 'this port'}`} style={{ width: 220, flexShrink: 0, objectFit: 'cover' }} />}
+                      <div style={{ flex: 1, minWidth: 0, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {headerRow('Best overall strategy', 'Your decisions', true)}
+                        <div style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 800 }}>{names(best)}{best.length === 1 && best[0].portName ? <span style={{ fontWeight: 500, opacity: 0.85 }}> · {best[0].portName}</span> : null}</div>
+                        <div style={bigNum}>{finalScore10(best[0]?.finalScore)}</div>
+                        <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: 0, opacity: 0.9 }}>Highest average strategy score over the three rounds</p>
+                      </div>
                     </div>
-                    <div style={{ border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {headerRow('Most losses avoided', 'Depends on the wheel', false)}
-                      <div style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 800 }}>{names(most)}{most.length === 1 && most[0].portName ? <span style={{ fontWeight: 500, color: COLOR.ink60 }}> · {most[0].portName}</span> : null}</div>
-                      <div style={bigNum}>{mostTot?.avoidedPct ?? 0}%</div>
-                      <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>{formatEurBn(mostTot?.avoidedShown || 0)} of {formatEurBn(mostTot?.totalPotential || 0)} potential losses avoided over the three rounds</p>
+                    <div style={{ display: 'flex', border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, minHeight: 150, overflow: 'hidden' }}>
+                      {most[0]?.portImage && <img src={most[0].portImage} alt={`Illustration of the port of ${most[0].portName || 'this port'}`} style={{ width: 220, flexShrink: 0, objectFit: 'cover' }} />}
+                      <div style={{ flex: 1, minWidth: 0, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {headerRow('Most losses avoided', 'Depends on the wheel', false)}
+                        <div style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 800 }}>{names(most)}{most.length === 1 && most[0].portName ? <span style={{ fontWeight: 500, color: COLOR.ink60 }}> · {most[0].portName}</span> : null}</div>
+                        <div style={bigNum}>{mostTot?.avoidedPct ?? 0}%</div>
+                        <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>{formatEurBn(mostTot?.avoidedShown || 0)} of {formatEurBn(mostTot?.totalPotential || 0)} potential losses avoided over the three rounds</p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* ranking */}
+                  {/* ranking — the toggle changes the columns and the header text */}
                   <div style={{ border: HAIRLINE, padding: '14px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
-                      <span style={uiLabel}>Ranking</span>
-                      <div style={{ display: 'flex', gap: 0, border: `2px solid ${COLOR.ink}` }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h3, letterSpacing: LS.tight }}>{isStrat ? 'Ranking by strategy' : 'Ranking by losses avoided'}</span>
+                        <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '2px 0 0' }}>{isStrat ? 'Your decisions: the score of each round’s plan, out of 10.' : 'The wheel: damage sustained in each round, against what the event could have cost.'}</p>
+                      </div>
+                      <div style={{ display: 'flex', gap: 0, border: `2px solid ${COLOR.ink}`, flexShrink: 0 }}>
                         {[['strategy', 'By strategy'], ['avoided', 'By losses avoided']].map(([k, label], i) => (
                           <button key={k} onClick={() => setDebriefSort(k)}
                             style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, border: 'none', borderLeft: i ? `2px solid ${COLOR.ink}` : 'none', borderRadius: 0, padding: '6px 12px', cursor: 'pointer', background: debriefSort === k ? COLOR.ink : COLOR.paper, color: debriefSort === k ? COLOR.onInk : COLOR.ink }}>
@@ -1671,15 +1683,14 @@ export default function PortsControlCenter() {
                       </div>
                     </div>
                     <div style={{ overflowX: 'auto' }}>
-                      <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 760 }}>
+                      <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 820 }}>
                         <thead>
                           <tr>
                             <th style={th}>#</th>
                             <th style={th}>Team · Port</th>
-                            {[1, 2, 3].map(n => <th key={n} style={th}>R{n} · {YEARS[n - 1]}</th>)}
-                            <th style={{ ...th, ...colHi(debriefSort === 'strategy') }}>Final strategy</th>
-                            <th style={th}>Total losses</th>
-                            <th style={{ ...th, ...colHi(debriefSort === 'avoided') }}>Avoided</th>
+                            {[1, 2, 3].map(rn => <th key={rn} style={th}>R{rn} · {YEARS[rn - 1]} {isStrat ? 'strategy' : 'damage'}</th>)}
+                            <th style={{ ...th, ...colHi(true) }}>{isStrat ? 'Final strategy' : 'Losses avoided'}</th>
+                            <th style={th}>{isStrat ? 'Losses rank' : 'Strategy rank'}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1688,13 +1699,33 @@ export default function PortsControlCenter() {
                             return (
                               <tr key={t.group}>
                                 <td style={{ ...td, fontFamily: FONT.mono, fontWeight: 700 }}>{t.rank}</td>
-                                <td style={td}><div style={{ fontWeight: 700 }}>{t.group}</div><div style={{ fontSize: FS.micro, color: COLOR.ink60 }}>{t.portName || '—'}</div></td>
-                                {[1, 2, 3].map(n => { const r = roundOf(t, n); return (
-                                  <td key={n} style={td}>{r ? (<><div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{formatScore10(r.strategyScoreRaw)}</div><div style={{ fontSize: FS.micro, color: COLOR.ink60 }}>{r.eventName || r.drawnEvent}</div></>) : '—'}</td>
+                                <td style={td}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <div style={{ width: 96, height: 56, flexShrink: 0, background: COLOR.ice, border: HAIRLINE, overflow: 'hidden' }}>{t.portImage && <img src={t.portImage} alt={`Illustration of the port of ${t.portName || 'this port'}`} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}</div>
+                                    <div style={{ minWidth: 0 }}><div style={{ fontWeight: 700 }}>{t.group}</div><div style={{ fontSize: FS.micro, color: COLOR.ink60 }}>{t.portName || '—'}</div></div>
+                                  </div>
+                                </td>
+                                {[1, 2, 3].map(rn => { const r = roundOf(t, rn); return (
+                                  <td key={rn} style={td}>{!r ? '—' : isStrat ? (
+                                    <><div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{formatScore10(r.strategyScoreRaw)}</div><div style={{ fontSize: FS.micro, color: COLOR.ink60 }}>{r.eventName || r.drawnEvent}</div></>
+                                  ) : (
+                                    <><div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{formatEurBn(round1(r.damageBill))} of {formatEurBn(r.impact)}</div><PotentialLossBar damage={r.damageBill} potential={r.impact} height={8} /><div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 2 }}>{r.eventName || r.drawnEvent}</div></>
+                                  )}</td>
                                 ) })}
-                                <td style={{ ...td, ...colHi(debriefSort === 'strategy'), fontFamily: FONT.mono, fontWeight: 700 }}>{finalScore10(t.finalScore)}</td>
-                                <td style={td}><div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{formatEurBn(tot.totalDamageShown)}</div><div style={{ fontSize: FS.micro, color: COLOR.ink60 }}>of {formatEurBn(tot.totalPotential)}</div></td>
-                                <td style={{ ...td, ...colHi(debriefSort === 'avoided'), minWidth: 170 }}><PotentialLossBar damage={tot.totalDamageRaw} potential={tot.totalPotential} height={12} /><div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 4 }}>{formatEurBn(tot.avoidedShown)} avoided · {tot.avoidedPct}%</div></td>
+                                {isStrat ? (
+                                  <td style={{ ...td, ...colHi(true), minWidth: 150 }}>
+                                    <div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{finalScore10(t.finalScore)}</div>
+                                    <div style={{ height: 10, background: COLOR.ice, border: HAIRLINE, marginTop: 4 }}><div style={{ width: `${Math.max(0, Math.min(100, t.finalScore || 0))}%`, height: '100%', background: COLOR.harbour }} /></div>
+                                    <div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 3 }}>Average of the three rounds</div>
+                                  </td>
+                                ) : (
+                                  <td style={{ ...td, ...colHi(true), minWidth: 170 }}>
+                                    <div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{tot.avoidedPct}% avoided</div>
+                                    <PotentialLossBar damage={tot.totalDamageRaw} potential={tot.totalPotential} height={10} />
+                                    <div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 3 }}>{formatEurBn(tot.totalDamageShown)} damage of {formatEurBn(tot.totalPotential)}</div>
+                                  </td>
+                                )}
+                                <td style={td}><span style={{ display: 'inline-block', fontFamily: FONT.mono, fontWeight: 700, border: `2px solid ${COLOR.ink}`, padding: '2px 8px' }}>#{otherRank[t.group]}</span></td>
                               </tr>
                             )
                           })}
@@ -1702,7 +1733,7 @@ export default function PortsControlCenter() {
                       </table>
                     </div>
                   </div>
-                  <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>Round cells show the strategy score (/10) and the event the wheel drew. Bar: blue = damage sustained, light = losses avoided.</p>
+                  <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>{isStrat ? 'Round cells: strategy score and the event drawn. Last column: the team’s place in the losses ranking.' : 'Bars: blue = damage sustained, light = losses avoided. Last column: the team’s place in the strategy ranking.'}</p>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                     {factBox('Room average strategy', finalScore10(roomAvgRaw), 'across the room')}
@@ -1715,34 +1746,47 @@ export default function PortsControlCenter() {
 
             // ── B · Team by team ─────────────────────────────────────────────
             const viewB = () => {
-              const t = teams[Math.min(debriefTeamIdx, teams.length - 1)]
+              const bTeams = sortByTeamName(teams)          // H3: team-name order
+              const n = bTeams.length
+              const t = bTeams[Math.min(debriefTeamIdx, n - 1)]
               if (!t) return null
               const tot = totals[t.group]
               const startLabel = BAND_RAMP[t.startingBand]?.label || null
               const sub = [t.portName, t.portDesc, startLabel ? `started ${startLabel}` : null].filter(Boolean).join(' · ')
-              const go = d => setDebriefTeamIdx(i => Math.max(0, Math.min(teams.length - 1, i + d)))
+              const stratRank = Object.fromEntries(rankTeams(teams, 'strategy').map(x => [x.group, x.rank]))[t.group]
+              const avoidRank = Object.fromEntries(rankTeams(teams, 'avoided').map(x => [x.group, x.rank]))[t.group]
+              const go = d => setDebriefTeamIdx(i => Math.max(0, Math.min(n - 1, i + d)))
               const arrow = (label, d, disabled) => (
                 <button onClick={() => go(d)} disabled={disabled}
-                  style={{ width: 40, height: 40, border: `2px solid ${COLOR.onHarbour}`, borderRadius: 0, background: 'transparent', color: COLOR.onHarbour, fontSize: FS.h3, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 }}>{label}</button>
+                  style={{ width: 34, height: 34, border: `2px solid ${COLOR.ink}`, borderRadius: 0, background: 'transparent', color: COLOR.ink, fontSize: FS.h3, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.35 : 1 }}>{label}</button>
               )
+              const bannerChip = (text) => <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, letterSpacing: LS.mono, border: '2px solid #fff', padding: '4px 8px', background: 'rgba(0,0,0,0.35)', whiteSpace: 'nowrap' }}>{text}</span>
               const th = { fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, textAlign: 'left', padding: '8px 12px', borderBottom: HAIRLINE, whiteSpace: 'nowrap' }
               const td = { fontFamily: FONT.sans, fontSize: FS.body, padding: '12px', borderBottom: HAIRLINE, verticalAlign: 'middle' }
               return (
                 <>
-                  <div style={{ background: COLOR.ink, color: COLOR.onInk, border: `2px solid ${COLOR.ink}`, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: 'rgba(255,255,255,0.65)' }}>#{t.rank} of {teams.length} · by strategy</div>
-                      <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(28px, 3vw, 44px)', letterSpacing: LS.display, lineHeight: 1 }}>{t.group}</div>
-                      <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, opacity: 0.85, marginTop: 4 }}>{sub}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                  {/* G4-style port banner */}
+                  <div style={{ position: 'relative', height: 230, flexShrink: 0, border: `2px solid ${COLOR.ink}`, overflow: 'hidden', background: COLOR.ice }}>
+                    {t.portImage && <img src={t.portImage} alt={`Illustration of the port of ${t.portName || 'this port'}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 35%, rgba(0,0,0,0.78))' }} />
+                    <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: `2px solid ${COLOR.ink}`, padding: '4px 8px' }}>
                       {arrow('←', -1, debriefTeamIdx === 0)}
-                      <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono }}>TEAM {debriefTeamIdx + 1} OF {teams.length}</span>
-                      {arrow('→', 1, debriefTeamIdx >= teams.length - 1)}
+                      <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono, fontWeight: 700 }}>TEAM {debriefTeamIdx + 1} OF {n}</span>
+                      {arrow('→', 1, debriefTeamIdx >= n - 1)}
+                    </div>
+                    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '16px 20px', color: '#fff', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(28px, 3vw, 44px)', letterSpacing: LS.display, lineHeight: 1 }}>{t.group}</div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, opacity: 0.9, marginTop: 4 }}>{sub}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        {bannerChip(`STRATEGY #${stratRank} OF ${n}`)}
+                        {bannerChip(`LOSSES AVOIDED #${avoidRank} OF ${n}`)}
+                      </div>
                     </div>
                   </div>
                   <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0, lineHeight: 1.4 }}>
-                    Bar: <span style={{ color: '#3A62AE', fontWeight: 700 }}>blue</span> damage sustained · <span style={{ color: '#9db6e0', fontWeight: 700 }}>light</span> losses avoided. Luck = protection against the event drawn, compared with what your plan expected across all events.
+                    Bar: <span style={{ color: '#3A62AE', fontWeight: 700 }}>■</span> damage sustained · <span style={{ color: '#9db6e0', fontWeight: 700 }}>□</span> losses avoided. Luck compares your protection against the event drawn with what your plan expected across all events.
                   </p>
                   <div style={{ overflowX: 'auto', border: HAIRLINE }}>
                     <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 720 }}>
@@ -1750,16 +1794,17 @@ export default function PortsControlCenter() {
                         <th style={th}>Round · event drawn</th><th style={th}>Protection</th><th style={th}>Damage sustained / potential losses</th><th style={th}>Luck</th><th style={th}>Strategy</th>
                       </tr></thead>
                       <tbody>
-                        {[1, 2, 3].map(n => {
-                          const r = roundOf(t, n)
-                          if (!r) return <tr key={n}><td style={td}><strong>Round {n} · {YEARS[n - 1]}</strong></td><td style={td} colSpan={4}>—</td></tr>
+                        {[1, 2, 3].map(rn => {
+                          const r = roundOf(t, rn)
+                          if (!r) return <tr key={rn}><td style={td}><strong>Round {rn} · {YEARS[rn - 1]}</strong></td><td style={td} colSpan={4}>—</td></tr>
                           const dmg = round1(r.damageBill), pot = round1(r.impact)
+                          const luckPts = Math.round(r.rawLossesAvoidedPct || 0) - Math.round(r.expectedProtection || 0)
                           return (
-                            <tr key={n}>
-                              <td style={td}><strong>Round {n} · {YEARS[n - 1]}</strong><div style={{ fontSize: FS.sm, color: COLOR.ink60 }}>{r.eventName || r.drawnEvent}</div></td>
+                            <tr key={rn}>
+                              <td style={td}><strong>Round {rn} · {YEARS[rn - 1]}</strong><div style={{ fontSize: FS.sm, color: COLOR.ink60 }}>{r.eventName || r.drawnEvent}</div></td>
                               <td style={{ ...td, fontFamily: FONT.mono, fontWeight: 700 }}>{formatPercent((r.rawLossesAvoidedPct || 0) / 10)}</td>
                               <td style={td}><div style={{ fontFamily: FONT.mono, fontWeight: 700, marginBottom: 6 }}>{formatEurBn(dmg)} of {formatEurBn(pot)}</div><PotentialLossBar damage={r.damageBill} potential={r.impact} /></td>
-                              <td style={{ ...td, fontSize: FS.sm, fontWeight: 600, color: COLOR.ink60, whiteSpace: 'nowrap' }}>{luckText(r)}</td>
+                              <td style={{ ...td, fontSize: FS.sm, fontWeight: 600, color: COLOR.ink, whiteSpace: 'nowrap' }}>{getLuckLabel(luckPts)}</td>
                               <td style={{ ...td, fontFamily: FONT.mono, fontWeight: 700 }}>{formatScore10(r.strategyScoreRaw)}</td>
                             </tr>
                           )

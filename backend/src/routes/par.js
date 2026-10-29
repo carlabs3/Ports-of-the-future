@@ -302,7 +302,7 @@ export default function parRouter(io) {
       teams.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
 
       // Awards (F1) — the winning rows, with port name resolved for display.
-      const awardRow = r => ({ group: r.group, portName: PORTS_BY_ID[r.portId]?.name || null, finalScore: r.finalScore, avoidedPctRaw: r.avoidedPctRaw, totalDamageRaw: r.totalDamageRaw, totalPotential: r.totalPotential })
+      const awardRow = r => ({ group: r.group, portName: PORTS_BY_ID[r.portId]?.name || null, portImage: PORTS_BY_ID[r.portId]?.image || null, finalScore: r.finalScore, avoidedPctRaw: r.avoidedPctRaw, totalDamageRaw: r.totalDamageRaw, totalPotential: r.totalPotential })
       const won = computeAwards(ranking)
       const awards = { bestStrategy: won.bestStrategy.map(awardRow), mostAvoided: won.mostAvoided.map(awardRow) }
 

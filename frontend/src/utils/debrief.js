@@ -24,3 +24,19 @@ export function luckText({ rawLossesAvoidedPct, expectedProtection } = {}) {
   if (Math.abs(luck) <= 5) return '≈ As planned'
   return luck > 0 ? `▲ +${luck} pts · lucky` : `▼ −${-luck} pts · unlucky`
 }
+
+// H3 · luck as words (no colour; the arrows carry the meaning). `points` is the
+// F5 value: round(rawLossesAvoidedPct) − round(expectedProtection).
+export function getLuckLabel(points) {
+  const p = Number(points) || 0
+  if (p >= 15) return '▲▲ Very lucky'
+  if (p >= 6) return '▲ Lucky'
+  if (p >= -5) return '= As planned'
+  if (p >= -14) return '▼ Unlucky'
+  return '▼▼ Very unlucky'
+}
+
+// H3 · debrief B walks teams in team-name order (Team A, Team B …), not by rank.
+export function sortByTeamName(teams = []) {
+  return [...teams].sort((a, b) => String(a.group).localeCompare(String(b.group), undefined, { numeric: true }))
+}
