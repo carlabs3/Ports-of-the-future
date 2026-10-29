@@ -9,6 +9,7 @@ import { cardStatus, orderCards, cultureLine } from '../../utils/postSpin.js'
 import { rankTeams, getLuckLabel, sortByTeamName } from '../../utils/debrief.js'
 import PotentialLossBar from '../../components/PotentialLossBar.jsx'
 import StandingsScreen from '../../components/StandingsScreen.jsx'
+import CapBreakdownView from '../../components/CapBreakdownView.jsx'
 import { getProtectionBand } from '../../utils/protectionBand.js'
 import { HazardIcon } from '../../components/HazardIcons.jsx'
 import { socket } from '../../utils/socket.js'
@@ -174,24 +175,6 @@ const uiLabel = {
   textTransform: 'uppercase', color: COLOR.ink60, margin: 0,
 }
 
-// Single-select filter chip for the PAR tab. Active (a value chosen) reads
-// harbour; empty reads neutral.
-function FilterSelect({ value, onChange, placeholder, options }) {
-  const active = !!value
-  return (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      style={{
-        fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: active ? FW.bold : FW.regular,
-        border: `1px solid ${active ? COLOR.harbour : COLOR.ink}`, borderRadius: 0,
-        padding: '9px 12px', background: COLOR.paper, color: active ? COLOR.harbour : COLOR.ink,
-        cursor: 'pointer',
-      }}>
-      <option value="">{placeholder}</option>
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  )
-}
-
 export default function PortsControlCenter() {
   const { code } = useParams()
 
@@ -279,8 +262,10 @@ export default function PortsControlCenter() {
 
   // PAR tab: combinable filters (v4 profile fields) + their labels for the
   // dropdowns. No minimum-group suppression (R1 removed it; it stays removed).
-  const [filters, setFilters] = useState({ portSize: '', governance: '', climateZone: '', coastalSetting: '' })
-  const [demoOptions, setDemoOptions] = useState({ portSize: [], governance: [], climateZone: [], coastalSetting: [] }) // each: [{ optionId, label }]
+  // CAP results: one view per profile question (replaces filters). `breakdowns`
+  // is the server's per-dimension aggregate; `parView` is the active tab.
+  const [breakdowns, setBreakdowns] = useState(null)
+  const [parView, setParView]       = useState('room') // 'room' | 'portSize' | 'governance' | 'climateZone' | 'coastalSetting'
 
   const joinUrl  = `${window.location.origin}/?code=${code}`
   const shortUrl = window.location.host // shown without the ?code= query string
@@ -293,6 +278,7 @@ export default function PortsControlCenter() {
         const dem = res.data.demographics || []
         setIndividual(ind)
         setGroupAgg(res.data.groups || [])
+        setBreakdowns(res.data.breakdowns || null)
         setRows(ind.map((r, i) => ({
           ...r,
           portSize:       dem[i]?.portSize       || '',
@@ -341,18 +327,6 @@ export default function PortsControlCenter() {
     api.get('/api/par/measures')
       .then(res => setMeasuresCatalog(res.data || []))
       .catch(() => {})
-    // World-zone labels for the PAR filter dropdown (ids live in the data).
-    api.get('/api/par/questionnaire')
-      .then(res => {
-        const d = res.data?.demographics || {}
-        setDemoOptions({
-          portSize:       d.portSize?.options       || [],
-          governance:     d.governance?.options     || [],
-          climateZone:    d.climateZone?.options    || [],
-          coastalSetting: d.coastalSetting?.options || [],
-        })
-      })
-      .catch(() => {})
   }, [code, fetchResults, fetchStrategies])
 
   // Live updates: join the room and listen for 'par:update'.
@@ -362,10 +336,11 @@ export default function PortsControlCenter() {
     joinRoom()
     socket.on('connect', joinRoom)
 
-    function onParUpdate({ individual: ind, groups: grp }) {
+    function onParUpdate({ individual: ind, groups: grp, breakdowns: bd }) {
       // par:update carries the full listing → replace, don't accumulate.
       if (ind) setIndividual(ind)
       if (grp) setGroupAgg(grp)
+      if (bd) setBreakdowns(bd)
       // Refresh rows/demographics too (payload has no portSize).
       fetchResults()
       // New PARs can change the base band → refresh effective culture bands.
@@ -413,19 +388,11 @@ export default function PortsControlCenter() {
     }
   }, [code, fetchResults, fetchStrategies])
 
-  // ── PAR tab: combinable filters + filtered aggregates (all client-side) ─────
-  const anyFilter = !!(filters.portSize || filters.governance || filters.climateZone || filters.coastalSetting)
-
-  const filteredRows = useMemo(() => rows.filter(r =>
-    (!filters.portSize       || r.portSize       === filters.portSize) &&
-    (!filters.governance     || r.governance     === filters.governance) &&
-    (!filters.climateZone    || r.climateZone    === filters.climateZone) &&
-    (!filters.coastalSetting || r.coastalSetting === filters.coastalSetting)
-  ), [rows, filters])
+  // ── PAR "Room" aggregates (all answers; filters removed in favour of views) ──
+  const filteredRows = rows
 
   const totalAnswers = rows.length         // all submissions this session
-  const shownCount   = filteredRows.length // after filters
-  const hasData      = shownCount > 0
+  const hasData      = rows.length > 0
 
   const fScores  = filteredRows.map(r => r.score)
   const fAverage = fScores.length ? Math.round(mean(fScores)) : 0
@@ -888,7 +855,15 @@ export default function PortsControlCenter() {
       }
     }
     if (phase === 'par') {
-      return { text: 'Talk through the room’s culture level.', primary: { label: 'Show teams →', onClick: () => changePhase('teams'), disabled: false } }
+      const order = ['room', 'portSize', 'governance', 'climateZone', 'coastalSetting']
+      const byLabel = { portSize: 'port size', governance: 'governance', climateZone: 'climate zone', coastalSetting: 'coastal setting' }
+      const idx = Math.max(0, order.indexOf(parView))
+      const next = order[idx + 1]
+      const text = parView === 'room' ? 'Talk through the room’s culture level.' : (breakdowns?.[parView]?.prompt || '')
+      const primary = next
+        ? { label: `Next: by ${byLabel[next]} →`, onClick: () => setParView(next), disabled: false }
+        : { label: 'Show teams →', onClick: () => changePhase('teams'), disabled: false }
+      return { text, primary }
     }
     if (phase === 'teams') {
       return { text: 'Each team, its port and its culture level. Read them out, then go to Strategy.', primary: { label: 'Next: Strategy →', onClick: () => changePhase('strategy'), disabled: false } }
@@ -1839,13 +1814,17 @@ export default function PortsControlCenter() {
         {phase === 'par' && (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-          {/* Filter row — four combinable profile filters, no minimum-group suppression */}
-          <div style={{ flexShrink: 0, minHeight: 60, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 24px', borderBottom: HAIRLINE, flexWrap: 'wrap' }}>
-            <span style={uiLabel}>Filter</span>
-            <FilterSelect value={filters.portSize}       onChange={v => setFilters(f => ({ ...f, portSize: v }))}       placeholder="All sizes"      options={demoOptions.portSize.map(o => ({ value: o.optionId, label: o.label }))} />
-            <FilterSelect value={filters.governance}     onChange={v => setFilters(f => ({ ...f, governance: v }))}     placeholder="All governance" options={demoOptions.governance.map(o => ({ value: o.optionId, label: o.label }))} />
-            <FilterSelect value={filters.climateZone}    onChange={v => setFilters(f => ({ ...f, climateZone: v }))}    placeholder="All climates"   options={demoOptions.climateZone.map(o => ({ value: o.optionId, label: o.label }))} />
-            <FilterSelect value={filters.coastalSetting} onChange={v => setFilters(f => ({ ...f, coastalSetting: v }))} placeholder="All coasts"     options={demoOptions.coastalSetting.map(o => ({ value: o.optionId, label: o.label }))} />
+          {/* Tabs — one view per profile question (replaces the filters) */}
+          <div style={{ flexShrink: 0, minHeight: 60, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 24px', borderBottom: HAIRLINE, flexWrap: 'wrap' }}>
+            {[['room', 'Room'], ['portSize', 'By port size'], ['governance', 'By governance'], ['climateZone', 'By climate zone'], ['coastalSetting', 'By coastal setting']].map(([id, label]) => {
+              const active = parView === id
+              return (
+                <button key={id} onClick={() => setParView(id)}
+                  style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, border: `2px solid ${COLOR.ink}`, borderRadius: 0, padding: '8px 12px', cursor: 'pointer', background: active ? COLOR.ink : COLOR.paper, color: active ? COLOR.onInk : COLOR.ink }}>
+                  {label}
+                </button>
+              )
+            })}
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
               {/* Join QR + code stay on Results so late arrivals can still join. */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12, borderRight: HAIRLINE }}>
@@ -1857,21 +1836,14 @@ export default function PortsControlCenter() {
                   <div style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold, letterSpacing: '0.08em' }}>{code}</div>
                 </div>
               </div>
-              {anyFilter ? (
-                <>
-                  <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold }}>Showing {shownCount} of {totalAnswers} answers</span>
-                  <button onClick={() => setFilters({ portSize: '', governance: '', climateZone: '', coastalSetting: '' })}
-                    style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-                    Clear filters
-                  </button>
-                </>
-              ) : (
-                <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, color: COLOR.ink60 }}>{totalAnswers} of {answeredDenom} answered</span>
-              )}
+              <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, color: COLOR.ink60 }}>{totalAnswers} of {answeredDenom} answered</span>
             </div>
           </div>
 
-          {/* Main area — two equal columns, fills remaining height */}
+          {parView !== 'room' ? (
+            <CapBreakdownView breakdown={breakdowns?.[parView]} />
+          ) : (
+          /* Room · two equal columns, fills remaining height */
           <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: '16px 24px 40px' }}>
 
             {/* LEFT column */}
@@ -1953,7 +1925,7 @@ export default function PortsControlCenter() {
               <div style={{ flex: 3, minHeight: 0, display: 'flex', border: HAIRLINE }}>
                 {bandCounts.map((b, i) => {
                   const ramp = BAND_RAMP[b.band]
-                  const pct = hasData ? Math.round((b.count / shownCount) * 100) : null
+                  const pct = hasData ? Math.round((b.count / totalAnswers) * 100) : null
                   return (
                     <div key={b.band} style={{ flex: 1, minWidth: 0, background: ramp.bg, color: ramp.text, borderLeft: i === 0 ? 'none' : HAIRLINE, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2, padding: '12px 14px' }}>
                       <div style={{ fontSize: 72, fontWeight: 800, lineHeight: 1 }}>{b.count}</div>
@@ -1965,6 +1937,7 @@ export default function PortsControlCenter() {
               </div>
             </div>
           </div>
+          )}
         </div>
         )}
 
