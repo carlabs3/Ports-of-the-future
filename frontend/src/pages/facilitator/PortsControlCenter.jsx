@@ -4,9 +4,10 @@ import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
 import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
 import { pickExtremes } from '../../utils/areaExtremes.js'
-import { formatEurBn, formatEurBnInt, formatPercent, formatScore10, damageBreakdown, debriefTotals } from '../../utils/format.js'
+import { formatEurBn, formatPercent, formatScore10, damageBreakdown, debriefTotals } from '../../utils/format.js'
 import { cardStatus, orderCards, cultureLine } from '../../utils/postSpin.js'
 import { rankTeams, luckText } from '../../utils/debrief.js'
+import PotentialLossBar from '../../components/PotentialLossBar.jsx'
 import { HazardIcon } from '../../components/HazardIcons.jsx'
 import { socket } from '../../utils/socket.js'
 import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP, AREA_COLOR } from '../../styles/tokens.js'
@@ -555,16 +556,12 @@ export default function PortsControlCenter() {
     if (phase === 'debrief') fetchDebrief()
   }, [phase, fetchDebrief])
 
-  // Footer "Next" walks the three debrief views: A → B team 1 … team N → C.
+  // Footer "Next" walks the two debrief views: A → B team 1 … team N. On the last
+  // team the footer shows "Close the session…" (wired directly in the conductor).
   function advanceDebrief() {
     const n = (debrief?.teams || []).length
     if (debriefView === 'A') { setDebriefView('B'); setDebriefTeamIdx(0); return }
-    if (debriefView === 'B') {
-      if (debriefTeamIdx < n - 1) setDebriefTeamIdx(i => i + 1)
-      else setDebriefView('C')
-      return
-    }
-    setEndDialogOpen(true) // view C → close the session
+    if (debriefView === 'B' && debriefTeamIdx < n - 1) setDebriefTeamIdx(i => i + 1)
   }
 
   // On entering the Strategy phase, auto-select Team A (the team named "Team A",
@@ -917,12 +914,12 @@ export default function PortsControlCenter() {
       if (closed) return { text: 'Session ended.', primary: null }
       const dteams = debrief?.teams || []
       if (debriefView === 'A') return { text: 'Announce both awards: one for decisions, one for the wheel.', primary: { label: 'Next: team by team →', onClick: advanceDebrief, disabled: false } }
-      if (debriefView === 'B') {
-        const last = debriefTeamIdx >= dteams.length - 1
-        const label = last ? 'Next: impact by port →' : `Next: ${dteams[debriefTeamIdx + 1]?.group || 'next team'} →`
-        return { text: 'Ask the team: which round was luck, and which was your plan?', primary: { label, onClick: advanceDebrief, disabled: false } }
-      }
-      return { text: 'Where were your estimates furthest off, and why?', primary: { label: 'Close the session…', onClick: () => setEndDialogOpen(true), disabled: false } }
+      // view B: walk the teams, then "Close the session…" on the last team.
+      const last = debriefTeamIdx >= dteams.length - 1
+      const primary = last
+        ? { label: 'Close the session…', onClick: () => setEndDialogOpen(true), disabled: false }
+        : { label: `Next: ${dteams[debriefTeamIdx + 1]?.group || 'next team'} →`, onClick: advanceDebrief, disabled: false }
+      return { text: 'Ask the team: which round was luck, and which was your plan?', primary }
     }
     return { text: '', primary: null }
   })()
@@ -1574,16 +1571,9 @@ export default function PortsControlCenter() {
                 <span style={{ ...uiLabel, color: dark ? 'rgba(255,255,255,0.7)' : COLOR.ink60 }}>{right}</span>
               </div>
             )
-            // One avoided/damage bar (blue = avoided, pale = damage). pctRaw is 0..1.
-            const bar = (pctRaw, h = 14) => (
-              <div style={{ position: 'relative', height: h, background: COLOR.ice, border: HAIRLINE, minWidth: 80 }}>
-                <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${Math.max(0, Math.min(100, (pctRaw || 0) * 100))}%`, background: COLOR.harbour }} />
-              </div>
-            )
-
             const tabs = (
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                {[['A', 'A · Room overview'], ['B', 'B · Team by team'], ['C', 'C · Impact by port']].map(([id, label]) => {
+                {[['A', 'A · Room overview'], ['B', 'B · Team by team']].map(([id, label]) => {
                   const active = debriefView === id
                   return (
                     <button key={id} onClick={() => setDebriefView(id)}
@@ -1676,7 +1666,7 @@ export default function PortsControlCenter() {
                                 ) })}
                                 <td style={{ ...td, ...colHi(debriefSort === 'strategy'), fontFamily: FONT.mono, fontWeight: 700 }}>{finalScore10(t.finalScore)}</td>
                                 <td style={td}><div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{formatEurBn(tot.totalDamageShown)}</div><div style={{ fontSize: FS.micro, color: COLOR.ink60 }}>of {formatEurBn(tot.totalPotential)}</div></td>
-                                <td style={{ ...td, ...colHi(debriefSort === 'avoided'), minWidth: 170 }}>{bar(t.avoidedPctRaw, 12)}<div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 4 }}>{formatEurBn(tot.avoidedShown)} avoided · {tot.avoidedPct}%</div></td>
+                                <td style={{ ...td, ...colHi(debriefSort === 'avoided'), minWidth: 170 }}><PotentialLossBar damage={tot.totalDamageRaw} potential={tot.totalPotential} height={12} /><div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 4 }}>{formatEurBn(tot.avoidedShown)} avoided · {tot.avoidedPct}%</div></td>
                               </tr>
                             )
                           })}
@@ -1684,7 +1674,7 @@ export default function PortsControlCenter() {
                       </table>
                     </div>
                   </div>
-                  <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>Round cells show the strategy score (/10) and the event the wheel drew. Bar: blue = losses avoided, pale = damage sustained.</p>
+                  <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>Round cells show the strategy score (/10) and the event the wheel drew. Bar: blue = damage sustained, light = losses avoided.</p>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                     {factBox('Room average strategy', finalScore10(roomAvgRaw), 'across the room')}
@@ -1724,7 +1714,7 @@ export default function PortsControlCenter() {
                     </div>
                   </div>
                   <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0, lineHeight: 1.4 }}>
-                    Bar: <span style={{ color: COLOR.harbour, fontWeight: 700 }}>blue</span> losses avoided · <span style={{ color: COLOR.ink }}>pale</span> damage sustained. Luck = protection against the event drawn, compared with what your plan expected across all events.
+                    Bar: <span style={{ color: '#3A62AE', fontWeight: 700 }}>blue</span> damage sustained · <span style={{ color: '#9db6e0', fontWeight: 700 }}>light</span> losses avoided. Luck = protection against the event drawn, compared with what your plan expected across all events.
                   </p>
                   <div style={{ overflowX: 'auto', border: HAIRLINE }}>
                     <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 720 }}>
@@ -1740,7 +1730,7 @@ export default function PortsControlCenter() {
                             <tr key={n}>
                               <td style={td}><strong>Round {n} · {YEARS[n - 1]}</strong><div style={{ fontSize: FS.sm, color: COLOR.ink60 }}>{r.eventName || r.drawnEvent}</div></td>
                               <td style={{ ...td, fontFamily: FONT.mono, fontWeight: 700 }}>{formatPercent((r.rawLossesAvoidedPct || 0) / 10)}</td>
-                              <td style={td}><div style={{ fontFamily: FONT.mono, fontWeight: 700, marginBottom: 6 }}>{formatEurBn(dmg)} of {formatEurBn(pot)}</div>{bar((r.rawLossesAvoidedPct || 0) / 100)}</td>
+                              <td style={td}><div style={{ fontFamily: FONT.mono, fontWeight: 700, marginBottom: 6 }}>{formatEurBn(dmg)} of {formatEurBn(pot)}</div><PotentialLossBar damage={r.damageBill} potential={r.impact} /></td>
                               <td style={{ ...td, fontSize: FS.sm, fontWeight: 600, color: COLOR.ink60, whiteSpace: 'nowrap' }}>{luckText(r)}</td>
                               <td style={{ ...td, fontFamily: FONT.mono, fontWeight: 700 }}>{formatScore10(r.strategyScoreRaw)}</td>
                             </tr>
@@ -1749,7 +1739,7 @@ export default function PortsControlCenter() {
                         <tr style={{ background: COLOR.ink, color: COLOR.onInk }}>
                           <td style={{ ...td, borderBottom: 'none' }}><strong>All three rounds</strong><div style={{ fontSize: FS.sm, opacity: 0.8 }}>Final results</div></td>
                           <td style={{ ...td, borderBottom: 'none', fontFamily: FONT.mono, fontWeight: 700 }}>{tot.avoidedPct}%</td>
-                          <td style={{ ...td, borderBottom: 'none' }}><div style={{ fontFamily: FONT.mono, fontWeight: 700, marginBottom: 6 }}>{formatEurBn(tot.totalDamageShown)} of {formatEurBn(tot.totalPotential)} potential losses</div><div style={{ position: 'relative', height: 14, background: 'rgba(255,255,255,0.25)', border: `1px solid ${COLOR.onInk}` }}><div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${Math.max(0, Math.min(100, (t.avoidedPctRaw || 0) * 100))}%`, background: COLOR.onInk }} /></div><div style={{ fontSize: FS.micro, opacity: 0.85, marginTop: 4 }}>{formatEurBn(tot.avoidedShown)} avoided ({tot.avoidedPct}%)</div></td>
+                          <td style={{ ...td, borderBottom: 'none' }}><div style={{ fontFamily: FONT.mono, fontWeight: 700, marginBottom: 6 }}>{formatEurBn(tot.totalDamageShown)} of {formatEurBn(tot.totalPotential)} potential losses</div><PotentialLossBar damage={tot.totalDamageRaw} potential={tot.totalPotential} /><div style={{ fontSize: FS.micro, opacity: 0.85, marginTop: 4 }}>{formatEurBn(tot.avoidedShown)} avoided ({tot.avoidedPct}%)</div></td>
                           <td style={{ ...td, borderBottom: 'none', fontSize: FS.sm, opacity: 0.85 }}>Strategy = average of the three rounds</td>
                           <td style={{ ...td, borderBottom: 'none', fontFamily: FONT.mono, fontWeight: 700 }}>{finalScore10(t.finalScore)}</td>
                         </tr>
@@ -1760,63 +1750,11 @@ export default function PortsControlCenter() {
               )
             }
 
-            // ── C · Impact by port ───────────────────────────────────────────
-            const viewC = () => (
-              <>
-                <div>
-                  <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.display, margin: '0 0 4px' }}>What each event would have cost</h2>
-                  <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Potential losses per event, with none of your solutions. Compare them with the estimates on your events sheet.</p>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
-                  {teams.map(t => {
-                    const base = t.impactsByRound?.[1] || {}, r3 = t.impactsByRound?.[3] || {}
-                    const codes = EVENT_CODES.filter(c => (base[c] ?? 0) > 0)
-                    const drawnByCode = {}
-                    for (const r of (t.rounds || [])) if (r.drawnEvent) (drawnByCode[r.drawnEvent] ||= []).push(r.round)
-                    const th = { fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, textAlign: 'left', padding: '6px 12px', whiteSpace: 'nowrap' }
-                    return (
-                      <div key={t.group} style={{ border: HAIRLINE }}>
-                        <div style={{ background: COLOR.ink, color: COLOR.onInk, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                          <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: FS.body }}>{t.portName || '—'}</span>
-                          <span style={{ fontFamily: FONT.mono, fontSize: FS.sm }}>{t.group}</span>
-                        </div>
-                        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                          <thead><tr><th style={th}>Event</th><th style={{ ...th, textAlign: 'right' }}>Potential losses</th><th style={{ ...th, textAlign: 'right' }}>Drawn</th></tr></thead>
-                          <tbody>
-                            {codes.map(c => {
-                              const bumped = (r3[c] ?? 0) > (base[c] ?? 0)
-                              const drawn = (drawnByCode[c] || []).sort((a, b) => a - b).map(n => `R${n}`).join(' · ') || '—'
-                              return (
-                                <tr key={c}>
-                                  <td style={{ padding: '8px 12px', borderTop: HAIRLINE }}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                      <HazardIcon code={c} color={EVENT_HEX[c] || COLOR.ink} size={16} />
-                                      <span style={{ fontFamily: FONT.sans, fontSize: FS.sm }}>{EVENT_WORDS[c] || c}</span>
-                                    </span>
-                                  </td>
-                                  <td style={{ padding: '8px 12px', borderTop: HAIRLINE, textAlign: 'right' }}>
-                                    <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: 700 }}>{formatEurBnInt(base[c])}</div>
-                                    <div style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: bumped ? (EVENT_HEX[c] || COLOR.harbour) : COLOR.ink60 }}>{bumped ? `→ ${formatEurBnInt(r3[c])} in 2036` : 'same in 2036'}</div>
-                                  </td>
-                                  <td style={{ padding: '8px 12px', borderTop: HAIRLINE, textAlign: 'right', fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>{drawn}</td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
-            )
-
             return (
               <>
                 {tabs}
                 {debriefView === 'A' && viewA()}
                 {debriefView === 'B' && viewB()}
-                {debriefView === 'C' && viewC()}
               </>
             )
           })()}
