@@ -169,6 +169,49 @@ Server → client: `participant:joined {total}`, `par:update {individual,groups}
   secret `exposureWeights` (sum 10). `topExposureEvents` picks the two highest
   for the illustration motifs.
 
+## Results display units (E-decisions)
+
+Display and copy only — no scoring formula changed. **1 impact coin = €1bn.**
+Money formatting lives in one place (`frontend/src/utils/format.js`):
+`formatEurBn` (one decimal, always), `formatEurBnInt` (whole €bn, the debrief
+impact table only), `formatPercent` (P → whole %), `formatScore10` (raw ratio →
+`X.X / 10`), and the `damageBreakdown` E3 helper. Card ordering / culture-line
+copy live in `postSpin.js`.
+
+| Metric | Shown as | Calculation (unchanged) |
+|---|---|---|
+| Protection this event | 0–100 % (half up) | P × 10 |
+| Damage sustained | €bn, one decimal | impact × (1 − P/10) |
+| Potential losses | €bn | the drawn event's impact for that port and round |
+| Losses avoided | €bn | potentialShown − damageShown (E3) |
+| Your strategy | score / 10, one decimal | (expected ÷ best) × 10 |
+| Expected protection | not shown on the post-spin panel | still computed for the strategy score |
+
+Coins remain the unit for **budget and card costs only**; damage never uses the
+word "coin".
+
+- **E1** Round only at display: % half up (D9), money `€X.Xbn` (always one
+  decimal), strategy `X.X / 10`. Computation stays on unrounded values.
+- **E2** €bn is a display conversion (1 coin = €1bn) in one shared formatter.
+- **E3** `damageShown = round1(damage)`, `potentialShown = round1(impact)`,
+  `avoidedShown = potentialShown − damageShown`; the on-screen figures always add
+  up. The protection bar width uses unrounded P.
+- **E4** The round panel shows the round's strategy to one decimal; the final
+  ranking averages the **unrounded** per-round raw ratios (`strategyScoreRaw` =
+  expected ÷ best) and rounds only for display. Teams share a rank only when
+  their unrounded means are exactly equal.
+- **E5** Reveal timing unchanged: the post-spin panel shows only the drawn
+  event's impact (D4); no other event's impact is sent to draw it.
+- **E6** Post-spin card order: HELPED, then RAISED CULTURE, then the rest
+  (MAX-CULTURE enablers + NOT THIS TIME), each group by number; the drawn event's
+  tag is highlighted.
+- **E7** A culture block states where the multiplier came from (started level +
+  which enabler cards raised it / none held / already at Proactive).
+- **E8** Debrief uses the same units: total damage in €bn, average strategy as
+  `/10`, and the "Impact by port" table in whole €bn (`€2bn → €3bn`).
+- **E9** Every damage figure (post-spin, debrief totals, impact-by-port) uses the
+  shared €bn formatter; "coins that didn't help" stays a budget metric.
+
 ## Secret-data rule (the core invariant)
 
 Exposure weights, measure protection scores, questionnaire option scores, and the

@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
 import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
 import { pickExtremes } from '../../utils/areaExtremes.js'
-import { formatEurBn, formatPercent, damageBreakdown } from '../../utils/format.js'
+import { formatEurBn, formatEurBnInt, formatPercent, formatScore10, damageBreakdown } from '../../utils/format.js'
 import { cardStatus, orderCards, cultureLine } from '../../utils/postSpin.js'
 import { HazardIcon } from '../../components/HazardIcons.jsx'
 import PortIllustration from '../../components/PortIllustration.jsx'
@@ -1536,10 +1536,10 @@ export default function PortsControlCenter() {
               return <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No debrief data yet. Play all three rounds first.</p>
             }
             const rint = v => Math.round(v || 0)
-            const d1 = v => (Math.round((v || 0) * 10) / 10).toFixed(1) // damage, 1 dp
+            const score10 = v => formatScore10((v || 0) / 100) // finalScore (0–100) → "X.X / 10"
             // Facts across the room (all teams, all rounds).
             const scored = teams.filter(t => (t.rounds || []).length > 0)
-            const roomAvgScore = scored.length ? Math.round(scored.reduce((s, t) => s + (t.finalScore || 0), 0) / scored.length) : 0
+            const roomAvg10 = scored.length ? score10(scored.reduce((s, t) => s + (t.finalScore || 0), 0) / scored.length) : '—'
             let bestPlan = null
             for (const t of teams) if (!bestPlan || (t.finalScore || 0) > (bestPlan.finalScore || 0)) bestPlan = t
             let hardest = null
@@ -1600,11 +1600,11 @@ export default function PortsControlCenter() {
                         })}
                       </div>
 
-                      {/* Final score + total damage */}
+                      {/* Final score (/10) + total damage (€bn) */}
                       <div style={{ flex: '0 0 150px', textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                        <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, lineHeight: 1 }}>{rint(t.finalScore)}</div>
-                        <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold }}>final score</div>
-                        <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, marginTop: 4 }}>Total damage {d1(t.totalDamage)} coins</div>
+                        <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h1, letterSpacing: LS.display, lineHeight: 1 }}>{score10(t.finalScore)}</div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold }}>final strategy score</div>
+                        <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, marginTop: 4 }}>Total damage {formatEurBn(t.totalDamage)}</div>
                       </div>
                     </div>
                   ))}
@@ -1612,9 +1612,9 @@ export default function PortsControlCenter() {
 
                 {/* Four facts */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                  {fact('Average strategy score', `${roomAvgScore}`, 'across the room')}
-                  {fact('Best plan', bestPlan?.group || '—', bestPlan ? `final score ${rint(bestPlan.finalScore)}` : '')}
-                  {fact('Hardest luck', hardest?.group || '—', hardest ? `total damage ${d1(hardest.totalDamage)} coins` : '')}
+                  {fact('Average strategy score', roomAvg10, 'across the room')}
+                  {fact('Best plan', bestPlan?.group || '—', bestPlan ? `final score ${score10(bestPlan.finalScore)}` : '')}
+                  {fact('Hardest luck', hardest?.group || '—', hardest ? `total damage ${formatEurBn(hardest.totalDamage)}` : '')}
                   {fact("Coins that didn't help", coinsNoHelp, 'across all three rounds')}
                 </div>
 
@@ -1622,7 +1622,7 @@ export default function PortsControlCenter() {
                     Base impact applies in 2026 & 2031; two events rise +1 in 2036. */}
                 {teams.some(t => t.impactsByRound) && (
                   <div>
-                    <p style={{ ...uiLabel, marginBottom: 10 }}>Impact by port · what each event would have cost at full strength</p>
+                    <p style={{ ...uiLabel, marginBottom: 10 }}>Impact by port · what each event would have cost at full strength (€bn)</p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
                       {teams.filter(t => t.impactsByRound).map(t => {
                         const base = t.impactsByRound[1] || {}
@@ -1639,7 +1639,7 @@ export default function PortsControlCenter() {
                                   <HazardIcon code={c} color={EVENT_HEX[c] || COLOR.ink} size={14} />
                                   <span style={{ flex: 1, fontFamily: FONT.sans, fontSize: FS.sm }}>{EVENT_WORDS[c] || c}</span>
                                   <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold }}>
-                                    {base[c]}{bumped && <span style={{ color: EVENT_HEX[c] || COLOR.harbour }}> → {r3[c]} in 2036</span>}
+                                    {formatEurBnInt(base[c])}{bumped && <span style={{ color: EVENT_HEX[c] || COLOR.harbour }}> → {formatEurBnInt(r3[c])} in 2036</span>}
                                   </span>
                                 </div>
                               )

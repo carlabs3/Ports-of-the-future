@@ -10,6 +10,13 @@ export function formatEurBn(value) {
   return `€${round1(value).toFixed(1)}bn`
 }
 
+// Whole-number €bn, for the debrief "Impact by port" table where the values are
+// integer impacts (E8): formatEurBnInt(2) → "€2bn". The only place €bn is shown
+// without a decimal.
+export function formatEurBnInt(value) {
+  return `€${Math.round(Number(value) || 0)}bn`
+}
+
 // Protection as a whole-number percent, rounded half up. Input is P (0–10
 // preparedness); protection % = P × 10 (v5). formatPercent(4.24) → "42%".
 export function formatPercent(p) {

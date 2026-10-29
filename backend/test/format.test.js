@@ -2,7 +2,7 @@
 // run here in the backend node:test runner (like wheelMath / areaExtremes).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { formatEurBn, formatPercent, formatScore10, damageBreakdown } from '../../frontend/src/utils/format.js'
+import { formatEurBn, formatEurBnInt, formatPercent, formatScore10, damageBreakdown } from '../../frontend/src/utils/format.js'
 
 test('formatEurBn: always one decimal, half up', () => {
   assert.equal(formatEurBn(2), '€2.0bn')
@@ -10,6 +10,12 @@ test('formatEurBn: always one decimal, half up', () => {
   assert.equal(formatEurBn(0.2), '€0.2bn')
   assert.equal(formatEurBn(1.65), '€1.7bn') // .65 rounds up
   assert.equal(formatEurBn(0), '€0.0bn')
+})
+
+test('formatEurBnInt: whole-number €bn for the impact table (E8)', () => {
+  assert.equal(formatEurBnInt(2), '€2bn')
+  assert.equal(formatEurBnInt(3), '€3bn')
+  assert.equal(formatEurBnInt(5), '€5bn')
 })
 
 test('formatPercent: P (0–10) → whole-number %, half up', () => {

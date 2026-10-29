@@ -773,14 +773,17 @@ The app takes every card the team owns that scores on the event, applies the cul
 
 P never goes above 10. Two cards of 5 give 7.5, not 10, and one well-chosen card is worth more than several weak ones.
 
-## The four numbers after each spin
+## The numbers after each spin
+
+Display units only; the formulas are unchanged. 1 impact coin = €1bn.
 
 | **Number** | **How it is calculated** |
 | --- | --- |
-| Protection (0–10) | Formula above, for the event the wheel drew |
-| Damage (coins) | Impact of that event for this port × (1 − P/10) |
-| Expected protection (%) | Damage avoided across all events, each weighted by its likelihood on the wheel and its impact for the port, divided by the total possible damage. It does not depend on what the wheel drew. |
-| Strategy score (%) | Expected protection ÷ the best expected protection the port could reach with the same budget and starting culture level. The app finds it by testing every affordable combination. |
+| Protection this event (%) | P × 10, for the event the wheel drew (P from the formula above). |
+| Damage sustained (€bn) | Impact of that event for this port × (1 − P/10), shown in €bn. |
+| Potential losses (€bn) | The impact of the drawn event for this port and round — what it would cost with none of the team's solutions. |
+| Losses avoided (€bn) | Potential losses − damage sustained. |
+| Your strategy (/10) | (Expected protection ÷ the best expected protection the port could reach with the same budget and starting culture level) × 10. The app finds the best by testing every affordable combination. Expected protection — damage avoided across all events, each weighted by its likelihood on the wheel and its impact for the port, divided by the total possible damage; it does not depend on what the wheel drew — is still computed for the score but no longer shown on its own. |
 
 ## Rounds and time
 
