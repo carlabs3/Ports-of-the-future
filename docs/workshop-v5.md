@@ -85,8 +85,8 @@ The game then moves forward in time. In 2031 and again in 2036 the team gets mor
 | 15 min | Port challenge | Teams read their report aloud, place the port on the map and fill in the impact column of the events worksheet. |
 | 20 min | Round 1 · 2026 | 6 coins. Teams choose their cards and write one line on why. |
 | 10 min | Wheel 2026 | The app spins each port's wheel and shows protection and damage. |
-| 15 min | Round 2 · 2031 | +3 coins, one card can be returned, new wheel, new spin |
-| 15 min | Round 3 · 2036 | +3 coins, one card can be returned, new wheel, new spin |
+| 15 min | Round 2 · 2031 | +3 coins, no returns, new wheel, new spin |
+| 15 min | Round 3 · 2036 | +3 coins, return any number of cards for full cost, new wheel, new spin |
 | 10 min | Results | Damage over three spins next to the strategy score |
 | 10 min | Debrief | Impact estimates vs real values, what made a strategy work, what to take home |
 
@@ -791,9 +791,9 @@ Display units only; the formulas are unchanged. 1 impact coin = €1bn.
 
 - At the first spin the app shows the 2026 wheel.
 
-- Round 2, 2031: +3 coins. Unspent coins carry over. A team may return one card and get back half its cost, rounded down. The wheel shifts to 2031.
+- Round 2, 2031: +3 coins. Unspent coins carry over. No cards may be returned this round. The wheel shifts to 2031.
 
-- Round 3, 2036: +3 coins, same rules. The wheel shifts again, and two hazards per port now hit one coin harder.
+- Round 3, 2036: +3 coins. A team may return any number of its cards before the spin, each for its full cost, and spend the coins on others. The wheel shifts again, and two hazards per port now hit one coin harder.
 
 - Final ranking: the average strategy score over the three rounds. The total damage over the three spins is shown next to it as the 'luck' result.
 

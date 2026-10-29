@@ -42,7 +42,8 @@ const teamStrategySchema = new Schema({
   currentRound:    { type: Number, default: 1 },
   roundLocked:     { type: Boolean, default: false },
   roundBought:     { type: [Number], default: [] },
-  roundReturned:   { type: Number, default: null },
+  roundReturned:   { type: Number, default: null },  // legacy (v5 single return)
+  roundRefund:     { type: Number, default: 0 },     // G1: coins refunded from returns this round
 
   rounds:          { type: [roundSchema], default: [] },
 }, { timestamps: true })

@@ -1,6 +1,6 @@
 import { MEASURES_BY_ID } from '../config/measures.js'
 import { PORTS_BY_ID } from '../config/ports/index.js'
-import { roundGrants, cumulativeBudgets } from '../config/game.js'
+import { roundGrants, cumulativeBudgets, returnPolicy } from '../config/game.js'
 import { applyCultureMeasureBonus } from './cultureService.js'
 import {
   computePreparedness, computeCoinsThatHelped, expectedProtection, impactsForRound,
@@ -31,16 +31,22 @@ export function buyCard(state, measureId) {
   return { ok: true }
 }
 
-// Return one card (rounds 2 & 3 only, at most one per round). Refund = floor(cost/2).
+// Return one held card (G1). Policy comes from config/game.js returnPolicy:
+// round 1 has nothing to return; round 2 is 'none' (rejected); round 3 is 'full'
+// — any number of held cards, each refunded its FULL cost. Only before the spin
+// (409 once the round has been spun, as for unlock). `roundRefund` accumulates
+// the coins refunded this round (for the coin meter and the spin record).
 export function returnCard(state, measureId) {
+  if (roundSpun(state)) return { ok: false, error: 'This round has already been spun.' }
   if (state.roundLocked) return { ok: false, error: 'This round is locked.' }
-  if (state.currentRound === 1) return { ok: false, error: 'Cards can only be returned in rounds 2 and 3.' }
-  if (state.roundReturned != null) return { ok: false, error: 'Only one card may be returned per round.' }
+  const policy = returnPolicy[state.currentRound]
+  if (policy === 'none') return { ok: false, error: `Returns are not allowed in round ${state.currentRound}.` }
+  if (policy !== 'full') return { ok: false, error: `Cards cannot be returned in round ${state.currentRound}.` }
   if (!state.portfolio.includes(measureId)) return { ok: false, error: `The team does not hold measure ${measureId}.` }
-  const refund = Math.floor((MEASURES_BY_ID[measureId]?.cost || 0) / 2)
+  const refund = MEASURES_BY_ID[measureId]?.cost || 0 // full cost
   state.portfolio = state.portfolio.filter(id => id !== measureId)
   state.coins += refund
-  state.roundReturned = measureId
+  state.roundRefund = (state.roundRefund || 0) + refund
   return { ok: true, refund }
 }
 
@@ -96,7 +102,7 @@ export function recordSpin(state, event) {
   const strategyRaw = computeStrategyScoreRaw({ expectedProtection: expected, portId: state.portId, round, startingBand: state.startingBand })
 
   const coinsSpent = state.roundBought.reduce((s, id) => s + (MEASURES_BY_ID[id]?.cost || 0), 0)
-  const refund = state.roundReturned != null ? Math.floor((MEASURES_BY_ID[state.roundReturned]?.cost || 0) / 2) : 0
+  const refund = state.roundRefund || 0 // coins refunded from returns this round (G1)
   // Total coins invested in the cards held this round — the denominator for
   // "coins that helped N of M" and the debrief's "coins that didn't help".
   const heldCost = state.portfolio.reduce((s, id) => s + (MEASURES_BY_ID[id]?.cost || 0), 0)
@@ -135,5 +141,6 @@ export function advanceRound(state) {
   state.roundLocked = false
   state.roundBought = []
   state.roundReturned = null
+  state.roundRefund = 0
   return { ok: true }
 }

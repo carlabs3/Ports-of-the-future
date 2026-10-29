@@ -17,7 +17,7 @@ import { buyCard, returnCard, undoCard, lockRound, unlockRound, recordSpin, adva
 precomputeBestPossible()
 
 function fresh(portId = 'boreal', startingBand = 'aware') {
-  return { portId, startingBand, portfolio: [], coins: 6, roundStartCoins: 6, currentRound: 1, roundLocked: false, roundBought: [], roundReturned: null, rounds: [] }
+  return { portId, startingBand, portfolio: [], coins: 6, roundStartCoins: 6, currentRound: 1, roundLocked: false, roundBought: [], roundReturned: null, roundRefund: 0, rounds: [] }
 }
 
 // Independently recompute what a spin's scoring fields SHOULD be, from the round
@@ -59,29 +59,30 @@ test('full 3-round playthrough for Boreal: coins, grants, returns, and per-round
   assert.equal(advanceRound(s).ok, true)
   assert.equal(s.coins, roundGrants[1])     // 0 + 3
 
-  // ── Round 2 (grant +3): return 24 (refund 1), buy 6 (2), spin WS ──────────
-  assert.equal(returnCard(s, 24).refund, 1) // floor(3/2)
-  assert.equal(s.coins, 4)                   // 3 + 1
-  assert.deepEqual(s.portfolio, [17, 19])
+  // ── Round 2 (grant +3): NO returns allowed; buy 6 (2), spin WS ────────────
+  assert.equal(returnCard(s, 24).ok, false) // round 2: returns rejected (G1)
+  assert.match(returnCard(s, 24).error, /Returns are not allowed in round 2\./)
   assert.equal(buyCard(s, 6).ok, true)
-  assert.equal(s.coins, 2)                   // 4 − 2
+  assert.equal(s.coins, 1)                   // 3 − 2
   assert.equal(lockRound(s).ok, true)
   const r2 = recordSpin(s, 'WS').entry
-  assert.deepEqual([r2.coinsStart, r2.coinsSpent, r2.refund, r2.coinsLeft], [3, 2, 1, 2])
+  assert.deepEqual([r2.coinsStart, r2.coinsSpent, r2.refund, r2.coinsLeft], [3, 2, 0, 1])
   assert.deepEqual(r2.bought, [6])
-  assert.equal(r2.returned, 24)
-  assert.equal(r2.heldCost, 5)              // 17(2) + 19(1) + 6(2)
+  assert.equal(r2.heldCost, 8)              // 24(3) + 17(2) + 19(1) + 6(2)
   assert.equal(r2.impact, 3)                // Boreal WS impact = 3
-  assertSpinScoring(r2, { portId: 'boreal', startingBand: 'aware', portfolio: [17, 19, 6], round: 2, event: 'WS' })
+  assertSpinScoring(r2, { portId: 'boreal', startingBand: 'aware', portfolio: [24, 17, 19, 6], round: 2, event: 'WS' })
   assert.equal(advanceRound(s).ok, true)
-  assert.equal(s.coins, 2 + roundGrants[2]) // 2 + 3
+  assert.equal(s.coins, 1 + roundGrants[2]) // 1 + 3
 
-  // ── Round 3 (grant +3): buy 14 (3), spin SS (round-3 impact gains +1) ─────
+  // ── Round 3 (grant +3): return 24 for its FULL cost, buy 14, spin SS ──────
+  assert.equal(returnCard(s, 24).refund, 3)  // full cost (not floor/2)
+  assert.equal(s.coins, 7)                   // 4 + 3
+  assert.deepEqual(s.portfolio, [17, 19, 6])
   assert.equal(buyCard(s, 14).ok, true)
-  assert.equal(s.coins, 2)                   // 5 − 3
+  assert.equal(s.coins, 4)                   // 7 − 3
   assert.equal(lockRound(s).ok, true)
   const r3 = recordSpin(s, 'SS').entry
-  assert.deepEqual([r3.coinsStart, r3.coinsSpent, r3.refund, r3.coinsLeft], [5, 3, 0, 2])
+  assert.deepEqual([r3.coinsStart, r3.coinsSpent, r3.refund, r3.coinsLeft], [4, 3, 3, 4])
   assert.equal(r3.heldCost, 8)              // 17(2) + 19(1) + 6(2) + 14(3)
   assert.equal(r3.impact, 4)                // Boreal SS base 3, +1 in round 3 (impactRound3Plus)
   assertSpinScoring(r3, { portId: 'boreal', startingBand: 'aware', portfolio: [17, 19, 6, 14], round: 3, event: 'SS' })
@@ -103,15 +104,14 @@ test('purchase is rejected for over-budget, not-in-deck, duplicate', () => {
   assert.match(buyCard(s, 12).error, /Not enough coins/)
 })
 
-test('returns: none in round 1, at most one per round', () => {
+test('returns: rejected in rounds 1 and 2 (G1)', () => {
   const s = fresh()
   buyCard(s, 24)
-  assert.equal(returnCard(s, 24).ok, false)              // round 1: no returns
-  assert.match(returnCard(s, 24).error, /rounds 2 and 3/)
+  assert.equal(returnCard(s, 24).ok, false)              // round 1: nothing to return
+  assert.match(returnCard(s, 24).error, /Cards cannot be returned in round 1\./)
   lockRound(s); recordSpin(s, 'SI'); advanceRound(s)     // → round 2
-  assert.equal(returnCard(s, 24).ok, true)
-  assert.equal(returnCard(s, 19).ok, false)              // second return blocked
-  assert.match(returnCard(s, 19).error, /one card/)
+  assert.equal(returnCard(s, 24).ok, false)              // round 2: none
+  assert.match(returnCard(s, 24).error, /Returns are not allowed in round 2\./)
 })
 
 test('advanceRound grants the configured coins for the new round', () => {
@@ -153,22 +153,20 @@ test('undo in round 1: full refund, card removed, return allowance untouched', (
   assert.equal(s.roundReturned, null)   // undo never touches the return allowance
 })
 
-test('undo a same-round card in round 2: full refund, one-return-per-round still available', () => {
+test('undo a same-round card in round 2: full refund; returns are not allowed in round 2', () => {
   const s = fresh()
-  assert.equal(buyCard(s, 24).ok, true) // coins 4
-  lockRound(s); recordSpin(s, 'SI'); advanceRound(s) // round 2, coins 4+? portfolio [24]
-  assert.equal(buyCard(s, 17).ok, true) // cost 2, roundBought [17]
+  assert.equal(buyCard(s, 24).ok, true)
+  lockRound(s); recordSpin(s, 'SI'); advanceRound(s) // round 2, portfolio [24]
+  assert.equal(buyCard(s, 17).ok, true) // roundBought [17]
   const r = undoCard(s, 17)
   assert.equal(r.ok, true)
-  assert.equal(r.refund, 2)             // FULL refund (returnCard would be floor(2/2)=1)
+  assert.equal(r.refund, 2)             // FULL refund of the just-bought card
   assert.deepEqual(s.portfolio, [24])
   assert.deepEqual(s.roundBought, [])
-  assert.equal(s.roundReturned, null)   // untouched by the undo
-  // The one real return is still available this round (undo did not consume it):
-  const rr = returnCard(s, 24)          // 24 is a previous-round card -> half refund
-  assert.equal(rr.ok, true)
-  assert.equal(rr.refund, 1)
-  assert.equal(s.roundReturned, 24)
+  // Returning the carried-over card is rejected in round 2 (G1).
+  const rr = returnCard(s, 24)
+  assert.equal(rr.ok, false)
+  assert.match(rr.error, /Returns are not allowed in round 2\./)
 })
 
 test('undo is rejected once the round is locked', () => {

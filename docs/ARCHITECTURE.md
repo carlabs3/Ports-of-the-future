@@ -21,9 +21,13 @@ The workshop moved to **v4**. Decisions, each replacing earlier ones:
   permutation of the 6. Teams stay named Team A, Team B … Replaces "max 8 tables".
 - **D14 · Damage bill** = event losses × (1 − P/10), rounded to the nearest 0.5
   (halves up). A score only; it never removes coins.
-- **D15 · Card returns** — in rounds 2 and 3 a table may return ≤ 1 card/round for
-  `floor(cost/2)` coins; enablers can be returned (lowering the culture level); a
-  returned card may be re-bought later.
+- **D15 · Card returns (G1)** — round 1: nothing to return. Round 2: **no returns**
+  (the server rejects with 409 `Returns are not allowed in round 2.`). Round 3: a
+  table may return **any number** of held cards, each for its **full cost**.
+  Returns only before the spin (409 once the round has been spun). Returning an
+  enabler lowers the culture level (it falls out of the held portfolio). The
+  policy lives in `config/game.js` (`returnPolicy: { 2: 'none', 3: 'full' }`);
+  routes read it, never hard-coding round numbers.
 - **D16 · Rounding** — full precision internally; P shown to 1 decimal; percentages
   as whole numbers (halves up).
 - **D17 · Ports have a colour** *(superseded — originally "ports have no colour")* —

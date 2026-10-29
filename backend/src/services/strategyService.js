@@ -121,6 +121,66 @@ export function computeAwards(rows = []) {
   return { bestStrategy: winners('finalScore'), mostAvoided: winners('avoidedPctRaw') }
 }
 
+// ── Standings (G5) ───────────────────────────────────────────────────────────
+// Per-team standings using only the rounds played up to `throughRound`, reusing
+// the F2/F3 maths. Returns raw aggregates (for ranking) and the shown money
+// (sums of the per-round shown values). Ranks are computed for BOTH boards
+// (by strategy = finalScore, by losses avoided = avoidedPctRaw); teams share a
+// rank only on exactly equal values. After round 2, each team's movement vs its
+// position after round 1 is included (+ = moved up).
+const round1s = v => Math.round((Number(v) || 0) * 10) / 10
+
+export function computeStandings(strategies = [], throughRound = 1) {
+  const rows = strategies.map(s => {
+    const played = (s.rounds || []).filter(r => r.round <= throughRound)
+    const raws = played.map(r => r.strategyScoreRaw != null ? r.strategyScoreRaw : (r.strategyScore != null ? r.strategyScore / 100 : null)).filter(v => v != null)
+    const totalDamageRaw = played.reduce((a, r) => a + (Number(r.damageBill) || 0), 0)
+    const totalPotential = played.reduce((a, r) => a + (Number(r.impact) || 0), 0)
+    const totalDamageShown = round1s(played.reduce((a, r) => a + round1s(r.damageBill), 0))
+    return {
+      group: s.group,
+      portId: s.portId ?? null,
+      finalScore: raws.length ? mean(raws) * 100 : 0,                       // raw mean ×100
+      totalDamageRaw,
+      totalPotential,
+      avoidedPctRaw: totalPotential > 0 ? 1 - totalDamageRaw / totalPotential : 0,
+      totalDamageShown,
+      avoidedShown: round1s(totalPotential - totalDamageShown),
+      avoidedPct: totalPotential > 0 ? Math.round((1 - totalDamageRaw / totalPotential) * 100) : 0, // F3: from raw
+    }
+  })
+
+  const ranksBy = (key) => {
+    const sorted = [...rows].sort((a, b) => b[key] - a[key])
+    const map = {}
+    let rank = 0, prev = null
+    sorted.forEach((r, i) => { if (prev === null || r[key] !== prev) { rank = i + 1; prev = r[key] } map[r.group] = rank })
+    return map
+  }
+  const strategyRank = ranksBy('finalScore')
+  const avoidedRank = ranksBy('avoidedPctRaw')
+
+  // Movement vs the standings after the previous round (round 2 only).
+  let prevStrat = {}, prevAvoid = {}
+  if (throughRound === 2) {
+    const prev = computeStandings(strategies, 1)
+    prevStrat = Object.fromEntries(prev.teams.map(t => [t.group, t.strategyRank]))
+    prevAvoid = Object.fromEntries(prev.teams.map(t => [t.group, t.avoidedRank]))
+  }
+  const move = (now, before) => (before == null ? null : before - now) // + = up
+
+  return {
+    throughRound,
+    teams: rows.map(r => ({
+      ...r,
+      strategyRank: strategyRank[r.group],
+      avoidedRank: avoidedRank[r.group],
+      strategyMove: throughRound === 2 ? move(strategyRank[r.group], prevStrat[r.group]) : null,
+      avoidedMove: throughRound === 2 ? move(avoidedRank[r.group], prevAvoid[r.group]) : null,
+    })),
+  }
+}
+
 // Convenience: a port's per-round wheel likelihoods (server-side only).
 export function portWheel(portId, round) {
   return PORTS_BY_ID[portId]?.wheels?.[round]?.likelihoods || {}

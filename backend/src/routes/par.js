@@ -12,7 +12,7 @@ import { getPublicMeasures } from '../services/measuresService.js'
 import { computeCultureBand, applyCultureMeasureBonus, BAND_ORDER } from '../services/cultureService.js'
 import { drawEvent } from '../services/wheelService.js'
 import { buyCard, returnCard, undoCard, lockRound, unlockRound, recordSpin, advanceRound, ROUND_BUDGET } from '../services/roundsService.js'
-import { computeFinalRanking, computeAwards } from '../services/strategyService.js'
+import { computeFinalRanking, computeAwards, computeStandings } from '../services/strategyService.js'
 import { canRevealWheel, buildWheelPayload, buildDrawPayload, buildOutcomesTeam, buildDebriefTeam } from '../services/parPayloads.js'
 
 const BAND_LABELS = {
@@ -126,7 +126,7 @@ export default function parRouter(io) {
     mutateStrategy(req.params.code, req.params.group, res, doc => buyCard(doc, Number(req.body.measureId))))
 
   router.post('/:code/strategy/:group/return', authMiddleware, (req, res) =>
-    mutateStrategy(req.params.code, req.params.group, res, doc => returnCard(doc, Number(req.body.measureId))))
+    mutateStrategy(req.params.code, req.params.group, res, doc => returnCard(doc, Number(req.body.measureId)), 409))
 
   // Undo a current-round purchase (full refund; not a "return"). 400 if locked
   // or if the card was not bought this round.
@@ -243,6 +243,25 @@ export default function parRouter(io) {
     } catch (err) {
       console.error('PAR outcomes error:', err.message)
       res.status(500).json({ error: 'Could not load outcomes' })
+    }
+  })
+
+  // Facilitator-only: STANDINGS after a round (G5). throughRound = the highest
+  // round every team has spun. Port name added for display; no secrets.
+  router.get('/:code/standings', authMiddleware, async (req, res) => {
+    try {
+      const strategies = await TeamStrategy.find({ sessionCode: req.params.code })
+      if (strategies.length === 0) return res.json({ throughRound: 0, teams: [] })
+      let throughRound = 0
+      for (const r of [1, 2, 3]) {
+        if (strategies.every(s => (s.rounds || []).some(x => x.round === r))) throughRound = r
+      }
+      const standings = computeStandings(strategies, throughRound)
+      standings.teams = standings.teams.map(t => ({ ...t, portName: PORTS_BY_ID[t.portId]?.name || null }))
+      res.json(standings)
+    } catch (err) {
+      console.error('PAR standings error:', err.message)
+      res.status(500).json({ error: 'Could not load standings' })
     }
   })
 

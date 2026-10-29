@@ -14,3 +14,9 @@ export const cumulativeBudgets = roundGrants.map((_, i) =>
 // The year shown for each round on the control centre. (The authoritative year
 // also lives next to each port's per-round wheel; this is the plain list.)
 export const roundYears = [2026, 2031, 2036]
+
+// Card-return policy per round (G1). Round 1 has nothing to return (absent here).
+// Round 2: 'none' — returns are rejected. Round 3: 'full' — any number of held
+// cards may be returned, each for its FULL cost. Read from here; routes must not
+// hard-code round numbers.
+export const returnPolicy = { 2: 'none', 3: 'full' }
