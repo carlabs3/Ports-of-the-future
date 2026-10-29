@@ -2,7 +2,8 @@ import { PORTS, PORTS_BY_ID } from '../config/ports/index.js'
 import { MEASURES_BY_ID } from '../config/measures.js'
 import { cumulativeBudgets } from '../config/game.js'
 import { applyCultureMeasureBonus, BAND_ORDER } from './cultureService.js'
-import { expectedProtection, impactsForRound } from './preparednessService.js'
+import { expectedProtection } from './preparednessService.js'
+import { roundPotentialM, roundDamageM } from './roundMoney.js'
 
 // Strategy scoring (v5, Appendix C) — pure, server-side. Reuses expectedProtection
 // (and through it the single preparedness formula); no second copy of the maths.
@@ -36,9 +37,8 @@ function bestForPort(port) {
     for (const round of [1, 2, 3]) {
       if (cost > cumulativeBudgets[round - 1]) continue
       const likelihoods = port.wheels[round].likelihoods
-      const impacts = impactsForRound(port, round)
       for (const band of BAND_ORDER) {
-        const exp = expectedProtection({ measures: subset, effectiveBand: effByBand[band], likelihoods, impacts })
+        const exp = expectedProtection({ measures: subset, effectiveBand: effByBand[band], likelihoods })
         if (exp > out[`${round}|${band}`]) out[`${round}|${band}`] = exp
       }
     }
@@ -127,16 +127,15 @@ export function computeAwards(rows = []) {
 // (sums of the per-round shown values). Ranks are computed for BOTH boards
 // (by strategy = finalScore, by losses avoided = avoidedPctRaw); teams share a
 // rank only on exactly equal values. After round 2, each team's movement vs its
-// position after round 1 is included (+ = moved up).
-const round1s = v => Math.round((Number(v) || 0) * 10) / 10
-
+// position after round 1 is included (+ = moved up). Money is in € millions,
+// rounded to whole numbers (J5); totals sum the per-round shown values.
 export function computeStandings(strategies = [], throughRound = 1) {
   const rows = strategies.map(s => {
     const played = (s.rounds || []).filter(r => r.round <= throughRound)
     const raws = played.map(r => r.strategyScoreRaw != null ? r.strategyScoreRaw : (r.strategyScore != null ? r.strategyScore / 100 : null)).filter(v => v != null)
-    const totalDamageRaw = played.reduce((a, r) => a + (Number(r.damageBill) || 0), 0)
-    const totalPotential = played.reduce((a, r) => a + (Number(r.impact) || 0), 0)
-    const totalDamageShown = round1s(played.reduce((a, r) => a + round1s(r.damageBill), 0))
+    const totalDamageRaw = played.reduce((a, r) => a + roundDamageM(r), 0)       // €M (J3)
+    const totalPotential = played.reduce((a, r) => a + roundPotentialM(r), 0)    // €M (J3)
+    const totalDamageShown = played.reduce((a, r) => a + Math.round(roundDamageM(r)), 0) // J5: whole
     return {
       group: s.group,
       portId: s.portId ?? null,
@@ -145,8 +144,8 @@ export function computeStandings(strategies = [], throughRound = 1) {
       totalPotential,
       avoidedPctRaw: totalPotential > 0 ? 1 - totalDamageRaw / totalPotential : 0,
       totalDamageShown,
-      avoidedShown: round1s(totalPotential - totalDamageShown),
-      avoidedPct: totalPotential > 0 ? Math.round((1 - totalDamageRaw / totalPotential) * 100) : 0, // F3: from raw
+      avoidedShown: totalPotential - totalDamageShown,                      // J5: whole
+      avoidedPct: totalPotential > 0 ? Math.round((1 - totalDamageRaw / totalPotential) * 100) : 0, // from raw
     }
   })
 

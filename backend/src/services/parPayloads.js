@@ -2,15 +2,15 @@ import { EVENT_CODES, EVENTS_BY_CODE } from '../config/events.js'
 import { MEASURES_BY_ID } from '../config/measures.js'
 import { applyCultureMeasureBonus } from './cultureService.js'
 import { topExposureEvents } from './wheelService.js'
-import { impactsForRound } from './preparednessService.js'
+import { roundPotentialM, roundDamageM } from './roundMoney.js'
 
 // Pure builders for the facilitator-facing round payloads. Extracted from the
 // routes so the secrecy rules can be unit-tested without a DB/HTTP harness:
 //   • D3 — a round's wheel may be revealed only once every team has locked it.
-//   • D4 — the full per-event impact table is revealed ONLY at the debrief; every
-//          other payload exposes at most the DRAWN event's single impact.
-// None of these ever expose the best-strategy combinations or a port's secret
-// impact table (outside the debrief builder).
+//   • D4 — a payload exposes at most the DRAWN event's own potential loss (€M)
+//          and the current round's likelihoods (J1: losses are the same for every
+//          port, so there is no secret per-port table to hide any more).
+// None of these ever expose the best-strategy combinations.
 
 // A port's per-round wheel likelihoods (percent, sum 100). Secret during play.
 export function roundLikelihoods(port, round) {
@@ -57,7 +57,7 @@ export function buildWheelPayload({ port, doc, round }) {
 }
 
 // /draw — post-spin outcome for ONE team. Carries the round's likelihoods and,
-// inside `entry`, ONLY the drawn event's impact/damage (D4) — never the table.
+// inside `entry`, ONLY the drawn event's potential loss/damage (D4).
 export function buildDrawPayload({ port, group, round, eventCode, entry }) {
   const L = roundLikelihoods(port, round)
   return {
@@ -73,7 +73,7 @@ export function buildDrawPayload({ port, group, round, eventCode, entry }) {
 }
 
 // /outcomes — round snapshots for ONE team (ranking/debrief source). Each round
-// entry carries only the drawn event's impact, never the full table.
+// entry carries only the drawn event's own potential loss, never a full table.
 export function buildOutcomesTeam(team, port) {
   return {
     group:    team.group,
@@ -82,16 +82,20 @@ export function buildOutcomesTeam(team, port) {
   }
 }
 
-// Debrief — the ONLY payload that reveals a port's full per-round impact table
-// ("Impact by port"). Round snapshots (with event names) + ranking + the impact
-// table per round. The game is over, so the previously-secret impacts are shown.
+// Debrief — round snapshots (with event names) + ranking. Money per round is in
+// € millions (J3): the drawn event's potential loss and the damage bill. With one
+// loss per event (J1) there is no secret per-port impact table to reveal here.
 export function buildDebriefTeam({ team, port, rankRow = {} }) {
+  // J3: expose per-round money in € millions so the UI never sees coin-era units.
   const rounds = (team.rounds || []).map(r => {
     const o = plainRound(r)
-    return { ...o, eventName: o.drawnEvent ? (EVENTS_BY_CODE[o.drawnEvent]?.name || o.drawnEvent) : null }
+    return {
+      ...o,
+      damageBill:     roundDamageM(o),
+      potentialLossM: roundPotentialM(o),
+      eventName:      o.drawnEvent ? (EVENTS_BY_CODE[o.drawnEvent]?.name || o.drawnEvent) : null,
+    }
   })
-  const impactsByRound = {}
-  for (const round of [1, 2, 3]) impactsByRound[round] = impactsForRound(port, round)
   return {
     group:              team.group,
     portName:           port?.name || null,
@@ -101,11 +105,10 @@ export function buildDebriefTeam({ team, port, rankRow = {} }) {
     rank:               rankRow.rank ?? null,
     finalScore:         rankRow.finalScore ?? 0,     // mean of the 3 strategy scores (skill)
     totalDamage:        rankRow.totalDamage ?? 0,    // sum of the 3 damages (luck)
-    totalPotential:     rankRow.totalPotential ?? 0, // Σ impact (F2)
+    totalPotential:     rankRow.totalPotential ?? 0, // Σ potential loss (F2)
     avoidedPctRaw:      rankRow.avoidedPctRaw ?? 0,   // raw avoided ratio (F2 — ranking/awards)
     portfolio:          portfolioCards(team.portfolio),
     rounds,
-    impactsByRound,                                 // full impact table — DEBRIEF ONLY
     illustrationMotifs: topExposureEvents(roundLikelihoods(port, 1)),
   }
 }

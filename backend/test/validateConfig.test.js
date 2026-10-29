@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { validateConfig } from '../src/config/validateConfig.js'
+import { EVENTS } from '../src/config/events.js'
 import { MEASURES, MEASURES_BY_ID } from '../src/config/measures.js'
 import { PORTS, PORTS_BY_ID } from '../src/config/ports/index.js'
 
@@ -30,7 +31,7 @@ test('spot-check measures (v5, 28, with new costs and #27/#28)', () => {
   assert.deepEqual(raisers, [19, 20])
 })
 
-test('spot-check ports (v5, decks + wheels + impacts)', () => {
+test('spot-check ports (v5, decks + wheels, no impact table)', () => {
   assert.equal(PORTS.length, 6)
   // Deck changes: Nord-Maris loses #24, gains #27; Boreal gains #27 and #28.
   assert.ok(PORTS_BY_ID['nord-maris'].deck.includes(27))
@@ -48,8 +49,9 @@ test('spot-check ports (v5, decks + wheels + impacts)', () => {
   // Appendix E/F spot values.
   assert.equal(PORTS_BY_ID['boreal'].wheels[1].likelihoods.SI, 40)
   assert.equal(PORTS_BY_ID['boreal'].wheels[1].year, 2026)
-  assert.equal(PORTS_BY_ID['nord-maris'].impacts.SS, 5)
-  assert.deepEqual(PORTS_BY_ID['boreal'].impactRound3Plus, ['SS', 'RF'])
+  // J1/J2/J6: ports no longer carry a per-port impact table or a round-3 override.
+  assert.equal(PORTS_BY_ID['nord-maris'].impacts, undefined)
+  assert.equal(PORTS_BY_ID['boreal'].impactRound3Plus, undefined)
 })
 
 // ── negatives: one broken fixture per validator rule ────────────────────────
@@ -67,25 +69,16 @@ test('negative: a wheel whose likelihoods do not sum to 100 fails', () => {
   assert.throws(() => validateConfig({ ports }), /sum to 100/)
 })
 
-test('negative: an impact outside 1–5 fails', () => {
-  const ports = clonePorts()
-  ports[0].impacts[Object.keys(ports[0].impacts)[0]] = 6
-  assert.throws(() => validateConfig({ ports }), /impact .* must be an integer 1–5/)
+test('negative: an event with no potentialLossM fails (J2)', () => {
+  const events = JSON.parse(JSON.stringify(EVENTS))
+  delete events[0].potentialLossM
+  assert.throws(() => validateConfig({ events }), /potentialLossM must be > 0/)
 })
 
-test('negative: an event with a likelihood above 0 but no impact fails', () => {
-  const ports = clonePorts()
-  // Nord-Maris SS has likelihood 40 in round 1; remove its impact.
-  const nm = ports.find(p => p.id === 'nord-maris')
-  delete nm.impacts.SS
-  assert.throws(() => validateConfig({ ports }), /likelihood above 0 but no impact/)
-})
-
-test('negative: a round-3 +1 event that would exceed 5 fails', () => {
-  const ports = clonePorts()
-  const nm = ports.find(p => p.id === 'nord-maris') // RF is +1 in round 3
-  nm.impacts.RF = 5 // 5 + 1 = 6
-  assert.throws(() => validateConfig({ ports }), /exceed 5 after the round-3/)
+test('negative: an event with potentialLossM = 0 fails (J2)', () => {
+  const events = JSON.parse(JSON.stringify(EVENTS))
+  events[0].potentialLossM = 0
+  assert.throws(() => validateConfig({ events }), /potentialLossM must be > 0/)
 })
 
 test('negative: a deck missing a shared card fails', () => {

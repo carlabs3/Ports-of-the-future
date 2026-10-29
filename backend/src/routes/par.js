@@ -12,6 +12,7 @@ import { getPublicMeasures } from '../services/measuresService.js'
 import { computeCultureBand, applyCultureMeasureBonus, BAND_ORDER } from '../services/cultureService.js'
 import { drawEvent } from '../services/wheelService.js'
 import { buyCard, returnCard, undoCard, lockRound, unlockRound, recordSpin, advanceRound, ROUND_BUDGET } from '../services/roundsService.js'
+import { roundPotentialM, roundDamageM } from '../services/roundMoney.js'
 import { computeFinalRanking, computeAwards, computeStandings } from '../services/strategyService.js'
 import { canRevealWheel, buildWheelPayload, buildDrawPayload, buildOutcomesTeam, buildDebriefTeam } from '../services/parPayloads.js'
 
@@ -30,9 +31,9 @@ export default function parRouter(io) {
     res.json(getPublicQuestionnaire())
   })
 
-  // Facilitator-only: port catalogue. PUBLIC fields only — the wheels, impacts
-  // and impactRound3Plus are SECRET and never exposed. Explicit field copy, NOT a
-  // spread of the port.
+  // Facilitator-only: port catalogue. PUBLIC fields only — the per-round wheels
+  // are SECRET and never exposed (potential losses live on the events, J1).
+  // Explicit field copy, NOT a spread of the port.
   router.get('/ports', authMiddleware, (_req, res) => {
     res.json(PORTS.map(p => ({
       id:             p.id,
@@ -291,8 +292,8 @@ export default function parRouter(io) {
         strategyRaws:   s.rounds
           .map(r => r.strategyScoreRaw != null ? r.strategyScoreRaw : (r.strategyScore != null ? r.strategyScore / 100 : null))
           .filter(v => v != null),
-        damages:        s.rounds.map(r => r.damageBill),
-        potentials:     s.rounds.map(r => r.impact), // Σ impact → totalPotential (F2)
+        damages:        s.rounds.map(roundDamageM),        // €M (J3-normalised)
+        potentials:     s.rounds.map(roundPotentialM),     // €M → totalPotential (F2)
       })))
       const rankByGroup = Object.fromEntries(ranking.map(r => [r.group, r]))
 

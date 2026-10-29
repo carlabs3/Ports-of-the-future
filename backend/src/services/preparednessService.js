@@ -1,5 +1,5 @@
 import { MEASURES_BY_ID } from '../config/measures.js'
-import { EVENT_CODES } from '../config/events.js'
+import { EVENT_CODES, EVENTS_BY_CODE } from '../config/events.js'
 
 // Preparedness scoring — pure, server-side, no DB. This is the phase-8 maths.
 //
@@ -59,42 +59,35 @@ export function computePreparedness({ measureIds = [], eventCode, cultureBand = 
   }
 }
 
-// ── v5 scoring (Appendix C) ─────────────────────────────────────────────────
+// ── v5 scoring (Appendix C), with J1/J2 potential losses ────────────────────
 
-// The impact (coins 1–5) per event for a port in a given round. Base impacts are
-// used in rounds 1 & 2; in round 3 the two `impactRound3Plus` events gain +1.
-// Events with no base impact are absent (they can't occur on this port's wheel).
-export function impactsForRound(port, round) {
-  const base = port?.impacts || {}
-  const plus = new Set(round === 3 ? (port?.impactRound3Plus || []) : [])
-  const out = {}
-  for (const [code, v] of Object.entries(base)) out[code] = v + (plus.has(code) ? 1 : 0)
-  return out
+// Potential loss (€ millions) for an event — the SAME for every port and round.
+export function potentialLossM(event) {
+  return EVENTS_BY_CODE[event]?.potentialLossM || 0
 }
 
-// Damage for the DRAWN event (D1): impact × (1 − P/10), at FULL precision — no
-// rounding to 0.5 any more. P is the preparedness (0–10) for that event with the
-// team's effective culture band. A score only; it never removes coins.
-export function computeDamage({ measures = [], event, effectiveBand = null, impact = 0 }) {
+// Damage for the DRAWN event (D1): potentialLossM × (1 − P/10), full precision
+// (€ millions). P is the preparedness (0–10) with the team's effective band.
+export function computeDamage({ measures = [], event, effectiveBand = null }) {
   const P = computePreparedness({ measureIds: measures, eventCode: event, cultureBand: effectiveBand }).rawPreparedness
-  return (Number(impact) || 0) * (1 - P / 10)
+  return potentialLossM(event) * (1 - P / 10)
 }
 
-// Expected protection (%) for a round: Σ_e (L_e × I_e × P_e/10) ÷ Σ_e (L_e × I_e),
-// ×100, over all events, where L is the likelihood on the ROUND's wheel and I the
-// impact in the ROUND. P_e uses the team's EFFECTIVE band. Does not depend on the
-// drawn event. Full precision — display rounds half-up (D9). The L scale cancels
+// Expected protection (%) for a round: Σ_e (L_e × W_e × P_e/10) ÷ Σ_e (L_e × W_e),
+// ×100, over the events on the ROUND's wheel, where L is the likelihood and W the
+// event's potential loss (potentialLossM, same for every port). P_e uses the
+// team's EFFECTIVE band. Does not depend on the drawn event. The L scale cancels
 // in the ratio, so likelihoods may be in percent.
-export function expectedProtection({ measures = [], effectiveBand = null, likelihoods = {}, impacts = {} }) {
+export function expectedProtection({ measures = [], effectiveBand = null, likelihoods = {} }) {
   let avoided = 0
   let possible = 0
   for (const code of EVENT_CODES) {
     const L = Number(likelihoods[code]) || 0
-    const I = Number(impacts[code]) || 0
-    if (L <= 0 || I <= 0) continue
+    const W = potentialLossM(code)
+    if (L <= 0 || W <= 0) continue
     const P = computePreparedness({ measureIds: measures, eventCode: code, cultureBand: effectiveBand }).rawPreparedness
-    avoided += L * I * (P / 10)
-    possible += L * I
+    avoided += L * W * (P / 10)
+    possible += L * W
   }
   return possible > 0 ? (avoided / possible) * 100 : 0
 }

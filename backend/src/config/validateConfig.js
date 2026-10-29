@@ -2,7 +2,7 @@
 // Run at server startup: if any invariant is violated it throws with the full
 // list of problems, so bad data stops the server before it can serve wrong
 // scoring. Workshop v5: 28 measures, 6 ports, 85 cards, per-round wheels (% in
-// steps of 5, sum 100) and per-port impacts (1–5, +1 for two events in round 3).
+// steps of 5, sum 100) and one potentialLossM (€M, > 0) per event (J1/J2).
 import { EVENTS, EVENT_CODES } from './events.js'
 import { MEASURES, SHARED_MEASURE_IDS } from './measures.js'
 import { PORTS } from './ports/index.js'
@@ -14,13 +14,14 @@ export function validateConfig({ events = EVENTS, measures = MEASURES, ports = P
   const validCodes = new Set(EVENT_CODES)
 
   // ── events ────────────────────────────────────────────────────────────────
-  // v5: no global lossValue — damage is per port and per round (see ports).
+  // J1/J2: each event carries potentialLossM (€M, > 0), the same for every port.
   if (events.length !== 7) errors.push(`events: expected 7, got ${events.length}`)
   const seenCodes = new Set()
   for (const e of events) {
     if (seenCodes.has(e.code)) errors.push(`event code duplicated: ${e.code}`)
     seenCodes.add(e.code)
     if (!validCodes.has(e.code)) errors.push(`event has unknown code "${e.code}"`)
+    if (!(Number(e.potentialLossM) > 0)) errors.push(`event ${e.code}: potentialLossM must be > 0, got ${e.potentialLossM}`)
   }
 
   // ── measures ──────────────────────────────────────────────────────────────
@@ -72,9 +73,8 @@ export function validateConfig({ events = EVENTS, measures = MEASURES, ports = P
     }
 
     // wheels: one per round (1/2/3); likelihoods are non-negative multiples of 5
-    // and sum to exactly 100. Collect every event that can occur in any round.
+    // and sum to exactly 100.
     const wheels = p.wheels || {}
-    const occurs = new Set()
     for (const round of [1, 2, 3]) {
       const w = wheels[round]
       if (!w || typeof w.likelihoods !== 'object') { errors.push(`port ${p.name}: missing wheel for round ${round}`); continue }
@@ -83,28 +83,11 @@ export function validateConfig({ events = EVENTS, measures = MEASURES, ports = P
         if (!validCodes.has(code)) errors.push(`port ${p.name} round ${round}: wheel has unknown event code "${code}"`)
         if (!isInt(val) || val < 0 || val % 5 !== 0) errors.push(`port ${p.name} round ${round}: likelihood ${code}=${val} must be a non-negative multiple of 5`)
         sum += Number(val) || 0
-        if ((Number(val) || 0) > 0) occurs.add(code)
       }
       if (sum !== 100) errors.push(`port ${p.name} round ${round}: likelihoods must sum to 100, got ${sum}`)
     }
-
-    // impacts: integers 1–5 for every event that can occur; the two round-3 +1
-    // events must have an impact and must not exceed 5 after the increase.
-    const impacts = p.impacts || {}
-    for (const [code, val] of Object.entries(impacts)) {
-      if (!validCodes.has(code)) errors.push(`port ${p.name}: impact has unknown event code "${code}"`)
-      if (!isInt(val) || val < 1 || val > 5) errors.push(`port ${p.name}: impact ${code}=${val} must be an integer 1–5`)
-    }
-    for (const code of occurs) {
-      const imp = impacts[code]
-      if (!isInt(imp) || imp < 1) errors.push(`port ${p.name}: event ${code} has a likelihood above 0 but no impact`)
-    }
-    for (const code of (p.impactRound3Plus || [])) {
-      if (!validCodes.has(code)) errors.push(`port ${p.name}: impactRound3Plus has unknown event code "${code}"`)
-      const imp = impacts[code]
-      if (!isInt(imp)) errors.push(`port ${p.name}: impactRound3Plus event ${code} has no base impact`)
-      else if (imp + 1 > 5) errors.push(`port ${p.name}: impact ${code} would exceed 5 after the round-3 +1 (base ${imp})`)
-    }
+    // J2/J6: ports no longer carry an impact table — potential losses live on
+    // the events (checked above), the same for every port and round.
   }
 
   const EXPECTED_CARDS = 85

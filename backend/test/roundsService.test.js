@@ -1,8 +1,8 @@
 // Rounds state machine (workshop v5). The structural numbers (coins, grants,
 // refunds, portfolio, lock/undo rules) are asserted as literals — they are the
 // point of this service. The per-spin scoring fields are verified against an
-// INDEPENDENT recomputation (round wheel + impactsForRound + effective band),
-// which catches a wrong-round / wrong-band wiring bug in recordSpin without
+// INDEPENDENT recomputation (round wheel + the event's potentialLossM + effective
+// band), which catches a wrong-round / wrong-band wiring bug in recordSpin without
 // hardcoding numbers that aren't in an appendix. The scoring maths themselves
 // are pinned to the appendix in scoringV5.test.js.
 import { test } from 'node:test'
@@ -11,7 +11,7 @@ import { PORTS_BY_ID } from '../src/config/ports/index.js'
 import { roundGrants } from '../src/config/game.js'
 import { precomputeBestPossible, computeStrategyScore } from '../src/services/strategyService.js'
 import { applyCultureMeasureBonus } from '../src/services/cultureService.js'
-import { computePreparedness, expectedProtection, impactsForRound } from '../src/services/preparednessService.js'
+import { computePreparedness, expectedProtection, potentialLossM } from '../src/services/preparednessService.js'
 import { buyCard, returnCard, undoCard, lockRound, unlockRound, recordSpin, advanceRound } from '../src/services/roundsService.js'
 
 precomputeBestPossible()
@@ -21,20 +21,19 @@ function fresh(portId = 'boreal', startingBand = 'aware') {
 }
 
 // Independently recompute what a spin's scoring fields SHOULD be, from the round
-// wheel, the round's impacts, and the effective culture band — then assert the
-// recorded entry matches. If recordSpin used the wrong round's wheel, used base
-// impacts in round 3, or skipped the enabler bonus, these diverge.
+// wheel, the drawn event's potentialLossM (€M, same for every port/round — J1/J6),
+// and the effective culture band — then assert the recorded entry matches. If
+// recordSpin used the wrong round's wheel or skipped the enabler bonus, these diverge.
 function assertSpinScoring(entry, { portId, startingBand, portfolio, round, event }) {
   const port = PORTS_BY_ID[portId]
   const effBand = applyCultureMeasureBonus(startingBand, portfolio)
   const prep = computePreparedness({ measureIds: portfolio, eventCode: event, cultureBand: effBand })
-  const impacts = impactsForRound(port, round)
-  const impact = impacts[event] ?? 0
-  const expDamage = impact * (1 - prep.rawPreparedness / 10)
-  const exp = expectedProtection({ measures: portfolio, effectiveBand: effBand, likelihoods: port.wheels[round].likelihoods, impacts })
+  const potential = potentialLossM(event)
+  const expDamage = potential * (1 - prep.rawPreparedness / 10)
+  const exp = expectedProtection({ measures: portfolio, effectiveBand: effBand, likelihoods: port.wheels[round].likelihoods })
 
   assert.equal(entry.cultureLevel, effBand, 'effective band')
-  assert.equal(entry.impact, impact, 'drawn-event impact for this port/round')
+  assert.equal(entry.potentialLossM, potential, 'drawn-event potential loss (€M, same for every port)')
   assert.equal(entry.rawLossesAvoidedPct, prep.rawLossesAvoidedPct, 'losses avoided')
   assert.ok(Math.abs(entry.damageBill - expDamage) < 1e-9, `damage full precision (${entry.damageBill} vs ${expDamage})`)
   assert.ok(Math.abs(entry.expectedProtection - exp) < 1e-9, 'expected protection uses this round\'s wheel')
@@ -54,7 +53,7 @@ test('full 3-round playthrough for Boreal: coins, grants, returns, and per-round
   assert.deepEqual([r1.coinsStart, r1.coinsSpent, r1.refund, r1.coinsLeft], [6, 6, 0, 0])
   assert.equal(r1.heldCost, 6)              // 24(3) + 17(2) + 19(1)
   assert.equal(r1.cultureLevel, 'developing') // Aware + 1 enabler (#19)
-  assert.equal(r1.impact, 5)                // Boreal SI impact = 5
+  assert.equal(r1.potentialLossM, 300)      // SI potential loss €300M (J1)
   assertSpinScoring(r1, { portId: 'boreal', startingBand: 'aware', portfolio: [24, 17, 19], round: 1, event: 'SI' })
   assert.equal(advanceRound(s).ok, true)
   assert.equal(s.coins, roundGrants[1])     // 0 + 3
@@ -69,7 +68,7 @@ test('full 3-round playthrough for Boreal: coins, grants, returns, and per-round
   assert.deepEqual([r2.coinsStart, r2.coinsSpent, r2.refund, r2.coinsLeft], [3, 2, 0, 1])
   assert.deepEqual(r2.bought, [6])
   assert.equal(r2.heldCost, 8)              // 24(3) + 17(2) + 19(1) + 6(2)
-  assert.equal(r2.impact, 3)                // Boreal WS impact = 3
+  assert.equal(r2.potentialLossM, 500)      // WS potential loss €500M (J1)
   assertSpinScoring(r2, { portId: 'boreal', startingBand: 'aware', portfolio: [24, 17, 19, 6], round: 2, event: 'WS' })
   assert.equal(advanceRound(s).ok, true)
   assert.equal(s.coins, 1 + roundGrants[2]) // 1 + 3
@@ -84,7 +83,7 @@ test('full 3-round playthrough for Boreal: coins, grants, returns, and per-round
   const r3 = recordSpin(s, 'SS').entry
   assert.deepEqual([r3.coinsStart, r3.coinsSpent, r3.refund, r3.coinsLeft], [4, 3, 3, 4])
   assert.equal(r3.heldCost, 8)              // 17(2) + 19(1) + 6(2) + 14(3)
-  assert.equal(r3.impact, 4)                // Boreal SS base 3, +1 in round 3 (impactRound3Plus)
+  assert.equal(r3.potentialLossM, 600)      // SS potential loss €600M (no round-3 increase, J6)
   assertSpinScoring(r3, { portId: 'boreal', startingBand: 'aware', portfolio: [17, 19, 6, 14], round: 3, event: 'SS' })
 
   assert.deepEqual(s.portfolio, [17, 19, 6, 14])

@@ -1,15 +1,15 @@
 // Standings (G5): computeStandings over the rounds played so far, with movement
-// after round 2. Shown money checked through debriefTotals (as in format.test).
+// after round 2. Money is € millions, whole numbers (J5); the backend aggregates
+// are checked directly here (the frontend debriefTotals is covered in format.test).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { computeStandings } from '../src/services/strategyService.js'
-import { debriefTotals } from '../../frontend/src/utils/format.js'
 
-// Team A / Team B round-1 fixtures from the debrief prompt (strategy B 9.0, A 8.3;
-// avoided B 42%/€1.7 of €4.0; A 11%/€0.2 of €2.0).
-const r = (round, strategyScoreRaw, damageBill, impact) => ({ round, strategyScoreRaw, damageBill, impact })
-const teamB = { group: 'Team B', portId: 'meridia', rounds: [r(1, 0.90, 2.304, 4), r(2, 0.70, 1.2, 3)] }
-const teamA = { group: 'Team A', portId: 'nord-maris', rounds: [r(1, 0.83, 1.78, 2), r(2, 0.95, 0.4, 2)] }
+// Team A / Team B fixtures in € millions (J1/J3). Strategy B 9.0, A 8.3; after
+// round 1 avoided B 42% (€170M of €400M), A 11% (€22M of €200M).
+const r = (round, strategyScoreRaw, damageBill, potentialLossM) => ({ round, strategyScoreRaw, damageBill, potentialLossM })
+const teamB = { group: 'Team B', portId: 'meridia', rounds: [r(1, 0.90, 230.4, 400), r(2, 0.70, 63, 300)] }
+const teamA = { group: 'Team A', portId: 'nord-maris', rounds: [r(1, 0.83, 178, 200), r(2, 0.95, 106, 200)] }
 
 test('standings after round 1: strategy and avoided values', () => {
   const st = computeStandings([teamA, teamB], 1)
@@ -20,13 +20,11 @@ test('standings after round 1: strategy and avoided values', () => {
   // avoided %
   assert.equal(byGroup['Team B'].avoidedPct, 42)
   assert.equal(byGroup['Team A'].avoidedPct, 11)
-  // shown € via the shared F3 helper (round-1 only)
-  const B = debriefTotals(teamB.rounds.slice(0, 1))
-  assert.equal(B.avoidedShown, 1.7); assert.equal(B.totalPotential, 4)
-  const A = debriefTotals(teamA.rounds.slice(0, 1))
-  assert.equal(A.avoidedShown, 0.2); assert.equal(A.totalPotential, 2)
-  assert.equal(byGroup['Team B'].avoidedShown, 1.7)
-  assert.equal(byGroup['Team A'].avoidedShown, 0.2)
+  // shown € millions (J5: whole; avoided = potential − round(damage))
+  assert.equal(byGroup['Team B'].totalPotential, 400)
+  assert.equal(byGroup['Team B'].avoidedShown, 170) // 400 − 230
+  assert.equal(byGroup['Team A'].totalPotential, 200)
+  assert.equal(byGroup['Team A'].avoidedShown, 22)  // 200 − 178
   // ranks (B higher on both boards); no movement after round 1
   assert.equal(byGroup['Team B'].strategyRank, 1)
   assert.equal(byGroup['Team B'].avoidedRank, 1)
@@ -45,8 +43,8 @@ test('standings after round 2: movement is computed from the round-1 positions',
 })
 
 test('exactly-equal values share a rank', () => {
-  const t1 = { group: 'T1', portId: 'meridia', rounds: [r(1, 0.8, 1, 3)] }
-  const t2 = { group: 'T2', portId: 'nord-maris', rounds: [r(1, 0.8, 1, 3)] }
+  const t1 = { group: 'T1', portId: 'meridia', rounds: [r(1, 0.8, 100, 300)] }
+  const t2 = { group: 'T2', portId: 'nord-maris', rounds: [r(1, 0.8, 100, 300)] }
   const st = computeStandings([t1, t2], 1)
   const [a, b] = st.teams
   assert.equal(a.strategyRank, b.strategyRank)

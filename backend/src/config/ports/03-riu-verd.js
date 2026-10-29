@@ -1,4 +1,4 @@
-// See 01-nord-maris.js for field conventions. wheels + impacts are SECRET (v5).
+// See 01-nord-maris.js for field conventions. wheels are SECRET (v5); potential losses live on the events (J1).
 export default {
   id: 'riu-verd',
   name: 'Riu Verd',
@@ -15,6 +15,4 @@ export default {
     2: { year: 2031, likelihoods: { RF: 25, HW: 25, DR: 40, WF: 10 } },
     3: { year: 2036, likelihoods: { RF: 20, HW: 25, DR: 45, WF: 10 } },
   },
-  impacts: { RF: 4, HW: 3, DR: 5, WF: 2 },
-  impactRound3Plus: ['RF', 'HW'],
 }

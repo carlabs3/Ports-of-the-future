@@ -9,9 +9,12 @@ import { buyCard, lockRound, recordSpin } from '../src/services/roundsService.js
 import { precomputeBestPossible, bestPossibleExpectedProtection } from '../src/services/strategyService.js'
 import { applyCultureMeasureBonus } from '../src/services/cultureService.js'
 import { MEASURES_BY_ID } from '../src/config/measures.js'
-import { formatEurBn, formatPercent, formatScore10, damageBreakdown } from '../../frontend/src/utils/format.js'
 
 precomputeBestPossible()
+
+// J5 display helpers (whole € millions) exercised here against the engine entry;
+// the frontend formatters are asserted separately in format.test.js (Commit 2).
+const round = x => Math.round(x)
 
 function play({ portId, startingBand, cards, event }) {
   const state = { portId, startingBand, portfolio: [], coins: 6, roundStartCoins: 6, currentRound: 1, roundLocked: false, roundBought: [], roundReturned: null, rounds: [] }
@@ -42,18 +45,17 @@ test('Case A · Nord-Maris, Team A, Developing, #2 #19 #23, draws Snow & ice', (
   assert.deepEqual(groups({ cards, event: 'SI', startingBand: 'developing', effBand }),
     { helped: [23], raised: [19], notThisTime: [2] })
 
-  // Protection this event, damage, losses avoided, potential losses.
-  assert.equal(formatPercent(entry.rawLossesAvoidedPct / 10), '11%')
-  const d = damageBreakdown(entry.damageBill, entry.impact)
-  assert.equal(formatEurBn(d.damageShown), '€1.8bn')
-  assert.equal(formatEurBn(d.avoidedShown), '€0.2bn')
-  assert.equal(formatEurBn(d.potentialShown), '€2.0bn')
-  assert.equal(d.damageShown + d.avoidedShown, d.potentialShown)
+  // Protection this event, damage, losses avoided, potential losses (€M, J1/J5).
+  assert.equal(Math.round(entry.rawLossesAvoidedPct), 11) // 11% protection
+  assert.equal(entry.potentialLossM, 300)                      // SI potential loss €300M
+  const damageShown = round(entry.damageBill)
+  assert.equal(damageShown, 267)                               // €267M
+  assert.equal(entry.potentialLossM - damageShown, 33)         // avoided €33M
 
-  // Strategy: expected 50.2% ÷ best 60.6% → 8.3 / 10.
-  assert.ok(Math.abs(entry.expectedProtection - 50.2) < 0.1, `expected ≈50.2, got ${entry.expectedProtection}`)
+  // Strategy: expected 48.5% ÷ best 60.6% → 8.0 / 10.
+  assert.ok(Math.abs(entry.expectedProtection - 48.5) < 0.1, `expected ≈48.5, got ${entry.expectedProtection}`)
   assert.ok(Math.abs(bestPossibleExpectedProtection('nord-maris', 1, 'developing') - 60.6) < 0.1)
-  assert.equal(formatScore10(entry.strategyScoreRaw), '8.3 / 10')
+  assert.equal((entry.strategyScoreRaw * 10).toFixed(1), '8.0')  // 8.0 / 10
 })
 
 test('Case B · Meridia, Team B, Aware, #8 #11 #19 #23 #26, draws Wildfire', () => {
@@ -65,14 +67,14 @@ test('Case B · Meridia, Team B, Aware, #8 #11 #19 #23 #26, draws Wildfire', () 
   assert.deepEqual(groups({ cards, event: 'WF', startingBand: 'aware', effBand }),
     { helped: [8, 11, 23], raised: [19], notThisTime: [26] })
 
-  assert.equal(formatPercent(entry.rawLossesAvoidedPct / 10), '42%')
-  const d = damageBreakdown(entry.damageBill, entry.impact)
-  assert.equal(formatEurBn(d.damageShown), '€2.3bn')
-  assert.equal(formatEurBn(d.avoidedShown), '€1.7bn')
-  assert.equal(formatEurBn(d.potentialShown), '€4.0bn')
-  assert.equal(d.damageShown + d.avoidedShown, d.potentialShown)
+  assert.equal(Math.round(entry.rawLossesAvoidedPct), 42) // 42% protection
+  assert.equal(entry.potentialLossM, 300)                      // WF potential loss €300M
+  const damageShown = round(entry.damageBill)
+  assert.equal(damageShown, 173)                               // €173M
+  assert.equal(entry.potentialLossM - damageShown, 127)        // avoided €127M
 
-  assert.ok(Math.abs(entry.expectedProtection - 53.9) < 0.1, `expected ≈53.9, got ${entry.expectedProtection}`)
-  assert.ok(Math.abs(bestPossibleExpectedProtection('meridia', 1, 'aware') - 60.2) < 0.1)
-  assert.equal(formatScore10(entry.strategyScoreRaw), '9.0 / 10')
+  // Strategy: expected 44.0% ÷ best 51.5% → 8.6 / 10.
+  assert.ok(Math.abs(entry.expectedProtection - 44.0) < 0.1, `expected ≈44.0, got ${entry.expectedProtection}`)
+  assert.ok(Math.abs(bestPossibleExpectedProtection('meridia', 1, 'aware') - 51.5) < 0.1)
+  assert.equal((entry.strategyScoreRaw * 10).toFixed(1), '8.6')  // 8.6 / 10
 })

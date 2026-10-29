@@ -3,7 +3,7 @@ import { PORTS_BY_ID } from '../config/ports/index.js'
 import { roundGrants, cumulativeBudgets, returnPolicy } from '../config/game.js'
 import { applyCultureMeasureBonus } from './cultureService.js'
 import {
-  computePreparedness, computeCoinsThatHelped, expectedProtection, impactsForRound,
+  computePreparedness, computeCoinsThatHelped, expectedProtection, potentialLossM,
 } from './preparednessService.js'
 import { computeStrategyScoreRaw } from './strategyService.js'
 
@@ -94,10 +94,9 @@ export function recordSpin(state, event) {
   const prep = computePreparedness({ measureIds: state.portfolio, eventCode: event, cultureBand: effBand })
 
   const likelihoods = port?.wheels?.[round]?.likelihoods || {}
-  const impacts = impactsForRound(port, round)
-  const impact = impacts[event] ?? 0
-  const damage = impact * (1 - prep.rawPreparedness / 10) // full precision (D1)
-  const expected = expectedProtection({ measures: state.portfolio, effectiveBand: effBand, likelihoods, impacts })
+  const potential = potentialLossM(event) // € millions, same for every port (J1)
+  const damage = potential * (1 - prep.rawPreparedness / 10) // full precision €M (D1)
+  const expected = expectedProtection({ measures: state.portfolio, effectiveBand: effBand, likelihoods })
   // Raw strategy ratio (exp ÷ best, unrounded); strategyScore is its rounded %.
   const strategyRaw = computeStrategyScoreRaw({ expectedProtection: expected, portId: state.portId, round, startingBand: state.startingBand })
 
@@ -117,8 +116,8 @@ export function recordSpin(state, event) {
     drawnEvent:          event,
     rawLossesAvoidedPct: prep.rawLossesAvoidedPct,
     lossesAvoidedPct:    prep.lossesAvoidedPct,
-    damageBill:          damage,          // full precision (display rounds to 1 dp)
-    impact,                               // the drawn event's impact this round (v5)
+    damageBill:          damage,          // € millions, full precision (display rounds)
+    potentialLossM:      potential,        // the drawn event's potential loss €M (J3)
     expectedProtection:  expected,
     strategyScore:       Math.round(strategyRaw * 100), // rounded whole % (back-compat)
     strategyScoreRaw:    strategyRaw,                    // unrounded ratio (ranking + /10 display)

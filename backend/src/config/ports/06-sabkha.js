@@ -1,4 +1,4 @@
-// See 01-nord-maris.js for field conventions. wheels + impacts are SECRET (v5).
+// See 01-nord-maris.js for field conventions. wheels are SECRET (v5); potential losses live on the events (J1).
 export default {
   id: 'sabkha',
   name: 'Sabkha',
@@ -15,6 +15,4 @@ export default {
     2: { year: 2031, likelihoods: { SS: 15, HW: 45, WS: 10, DR: 30 } },
     3: { year: 2036, likelihoods: { SS: 20, HW: 45, WS: 5, DR: 30 } },
   },
-  impacts: { SS: 3, HW: 4, WS: 2, DR: 4 },
-  impactRound3Plus: ['SS', 'HW'],
 }

@@ -1,14 +1,12 @@
 // Secrecy rules for the facilitator round payloads (D3 + D4), tested on the pure
 // builders — no DB/HTTP harness needed.
 //   D3: a round's wheel is revealed only once every team has locked that round.
-//   D4: the full per-event impact table appears ONLY in the debrief payload; every
-//       other payload exposes at most the DRAWN event's single impact, and only
-//       the current round's likelihoods.
+//   D4: a payload exposes at most the DRAWN event's own potential loss (€M) and
+//       the current round's likelihoods — never a full event-keyed numeric map.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PORTS_BY_ID } from '../src/config/ports/index.js'
 import { EVENT_CODES } from '../src/config/events.js'
-import { impactsForRound } from '../src/services/preparednessService.js'
 import {
   canRevealWheel, buildWheelPayload, buildDrawPayload, buildOutcomesTeam, buildDebriefTeam,
 } from '../src/services/parPayloads.js'
@@ -57,32 +55,33 @@ test('canRevealWheel round 2: a team still on round 1 blocks the round-2 reveal'
   assert.equal(canRevealWheel([onR2Locked, spunR2, stillR1], 2), false)
 })
 
-// ── D4 · the impact table never leaks outside the debrief ────────────────────
-test('wheel / draw / outcomes payloads never contain a raw event map (impacts or likelihoods)', () => {
+// ── D4 · no full event-keyed numeric map leaks; only the drawn event's loss ──
+test('wheel / draw / outcomes payloads never contain a raw event map (losses or likelihoods)', () => {
   const doc = team({ roundLocked: true })
   const wheel = buildWheelPayload({ port: PORT, doc, round: 1 })
-  const entry = { round: 1, drawnEvent: 'SS', impact: 5, damageBill: 2.5, strategyScore: 70 }
+  const entry = { round: 1, drawnEvent: 'SS', potentialLossM: 600, damageBill: 438, strategyScore: 70 }
   const draw = buildDrawPayload({ port: PORT, group: doc.group, round: 1, eventCode: 'SS', entry })
   const outcomes = buildOutcomesTeam(team({ rounds: [entry] }), PORT)
 
   assert.equal(leaksEventMap(wheel), false, 'wheel leaks an event map')
   assert.equal(leaksEventMap(draw), false, 'draw leaks an event map')
   assert.equal(leaksEventMap(outcomes), false, 'outcomes leaks an event map')
-  // The only impact present in the draw payload is the drawn event's single value.
-  assert.equal(draw.entry.impact, 5)
+  // The only potential loss present in the draw payload is the drawn event's value.
+  assert.equal(draw.entry.potentialLossM, 600)
   assert.equal('impactsByRound' in draw, false)
   assert.equal('impactsByRound' in outcomes, false)
 })
 
-test('the debrief payload IS the one place the full per-round impact table appears', () => {
-  const t = team({ rounds: [{ round: 1, drawnEvent: 'SS', impact: 5, damageBill: 2.5, strategyScore: 70 }] })
-  const debrief = buildDebriefTeam({ team: t, port: PORT, rankRow: { rank: 1, finalScore: 70, totalDamage: 2.5 } })
-  assert.ok(debrief.impactsByRound, 'debrief must expose impactsByRound')
-  for (const round of [1, 2, 3]) {
-    assert.deepEqual(debrief.impactsByRound[round], impactsForRound(PORT, round), `round ${round} impacts`)
-  }
-  // Round 3 reveals the +1 bump (nord-maris: RF, HW) that was hidden in play.
-  assert.equal(debrief.impactsByRound[3].RF, impactsForRound(PORT, 1).RF + 1)
+test('the debrief payload carries per-round money in € millions (J3) and no impact table', () => {
+  const t = team({ rounds: [{ round: 1, drawnEvent: 'SS', potentialLossM: 600, damageBill: 438, strategyScore: 70 }] })
+  const debrief = buildDebriefTeam({ team: t, port: PORT, rankRow: { rank: 1, finalScore: 70, totalDamage: 438 } })
+  // J1/J2/J6: there is no per-port impact table any more — nothing to reveal.
+  assert.equal('impactsByRound' in debrief, false)
+  assert.equal(leaksEventMap(debrief), false, 'debrief leaks an event map')
+  // Each round snapshot exposes the drawn event's own potential loss + damage (€M).
+  assert.equal(debrief.rounds[0].potentialLossM, 600)
+  assert.equal(debrief.rounds[0].damageBill, 438)
+  assert.equal(debrief.rounds[0].eventName, 'Storm surge')
 })
 
 // ── D4 · only the current round's likelihoods are exposed ────────────────────
@@ -96,7 +95,7 @@ test('a round-1 payload exposes round-1 likelihoods only, not later rounds', () 
 })
 
 test('outcomes carries round snapshots only — no wheel/likelihoods at all', () => {
-  const outcomes = buildOutcomesTeam(team({ rounds: [{ round: 1, drawnEvent: 'SS', impact: 5 }] }), PORT)
+  const outcomes = buildOutcomesTeam(team({ rounds: [{ round: 1, drawnEvent: 'SS', potentialLossM: 600 }] }), PORT)
   assert.equal('exposure' in outcomes, false)
   assert.deepEqual(Object.keys(outcomes).sort(), ['group', 'portName', 'rounds'])
 })
