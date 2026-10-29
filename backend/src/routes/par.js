@@ -73,6 +73,7 @@ export default function parRouter(io) {
       portfolio:       doc.portfolio.map(id => ({ id, name: MEASURES_BY_ID[id]?.name || `Measure ${id}`, cost: MEASURES_BY_ID[id]?.cost ?? null })),
       roundBought:     [...doc.roundBought],
       roundReturned:   doc.roundReturned,
+      roundRefund:     doc.roundRefund || 0, // G1: total refund from returns this round
       rounds:          doc.rounds.map(r => (r.toObject ? r.toObject() : r)),
     }
   }

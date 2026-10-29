@@ -8,6 +8,8 @@ import { formatEurBn, formatPercent, formatScore10, damageBreakdown, debriefTota
 import { cardStatus, orderCards, cultureLine } from '../../utils/postSpin.js'
 import { rankTeams, luckText } from '../../utils/debrief.js'
 import PotentialLossBar from '../../components/PotentialLossBar.jsx'
+import StandingsScreen from '../../components/StandingsScreen.jsx'
+import { getProtectionBand } from '../../utils/protectionBand.js'
 import { HazardIcon } from '../../components/HazardIcons.jsx'
 import { socket } from '../../utils/socket.js'
 import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP, AREA_COLOR } from '../../styles/tokens.js'
@@ -249,6 +251,9 @@ export default function PortsControlCenter() {
   const [debriefView, setDebriefView]       = useState('A') // 'A' | 'B' | 'C'
   const [debriefTeamIdx, setDebriefTeamIdx] = useState(0)   // which team on view B
   const [debriefSort, setDebriefSort]       = useState('strategy') // 'strategy' | 'avoided'
+  // Standings screen (G5), shown after rounds 1 and 2 before advancing.
+  const [showStandings, setShowStandings]   = useState(false)
+  const [standings, setStandings]           = useState(null) // { throughRound, teams:[...] }
 
   // Phase 9 — session close
   const [closed, setClosed]   = useState(false)
@@ -595,7 +600,7 @@ export default function PortsControlCenter() {
   // Coin meter: squares = coins available this round (round-start + any return
   // refund taken this round); filled = spent so far; "left" = coins now. This
   // keeps "spent" non-negative even after a mid-round return adds coins back.
-  const returnRefund = editingStrat?.roundReturned != null ? Math.floor((measureById.get(editingStrat.roundReturned)?.cost || 0) / 2) : 0
+  const returnRefund = editingStrat?.roundRefund || 0 // G1: total refund from returns this round
   const coinCapacity = editingStrat ? editingStrat.roundStartCoins + returnRefund : 0
   const coinsSpent = editingStrat ? coinCapacity - editingStrat.coins : 0
   // Does this team still need a starting level chosen by hand? Only when it has
@@ -603,7 +608,8 @@ export default function PortsControlCenter() {
   // get their starting level from the PARI mean automatically on lock.
   const editingCount = groupStats.find(g => g.group === editingGroup)?.count ?? 0
   const needsStartingLevel = !!editingStrat && editingStrat.startingBand == null && editingCount === 0
-  const canReturn = !!editingStrat && editingStrat.currentRound >= 2 && editingStrat.roundReturned == null && !editingStrat.roundLocked
+  // G1: returns only in round 3 (round 2 has none), any number, before the lock.
+  const canReturn = !!editingStrat && editingStrat.currentRound === 3 && !editingStrat.roundLocked
 
   // Readback for the dictating team, from the cards it holds and their total
   // cost, e.g. "Team D: cards 13 and 24. Five coins. Correct?"
@@ -652,8 +658,8 @@ export default function PortsControlCenter() {
   // round. Confirms first.
   function onReturnCard(m) {
     if (busy) return
-    const refund = Math.floor((m.cost || 0) / 2)
-    if (!window.confirm(`Return ${m.name} (#${m.id}) for ${refund} coin${refund !== 1 ? 's' : ''}? This uses this round's one return.`)) return
+    const refund = m.cost || 0 // G1: full cost in round 3
+    if (!window.confirm(`Return ${m.name} (#${m.id}) for ${refund} coin${refund !== 1 ? 's' : ''}?`)) return
     strategyCall('post', '/return', { measureId: m.id })
   }
   // Clear: undo every current-round purchase (full refund each).
@@ -842,6 +848,18 @@ export default function PortsControlCenter() {
     }
   }
 
+  // G5 standings flow: open the standings after the last team of a round spun,
+  // then advance into the next round's strategy from the standings screen.
+  function openStandings() {
+    api.get(`/api/par/${code}/standings`).then(res => setStandings(res.data)).catch(() => setStandings(null))
+    setShowStandings(true)
+  }
+  async function strategyFromStandings() {
+    await nextRound()          // POST /next-round + reset wheel state
+    setShowStandings(false)
+    changePhase('strategy')
+  }
+
   // The next team that still needs to spin (after the current one), or null.
   function nextTeamToDraw() {
     const order = groupStats.map(g => g.group)
@@ -905,10 +923,13 @@ export default function PortsControlCenter() {
           primary: { label: isSpinning ? 'Spinning…' : 'Spin the wheel', onClick: spinWheel, disabled: isSpinning },
         }
       }
+      if (showStandings) {
+        return { text: 'Read both rankings: one is your decisions, the other is the wheel.', primary: { label: advancing ? 'Advancing…' : `Next: round ${currentRound + 1} strategy →`, onClick: strategyFromStandings, disabled: advancing } }
+      }
       const next = nextTeamToDraw()
-      if (next) return { text: 'Read the result aloud: this event first, then your strategy.', primary: { label: `Next: ${next} →`, onClick: () => openWheel(next), disabled: false } }
-      if (currentRound < 3) return { text: 'Every team has spun this round.', primary: { label: advancing ? 'Advancing…' : `Start round ${currentRound + 1} · ${roundYear(currentRound + 1)} →`, onClick: () => setAdvanceDialog('round'), disabled: advancing } }
-      return { text: 'All three rounds are done.', primary: { label: 'Go to Debrief →', onClick: () => setAdvanceDialog('debrief'), disabled: false } }
+      if (next) return { text: 'Read it in order: the event, what your cards protected, the damage. Then your strategy.', primary: { label: `Next: ${next} →`, onClick: () => openWheel(next), disabled: false } }
+      if (currentRound < 3) return { text: 'Every team has spun this round.', primary: { label: 'Next: standings →', onClick: openStandings, disabled: false } }
+      return { text: 'All three rounds are done.', primary: { label: 'Next: debrief →', onClick: () => setAdvanceDialog('debrief'), disabled: false } }
     }
     if (phase === 'debrief') {
       if (closed) return { text: 'Session ended.', primary: null }
@@ -1281,6 +1302,11 @@ export default function PortsControlCenter() {
                                 <span style={{ fontFamily: FONT.sans, fontWeight: FW.semibold, fontSize: FS.sm, lineHeight: 1.25 }}>{m.name}</span>
                                 <span style={{ fontFamily: FONT.mono, fontWeight: FW.bold, fontSize: FS.micro, flexShrink: 0, color: dark ? 'rgba(255,255,255,0.85)' : COLOR.ink60 }}>#{m.id}</span>
                               </div>
+                              {/* G2: cost — dots + "N coins", same as the roulette cards */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ display: 'flex', gap: 2 }}>{Array.from({ length: m.cost || 0 }).map((_, i) => <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#E3BF40' }} />)}</span>
+                                <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold, color: dark ? 'rgba(255,255,255,0.85)' : COLOR.ink }}>{m.cost} coin{m.cost !== 1 ? 's' : ''}</span>
+                              </div>
                               {status && (
                                 <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, marginTop: 'auto', color: dark ? 'rgba(255,255,255,0.8)' : (unaffordable ? '#5C6B7A' : COLOR.ink60) }}>{status}</span>
                               )}
@@ -1289,7 +1315,7 @@ export default function PortsControlCenter() {
                           {owned && canReturn && (
                             <button type="button" onClick={() => onReturnCard(m)} disabled={busy}
                               style={{ border: `2px solid ${COLOR.ink}`, borderTop: 'none', borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: FW.semibold, padding: '8px 10px', cursor: busy ? 'default' : 'pointer' }}>
-                              Return for {Math.floor((m.cost || 0) / 2)} coin{Math.floor((m.cost || 0) / 2) !== 1 ? 's' : ''}
+                              Return for {m.cost} coin{m.cost !== 1 ? 's' : ''}
                             </button>
                           )}
                         </div>
@@ -1301,7 +1327,7 @@ export default function PortsControlCenter() {
                   <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, background: COLOR.ice, border: HAIRLINE, padding: '10px 14px', margin: '20px 0 0' }}>
                     Culture level: <strong>{BAND_RAMP[editingStrat.cultureLevel]?.label || '—'}</strong>
                     {portfolio.some(m => measureById.get(m.id)?.raisesCultureLevel) ? ' — raised by an enabler (#19 / #20)' : ''}
-                    {editingStrat.roundReturned != null ? ` · returned #${editingStrat.roundReturned} this round` : ''}
+                    {(editingStrat.roundRefund || 0) > 0 ? ` · returned cards this round (+${editingStrat.roundRefund} coins)` : ''}
                   </p>
                 </>
               )}
@@ -1313,7 +1339,9 @@ export default function PortsControlCenter() {
         {/* 4 · ROULETTE — phase: wheel. One screen, no scroll; one obvious action. */}
         {phase === 'wheel' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
-          {!allConfirmed ? (
+          {showStandings ? (
+            <StandingsScreen standings={standings} year={roundYear} portImage={pid => portById[pid]?.image || null} />
+          ) : !allConfirmed ? (
             <div style={{ border: HAIRLINE, padding: '48px 28px', textAlign: 'center' }}>
               <p style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight, margin: '0 0 8px' }}>The roulette opens once every team has locked round {currentRound} · {roundYear(currentRound)}.</p>
               {pendingConfirm.length > 0 && <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Waiting on: {pendingConfirm.join(', ')}.</p>}
@@ -1322,201 +1350,185 @@ export default function PortsControlCenter() {
             <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>Select a team below to open its wheel.</p>
           ) : (
             <>
-              {/* LEFT COLUMN (port header + cards) + RIGHT ZONE (wheel + result) */}
-              <div style={{ display: 'flex', gap: 24, flex: 1, minHeight: 0 }}>
-                {(() => {
-                  const bandBg = wheelPortColour || '#C5E4FF'
-                  const bandFg = textOnColour(bandBg)
-                  const cultLabel = BAND_RAMP[wheelComp.cultureLevel]?.label
-                  const cultMult = (CULTURE_FACTOR[wheelComp.cultureLevel] ?? 1).toFixed(1)
-                  const wStrat = strategyByGroup[wheelTeam]
-                  const returnRefundW = wStrat?.roundReturned != null ? Math.floor((measureById.get(wStrat.roundReturned)?.cost || 0) / 2) : 0
-                  const coinCapW = wStrat ? wStrat.roundStartCoins + returnRefundW : 0
-                  const coinsSpentW = wStrat ? coinCapW - wStrat.coins : 0
-                  const ids = [...(wheelComp.portfolio || [])].sort((a, b) => a - b)
-                  const wheelCodes = wheelComp.exposure.filter(e => e.weight > 0).map(e => e.code)
-                  const drawnCode = wheelRevealed ? wheelOutcome?.eventCode : null
-                  const twoCol = ids.length > 5
+              {(() => {
+                const bandBg = wheelPortColour || '#C5E4FF'
+                const bandFg = textOnColour(bandBg)
+                const cultLabel = BAND_RAMP[wheelComp.cultureLevel]?.label
+                const cultMult = (CULTURE_FACTOR[wheelComp.cultureLevel] ?? 1).toFixed(1)
+                const wStrat = strategyByGroup[wheelTeam]
+                const ids = [...(wheelComp.portfolio || [])].sort((a, b) => a - b)
+                const wheelCodes = wheelComp.exposure.filter(e => e.weight > 0).map(e => e.code)
+                const drawnCode = wheelRevealed ? wheelOutcome?.eventCode : null
+                const getMeasure = (id) => measureById.get(id)
+                const startingBand = wStrat?.startingBand || null
+                const enablersHeld = ids.filter(id => measureById.get(id)?.raisesCultureLevel)
+                const startIdx = BAND_ORDER.indexOf(startingBand)
+                const effIdx = BAND_ORDER.indexOf(wheelComp.cultureLevel)
+                const cultureTitle = `${cultLabel || '—'} · cards ×${cultMult}`
+                const cultureText = cultureLine({ startingBand, startLabel: BAND_RAMP[startingBand]?.label || startingBand, startMult: (CULTURE_FACTOR[startingBand] ?? 1).toFixed(1), raisedLevels: Math.max(1, effIdx - startIdx), enablerIds: enablersHeld })
+                const orderedIds = drawnCode ? orderCards(ids, { drawnEvent: drawnCode, startingBand, getMeasure }) : ids
 
-                  // E6/E7 · card order, per-card status and the culture line come
-                  // from the shared pure helpers (unit-tested in postSpin.test.js).
-                  const getMeasure = (id) => measureById.get(id)
-                  const startingBand = wStrat?.startingBand || null
-                  const enablersHeld = ids.filter(id => measureById.get(id)?.raisesCultureLevel)
-                  const startIdx = BAND_ORDER.indexOf(startingBand)
-                  const effIdx = BAND_ORDER.indexOf(wheelComp.cultureLevel)
-                  const cultureTitle = `${cultLabel || '—'} · cards ×${cultMult}`
-                  const cultureText = cultureLine({
-                    startingBand,
-                    startLabel: BAND_RAMP[startingBand]?.label || startingBand,
-                    startMult: (CULTURE_FACTOR[startingBand] ?? 1).toFixed(1),
-                    raisedLevels: Math.max(1, effIdx - startIdx),
-                    enablerIds: enablersHeld,
-                  })
-                  const orderedIds = drawnCode ? orderCards(ids, { drawnEvent: drawnCode, startingBand, getMeasure }) : ids
-
-                  const renderCard = (id) => {
-                    const m = measureById.get(id)
-                    const prot = m?.protection || {}
-                    const isEnabler = !!m?.raisesCultureLevel
-                    const chips = wheelCodes.filter(c => (prot[c] || 0) > 0)
-                    const status = drawnCode ? cardStatus(id, { drawnEvent: drawnCode, startingBand, getMeasure }) : null
-                    const notThisTime = status === 'NOT THIS TIME' // dashed/greyed style only here
-                    const nameCol = notThisTime ? '#5C6B7A' : COLOR.ink
-                    return (
-                      <div key={id} style={{ display: 'flex', alignItems: 'stretch', gap: 10, minWidth: 0, background: notThisTime ? '#F3F5F8' : COLOR.paper, border: notThisTime ? '2px dashed #5C6B7A' : `2px solid ${COLOR.ink}` }}>
-                        <div style={{ width: 52, minHeight: 52, flexShrink: 0, background: notThisTime ? '#5C6B7A' : COLOR.ink, color: COLOR.onInk, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT.mono, fontWeight: FW.bold, fontSize: FS.h3 }}>{id}</div>
-                        <div style={{ flex: 1, minWidth: 0, padding: '7px 10px 7px 0' }}>
-                          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                            <span style={{ fontFamily: FONT.sans, fontSize: 17, fontWeight: 700, color: nameCol, lineHeight: 1.15 }}>{m?.name || `Measure ${id}`}</span>
-                            <span style={{ display: 'flex', gap: 2, flexShrink: 0, marginTop: 3 }}>
-                              {Array.from({ length: m?.cost || 0 }).map((_, i) => <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#E3BF40' }} />)}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-                            {isEnabler ? (
-                              <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold, border: `1px solid ${COLOR.ink}`, padding: '1px 5px' }}>★ +1 culture level</span>
-                            ) : chips.map(c => {
-                              const inv = !!drawnCode && c === drawnCode
-                              return (
-                                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: `1px solid ${COLOR.ink}`, padding: '1px 5px', background: inv ? COLOR.ink : 'transparent', color: inv ? COLOR.onInk : COLOR.ink, fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold }}>
-                                  <span style={{ width: 8, height: 8, flexShrink: 0, background: EVENT_HEX[c] || COLOR.ice, border: `1px solid ${inv ? 'rgba(255,255,255,0.5)' : COLOR.ink}` }} />
-                                  {c} {prot[c]}
-                                </span>
-                              )
-                            })}
-                            {status && <span style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold, letterSpacing: LS.mono, color: notThisTime ? '#5C6B7A' : COLOR.ink }}>{status}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  }
-
+                // One solution card. `withImage` leads with the 16:9 solution image (G6).
+                const renderCard = (id, withImage) => {
+                  const m = measureById.get(id)
+                  const prot = m?.protection || {}
+                  const isEnabler = !!m?.raisesCultureLevel
+                  const chips = wheelCodes.filter(c => (prot[c] || 0) > 0)
+                  const status = drawnCode ? cardStatus(id, { drawnEvent: drawnCode, startingBand, getMeasure }) : null
+                  const notThisTime = status === 'NOT THIS TIME'
+                  const nameCol = notThisTime ? '#5C6B7A' : COLOR.ink
                   return (
-                    <div style={{ flex: '0 0 clamp(480px, 42%, 600px)', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
-                      {/* a) port header row */}
-                      <div style={{ display: 'flex', height: 150, flexShrink: 0, border: `2px solid ${COLOR.ink}`, overflow: 'hidden' }}>
-                        {wheelImage && <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`} style={{ flex: '0 0 42%', minWidth: 0, objectFit: 'cover', display: 'block' }} />}
-                        <div style={{ flex: 1, minWidth: 0, background: bandBg, color: bandFg, padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
-                          <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', opacity: 0.85 }}>Now spinning · {wheelTeam}</div>
-                          <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(32px, 2.6vw, 48px)', lineHeight: 0.95, letterSpacing: LS.display, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wheelComp.portName}</div>
-                          {wheelPortDesc && <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, opacity: 0.9 }}>{wheelPortDesc}</div>}
-                          <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', marginTop: 2 }}>{cultLabel || '—'} · scores ×{cultMult}</div>
+                    <div key={id} style={{ display: 'flex', flexDirection: 'column', minWidth: 0, background: notThisTime ? '#F3F5F8' : COLOR.paper, border: notThisTime ? '2px dashed #5C6B7A' : `2px solid ${COLOR.ink}`, overflow: 'hidden' }}>
+                      {withImage && <MeasureCardImage id={id} title={m?.name || `Measure ${id}`} />}
+                      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                          <span style={{ fontFamily: FONT.sans, fontSize: 16, fontWeight: 700, color: nameCol, lineHeight: 1.15 }}><span style={{ fontFamily: FONT.mono, color: COLOR.ink60, marginRight: 4 }}>#{id}</span>{m?.name || `Measure ${id}`}</span>
+                          <span style={{ display: 'flex', gap: 2, flexShrink: 0, marginTop: 3 }}>{Array.from({ length: m?.cost || 0 }).map((_, i) => <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#E3BF40' }} />)}</span>
                         </div>
-                      </div>
-                      {/* a2) ADAPTATION CULTURE block (E7) */}
-                      <div style={{ border: `2px solid ${COLOR.ink}`, padding: '10px 14px', flexShrink: 0 }}>
-                        <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60 }}>Adaptation culture</div>
-                        <div style={{ fontFamily: FONT.sans, fontSize: 19, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 2 }}>{cultureTitle}</div>
-                        <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, marginTop: 2, lineHeight: 1.35 }}>{cultureText}</div>
-                      </div>
-                      {/* b) heading */}
-                      <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, letterSpacing: LS.mono, textTransform: 'uppercase', flexShrink: 0 }}>
-                        {drawnCode ? `Which cards helped against ${wheelOutcome.eventName || drawnCode}` : `${wheelTeam}'s cards · ${coinsSpentW} of ${coinCapW} coins`}
-                      </div>
-                      {/* c + d) cards */}
-                      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr', gap: 8, alignContent: 'start' }}>
-                        {orderedIds.length === 0
-                          ? <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No cards.</p>
-                          : orderedIds.map(renderCard)}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {isEnabler ? (
+                            <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold, border: `1px solid ${COLOR.ink}`, padding: '1px 5px' }}>★ +1 culture level</span>
+                          ) : chips.map(c => {
+                            const inv = !!drawnCode && c === drawnCode
+                            return (
+                              <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: `1px solid ${COLOR.ink}`, padding: '1px 5px', background: inv ? COLOR.ink : 'transparent', color: inv ? COLOR.onInk : COLOR.ink, fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold }}>
+                                <span style={{ width: 8, height: 8, flexShrink: 0, background: EVENT_HEX[c] || COLOR.ice, border: `1px solid ${inv ? 'rgba(255,255,255,0.5)' : COLOR.ink}` }} />
+                                {c} {prot[c]}
+                              </span>
+                            )
+                          })}
+                          {status && <span style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold, letterSpacing: LS.mono, color: notThisTime ? '#5C6B7A' : COLOR.ink }}>{status}</span>}
+                        </div>
                       </div>
                     </div>
                   )
-                })()}
+                }
 
-                {/* RIGHT ZONE · wheel, large and centred (+ result when revealed) */}
-                <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', gap: 28, alignItems: 'center', justifyContent: 'center' }}>
-                  <button onClick={() => setSoundOn(v => !v)}
-                    style={{ position: 'absolute', top: 0, right: 0, zIndex: 1, fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: 'pointer' }}>
-                    {soundOn ? '🔊 Sound on' : '🔇 Sound off'}
-                  </button>
-                  <div style={{ flexShrink: 0, width: wheelRevealed ? 'min(400px, 46vh)' : 'min(560px, 62vh)', maxWidth: '100%' }}>
-                    <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} portColour={wheelPortColour || '#C5E4FF'} onPeg={playTick} size={560} />
-                  </div>
-                  {wheelRevealed && (() => {
-                    const e = wheelOutcome.entry || {}
-                    const code = wheelOutcome.eventCode
-                    const sqBg = EVENT_HEX[code] || COLOR.ice
-                    const sqFg = textOnColour(EVENT_HEX[code] || '#C5E4FF')
-                    const bigNum = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(34px, 5.5vh, 56px)', lineHeight: 1 }
-                    const P = (e.rawLossesAvoidedPct ?? 0) / 10                 // 0–10 preparedness
-                    const fillPct = Math.max(0, Math.min(100, e.rawLossesAvoidedPct ?? 0)) // unrounded bar width (E3)
-                    const { damageShown, potentialShown, avoidedShown } = damageBreakdown(e.damageBill, e.impact)
-                    const score10 = (e.strategyScoreRaw ?? 0) * 10             // 0–10 for the segments
-                    const scoreStr = (Math.round(score10 * 10) / 10).toFixed(1)
-                    return (
-                      <div style={{ flex: 1, minWidth: 0, maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                          <div style={{ width: 64, height: 64, flexShrink: 0, border: HAIRLINE, background: sqBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <HazardIcon code={code} color={sqFg} size={38} />
-                          </div>
+                const uiL = { fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, margin: 0 }
+
+                // ── Result view (G4): wheel gone; banner · 3 steps · cards · strategy ──
+                if (wheelRevealed) {
+                  const e = wheelOutcome.entry || {}
+                  const code = wheelOutcome.eventCode
+                  const protShown = Math.round(e.rawLossesAvoidedPct ?? 0)
+                  const band = getProtectionBand(protShown)
+                  const { damageShown, potentialShown, avoidedShown } = damageBreakdown(e.damageBill, e.impact)
+                  const score10 = (e.strategyScoreRaw ?? 0) * 10
+                  const scoreStr = (Math.round(score10 * 10) / 10).toFixed(1)
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1, minHeight: 0 }}>
+                      {/* 1 · port banner */}
+                      <div style={{ position: 'relative', height: 220, flexShrink: 0, border: `2px solid ${COLOR.ink}`, overflow: 'hidden', background: bandBg }}>
+                        {wheelImage && <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 35%, rgba(0,0,0,0.78))' }} />
+                        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '16px 20px', color: '#fff', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
                           <div style={{ minWidth: 0 }}>
-                            <p style={uiLabel}>The wheel drew</p>
-                            <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: 'clamp(28px, 4vw, 52px)', letterSpacing: LS.tight, lineHeight: 1 }}>{wheelOutcome.eventName || code}</div>
+                            <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', opacity: 0.85 }}>Round {currentRound} · {roundYear(currentRound)} · {wheelTeam}</div>
+                            <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(30px, 3vw, 48px)', lineHeight: 1, letterSpacing: LS.display }}>{wheelComp.portName}</div>
+                            {wheelPortDesc && <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, opacity: 0.9, marginTop: 2 }}>{wheelPortDesc}</div>}
+                          </div>
+                          <div style={{ border: '2px solid #fff', padding: '8px 12px', flexShrink: 0, maxWidth: 340, background: 'rgba(0,0,0,0.35)' }}>
+                            <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', opacity: 0.8 }}>Adaptation culture</div>
+                            <div style={{ fontFamily: FONT.sans, fontSize: 17, fontWeight: 800 }}>{cultureTitle}</div>
+                            <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, opacity: 0.9, lineHeight: 1.3 }}>{cultureText}</div>
                           </div>
                         </div>
-                        {/* THIS EVENT box */}
-                        <div style={{ border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                            <span style={uiLabel}>This event</span>
-                            <span style={{ ...uiLabel, color: COLOR.ink60 }}>Depends on the wheel</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-                            <div>
-                              <div style={bigNum}>{formatPercent(P)}</div>
-                              <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '2px 0 0' }}>Protection this event</p>
+                      </div>
+
+                      {/* 2 · three steps */}
+                      <div style={{ display: 'flex', border: `2px solid ${COLOR.ink}`, flexShrink: 0 }}>
+                        <div style={{ flex: 1, minWidth: 0, padding: '14px 18px', borderRight: `2px solid ${COLOR.ink}` }}>
+                          <div style={uiL}>1 · The wheel drew</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '8px 0' }}>
+                            <div style={{ width: 48, height: 48, flexShrink: 0, border: HAIRLINE, background: EVENT_HEX[code] || COLOR.ice, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <HazardIcon code={code} color={textOnColour(EVENT_HEX[code] || '#C5E4FF')} size={28} />
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ ...bigNum, fontSize: 'clamp(26px, 4vh, 40px)' }}>{formatEurBn(damageShown)}</div>
-                              <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '2px 0 0' }}>Damage sustained</p>
-                            </div>
+                            <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: 'clamp(22px, 2.6vw, 34px)', letterSpacing: LS.tight, lineHeight: 1 }}>{wheelOutcome.eventName || code}</div>
                           </div>
-                          <div role="img" aria-label={`Losses avoided ${formatEurBn(avoidedShown)} of ${formatEurBn(potentialShown)} potential losses`}
-                            style={{ position: 'relative', height: 16, background: COLOR.ice, border: HAIRLINE }}>
-                            <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${fillPct}%`, background: COLOR.harbour }} />
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold }}>
-                            <span><span style={{ color: COLOR.harbour }}>■</span> Losses avoided {formatEurBn(avoidedShown)}</span>
-                            <span>Potential losses {formatEurBn(potentialShown)}</span>
-                          </div>
-                          <p style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, margin: 0, lineHeight: 1.35 }}>Potential losses = what this event would cost your port with none of your solutions.</p>
+                          <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>{formatEurBn(potentialShown)} potential losses for your port</p>
                         </div>
-                        {/* YOUR STRATEGY box */}
-                        <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0, position: 'relative', padding: '18px 18px 14px', borderRight: `2px solid ${COLOR.ink}`, background: band.bg }}>
+                          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 8, background: band.color }} />
+                          <div style={uiL}>2 · Your cards protected</div>
+                          <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(40px, 7vh, 72px)', color: band.color, lineHeight: 1, margin: '4px 0 8px' }}>{protShown}%</div>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: band.color, color: '#fff', fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, padding: '3px 8px' }}>{band.icon} {band.label}</span>
+                          <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, margin: '8px 0 0', fontWeight: 600 }}>{formatEurBn(avoidedShown)} avoided</p>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0, padding: '14px 18px' }}>
+                          <div style={uiL}>3 · Damage sustained</div>
+                          <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(26px, 3.6vh, 40px)', lineHeight: 1, margin: '6px 0 8px' }}>{formatEurBn(damageShown)} / {formatEurBn(potentialShown)}</div>
+                          <PotentialLossBar damage={e.damageBill} potential={e.impact} />
+                          <p style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, color: COLOR.ink60, margin: '6px 0 0' }}><span style={{ color: '#3A62AE' }}>■</span> damage sustained · <span style={{ color: '#9db6e0' }}>□</span> avoided</p>
+                        </div>
+                      </div>
+
+                      {/* 3 · band legend */}
+                      <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0, flexShrink: 0 }}>Protection colour: <span style={{ color: '#157347', fontWeight: 700 }}>●</span> Strong 70% and above · <span style={{ color: '#8A5A00', fontWeight: 700 }}>◐</span> Partial 40–69% · <span style={{ color: '#B42318', fontWeight: 700 }}>○</span> Weak below 40%</p>
+
+                      {/* 4 · cards + 5 · strategy box */}
+                      <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+                        <div style={{ flex: '1 1 66%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+                          <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, letterSpacing: LS.mono, textTransform: 'uppercase', flexShrink: 0 }}>Your cards against {wheelOutcome.eventName || code}</div>
+                          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10, alignContent: 'start' }}>
+                            {orderedIds.length === 0 ? <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No cards.</p> : orderedIds.map(id => renderCard(id, true))}
+                          </div>
+                        </div>
+                        <div style={{ flex: '1 1 34%', minWidth: 0, maxWidth: 380, border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, alignSelf: 'flex-start' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                             <span style={{ ...uiLabel, color: COLOR.onHarbour }}>Your strategy</span>
                             <span style={{ ...uiLabel, color: 'rgba(255,255,255,0.7)' }}>All possible events</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                              <span style={bigNum}>{scoreStr}</span>
-                              <span style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 700, opacity: 0.85 }}>/ 10</span>
-                            </div>
-                            <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: 600, textAlign: 'right', maxWidth: 180, opacity: 0.9, lineHeight: 1.3 }}>Same score whatever the wheel draws</span>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                            <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(40px, 6vh, 60px)', lineHeight: 1 }}>{scoreStr}</span>
+                            <span style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 700, opacity: 0.85 }}>/ 10</span>
                           </div>
                           <div style={{ display: 'flex', gap: 3 }}>
-                            {Array.from({ length: 10 }).map((_, i) => {
-                              const fill = Math.max(0, Math.min(1, score10 - i))
-                              return (
-                                <div key={i} style={{ flex: 1, height: 12, background: 'rgba(255,255,255,0.25)', position: 'relative' }}>
-                                  <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${fill * 100}%`, background: COLOR.onHarbour }} />
-                                </div>
-                              )
-                            })}
+                            {Array.from({ length: 10 }).map((_, i) => { const fill = Math.max(0, Math.min(1, score10 - i)); return (<div key={i} style={{ flex: 1, height: 12, background: 'rgba(255,255,255,0.25)', position: 'relative' }}><div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${fill * 100}%`, background: COLOR.onHarbour }} /></div>) })}
                           </div>
-                          <p style={{ fontFamily: FONT.sans, fontSize: FS.micro, margin: 0, opacity: 0.85 }}>10 = the best combination possible for your port and budget</p>
+                          <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: 0, opacity: 0.9 }}>Same score whatever the wheel draws. 10 = the best combination possible for your port and budget.</p>
                           <details style={{ fontFamily: FONT.sans, fontSize: FS.sm }}>
                             <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How is this score calculated?</summary>
                             <p style={{ margin: '6px 0 0', opacity: 0.9, lineHeight: 1.4 }}>Your strategy compares how much of the likely losses your cards would avoid, across every event on this round's wheel, with the best combination of cards your port could buy with the same budget and starting culture. It does not depend on what the wheel drew.</p>
                           </details>
                         </div>
                       </div>
-                    )
-                  })()}
-                </div>
-              </div>
+                    </div>
+                  )
+                }
 
-              {/* ZONE 3 · bottom strip */}
+                // ── Spinning / pre-spin view: the wheel stays visible, cards on the left ──
+                return (
+                  <div style={{ display: 'flex', gap: 24, flex: 1, minHeight: 0 }}>
+                    <div style={{ flex: '0 0 clamp(440px, 40%, 560px)', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+                      <div style={{ display: 'flex', height: 150, flexShrink: 0, border: `2px solid ${COLOR.ink}`, overflow: 'hidden' }}>
+                        {wheelImage && <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`} style={{ flex: '0 0 42%', minWidth: 0, objectFit: 'cover', display: 'block' }} />}
+                        <div style={{ flex: 1, minWidth: 0, background: bandBg, color: bandFg, padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+                          <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', opacity: 0.85 }}>Now spinning · {wheelTeam}</div>
+                          <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(30px, 2.4vw, 44px)', lineHeight: 0.95, letterSpacing: LS.display, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wheelComp.portName}</div>
+                          <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', marginTop: 2 }}>{cultLabel || '—'} · scores ×{cultMult}</div>
+                        </div>
+                      </div>
+                      <div style={{ border: `2px solid ${COLOR.ink}`, padding: '10px 14px', flexShrink: 0 }}>
+                        <div style={uiL}>Adaptation culture</div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: 19, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 2 }}>{cultureTitle}</div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, marginTop: 2, lineHeight: 1.35 }}>{cultureText}</div>
+                      </div>
+                      <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, letterSpacing: LS.mono, textTransform: 'uppercase', flexShrink: 0 }}>{wheelTeam}'s cards</div>
+                      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: ids.length > 5 ? '1fr 1fr' : '1fr', gap: 8, alignContent: 'start' }}>
+                        {ids.length === 0 ? <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No cards.</p> : orderedIds.map(id => renderCard(id, false))}
+                      </div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <button onClick={() => setSoundOn(v => !v)} style={{ position: 'absolute', top: 0, right: 0, zIndex: 1, fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60, background: COLOR.paper, border: HAIRLINE, borderRadius: 0, padding: '4px 8px', cursor: 'pointer' }}>{soundOn ? '🔊 Sound on' : '🔇 Sound off'}</button>
+                      <div style={{ flexShrink: 0, width: 'min(560px, 62vh)', maxWidth: '100%' }}>
+                        <EventWheel slices={wheelComp.exposure} resultCode={wheelOutcome?.eventCode} animate={wheelAnimate} onReveal={onWheelRevealed} portColour={wheelPortColour || '#C5E4FF'} onPeg={playTick} size={560} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* ZONE 3 · bottom strip — team chips with the protection band (G3) */}
               <div style={{ flexShrink: 0, borderTop: HAIRLINE, paddingTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', minHeight: 56 }}>
                 <span style={{ ...uiLabel, whiteSpace: 'nowrap' }}>Round {currentRound} · {roundYear(currentRound)} · {drawnGroups.size} of {groupStats.length} spun</span>
                 <div style={{ flex: 1, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1525,16 +1537,13 @@ export default function PortsControlCenter() {
                     const entry = (strat?.rounds || []).find(r => r.round === g.currentRound)
                     const isNow = g.group === wheelTeam
                     const done = drawnGroups.has(g.group)
+                    const band = done && entry ? getProtectionBand(Math.round(entry.lossesAvoidedPct ?? 0)) : null
                     return (
                       <button key={g.group} onClick={() => openWheel(g.group)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, border: HAIRLINE, borderRadius: 0, background: isNow ? COLOR.ink : COLOR.paper, color: isNow ? COLOR.onInk : COLOR.ink, padding: '8px 10px', cursor: 'pointer' }}>
-                        <span style={{ width: 14, height: 14, flexShrink: 0, background: g.portColour || COLOR.ice, border: `1px solid ${isNow ? COLOR.onInk : COLOR.ink}` }} />
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, border: HAIRLINE, borderRadius: 0, background: band ? band.bg : (isNow ? COLOR.ink : COLOR.paper), color: isNow && !band ? COLOR.onInk : COLOR.ink, padding: '8px 10px', cursor: 'pointer' }}>
                         <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.bold }}>{g.group}</span>
-                        {done && entry?.drawnEvent ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <HazardIcon code={entry.drawnEvent} color={isNow ? COLOR.onInk : COLOR.ink} size={14} />
-                            <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold }}>{Math.round(entry.lossesAvoidedPct ?? 0)}%</span>
-                          </span>
+                        {done && entry ? (
+                          <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold, color: band.color }}>{band.icon} {Math.round(entry.lossesAvoidedPct ?? 0)}%</span>
                         ) : (
                           <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: isNow ? COLOR.onInk : '#5C6B7A' }}>{isNow ? 'now' : 'Waiting'}</span>
                         )}
