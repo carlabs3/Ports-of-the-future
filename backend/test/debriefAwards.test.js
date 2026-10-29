@@ -31,15 +31,21 @@ test('F2 · per-team raw totals and avoidedPctRaw', () => {
   assert.ok(Math.abs(A.avoidedPctRaw - (1 - 4.68 / 8)) < 1e-9)   // 0.415
 })
 
-test('F3 · shown totals add up (Team B €3.5 / €11.0 / €7.5 / 68%)', () => {
+test('F3 · shown money adds up; % from raw (Team B €3.5 / €11.0 / €7.5 / 68%)', () => {
   const B = debriefTotals(teamB.damages.map((d, i) => ({ damageBill: d, impact: teamB.potentials[i] })))
-  assert.deepEqual(B, { totalDamageShown: 3.5, totalPotential: 11, avoidedShown: 7.5, avoidedPct: 68 })
+  assert.equal(B.totalDamageShown, 3.5)
+  assert.equal(B.totalPotential, 11)
+  assert.equal(B.avoidedShown, 7.5)
+  assert.equal(B.avoidedPct, 68) // round(0.68236 × 100)
   assert.equal(B.totalDamageShown + B.avoidedShown, B.totalPotential)
 })
 
-test('F3 · shown totals add up (Team A €4.7 / €8.0 / €3.3 / 41%)', () => {
+test('F3 · shown money adds up; % from raw (Team A €4.7 / €8.0 / €3.3 / 42%)', () => {
   const A = debriefTotals(teamA.damages.map((d, i) => ({ damageBill: d, impact: teamA.potentials[i] })))
-  assert.deepEqual(A, { totalDamageShown: 4.7, totalPotential: 8, avoidedShown: 3.3, avoidedPct: 41 })
+  assert.equal(A.totalDamageShown, 4.7)
+  assert.equal(A.totalPotential, 8)
+  assert.equal(A.avoidedShown, 3.3)
+  assert.equal(A.avoidedPct, 42) // from raw: 1 − 4.68/8 = 0.415 → 42% (not shown 3.3/8 = 41%)
   assert.equal(A.totalDamageShown + A.avoidedShown, A.totalPotential)
 })
 

@@ -30,16 +30,18 @@ export function formatScore10(ratio) {
 }
 
 // F3: a team's debrief totals from its per-round raw `damageBill` + `impact`.
-// Total damage SHOWN = Σ round1(damageBill) (so it equals the three shown round
-// figures); potential = Σ impact (integers); avoided = potential − totalDamageShown;
-// avoidedPct = round(avoided / potential × 100), half up. Ranking/awards use raw
-// values, never these.
+// Money SHOWN adds up: totalDamageShown = Σ round1(damageBill); potential =
+// Σ impact (integers); avoidedShown = potential − totalDamageShown. The % shown
+// is ALWAYS from the raw values — avoidedPct = round(avoidedPctRaw × 100), half
+// up — so the same figure never shows two different percentages on two screens.
 export function debriefTotals(rounds = []) {
   const totalDamageShown = round1(rounds.reduce((s, r) => s + round1(r.damageBill), 0))
+  const totalDamageRaw = rounds.reduce((s, r) => s + (Number(r.damageBill) || 0), 0)
   const totalPotential = rounds.reduce((s, r) => s + (Number(r.impact) || 0), 0)
   const avoidedShown = round1(totalPotential - totalDamageShown)
-  const avoidedPct = totalPotential > 0 ? Math.round((avoidedShown / totalPotential) * 100) : 0
-  return { totalDamageShown, totalPotential, avoidedShown, avoidedPct }
+  const avoidedPctRaw = totalPotential > 0 ? 1 - totalDamageRaw / totalPotential : 0
+  const avoidedPct = Math.round(avoidedPctRaw * 100) // F3: shown % always from raw
+  return { totalDamageShown, totalDamageRaw, totalPotential, avoidedShown, avoidedPctRaw, avoidedPct }
 }
 
 // E3: the three money figures that must add up on screen. `damage` and `impact`
