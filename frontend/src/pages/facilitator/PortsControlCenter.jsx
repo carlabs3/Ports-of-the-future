@@ -4,6 +4,8 @@ import { QRCodeSVG } from 'qrcode.react'
 import api from '../../utils/api.js'
 import EventWheel, { EVENT_WORDS } from '../../components/EventWheel.jsx'
 import { pickExtremes } from '../../utils/areaExtremes.js'
+import { formatEurBn, formatPercent, damageBreakdown } from '../../utils/format.js'
+import { cardStatus, orderCards, cultureLine } from '../../utils/postSpin.js'
 import { HazardIcon } from '../../components/HazardIcons.jsx'
 import PortIllustration from '../../components/PortIllustration.jsx'
 import { socket } from '../../utils/socket.js'
@@ -891,7 +893,7 @@ export default function PortsControlCenter() {
         }
       }
       const next = nextTeamToDraw()
-      if (next) return { text: 'Read the result aloud: luck first, then strategy.', primary: { label: `Next: ${next} →`, onClick: () => openWheel(next), disabled: false } }
+      if (next) return { text: 'Read the result aloud: this event first, then your strategy.', primary: { label: `Next: ${next} →`, onClick: () => openWheel(next), disabled: false } }
       if (currentRound < 3) return { text: 'Every team has spun this round.', primary: { label: advancing ? 'Advancing…' : `Start round ${currentRound + 1} · ${roundYear(currentRound + 1)} →`, onClick: () => setAdvanceDialog('round'), disabled: advancing } }
       return { text: 'All three rounds are done.', primary: { label: 'Go to Debrief →', onClick: () => setAdvanceDialog('debrief'), disabled: false } }
     }
@@ -1315,14 +1317,30 @@ export default function PortsControlCenter() {
                   const drawnCode = wheelRevealed ? wheelOutcome?.eventCode : null
                   const twoCol = ids.length > 5
 
+                  // E6/E7 · card order, per-card status and the culture line come
+                  // from the shared pure helpers (unit-tested in postSpin.test.js).
+                  const getMeasure = (id) => measureById.get(id)
+                  const startingBand = wStrat?.startingBand || null
+                  const enablersHeld = ids.filter(id => measureById.get(id)?.raisesCultureLevel)
+                  const startIdx = BAND_ORDER.indexOf(startingBand)
+                  const effIdx = BAND_ORDER.indexOf(wheelComp.cultureLevel)
+                  const cultureTitle = `${cultLabel || '—'} · cards ×${cultMult}`
+                  const cultureText = cultureLine({
+                    startingBand,
+                    startLabel: BAND_RAMP[startingBand]?.label || startingBand,
+                    startMult: (CULTURE_FACTOR[startingBand] ?? 1).toFixed(1),
+                    raisedLevels: Math.max(1, effIdx - startIdx),
+                    enablerIds: enablersHeld,
+                  })
+                  const orderedIds = drawnCode ? orderCards(ids, { drawnEvent: drawnCode, startingBand, getMeasure }) : ids
+
                   const renderCard = (id) => {
                     const m = measureById.get(id)
                     const prot = m?.protection || {}
                     const isEnabler = !!m?.raisesCultureLevel
-                    const helped = !!drawnCode && (prot[drawnCode] || 0) > 0
-                    const notThisTime = !!drawnCode && !helped && !isEnabler
                     const chips = wheelCodes.filter(c => (prot[c] || 0) > 0)
-                    const status = drawnCode ? (helped ? 'HELPED' : isEnabler ? 'RAISED CULTURE' : 'NOT THIS TIME') : null
+                    const status = drawnCode ? cardStatus(id, { drawnEvent: drawnCode, startingBand, getMeasure }) : null
+                    const notThisTime = status === 'NOT THIS TIME' // dashed/greyed style only here
                     const nameCol = notThisTime ? '#5C6B7A' : COLOR.ink
                     return (
                       <div key={id} style={{ display: 'flex', alignItems: 'stretch', gap: 10, minWidth: 0, background: notThisTime ? '#F3F5F8' : COLOR.paper, border: notThisTime ? '2px dashed #5C6B7A' : `2px solid ${COLOR.ink}` }}>
@@ -1365,15 +1383,21 @@ export default function PortsControlCenter() {
                           <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', marginTop: 2 }}>{cultLabel || '—'} · scores ×{cultMult}</div>
                         </div>
                       </div>
+                      {/* a2) ADAPTATION CULTURE block (E7) */}
+                      <div style={{ border: `2px solid ${COLOR.ink}`, padding: '10px 14px', flexShrink: 0 }}>
+                        <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', color: COLOR.ink60 }}>Adaptation culture</div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: 19, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 2 }}>{cultureTitle}</div>
+                        <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, marginTop: 2, lineHeight: 1.35 }}>{cultureText}</div>
+                      </div>
                       {/* b) heading */}
                       <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, letterSpacing: LS.mono, textTransform: 'uppercase', flexShrink: 0 }}>
                         {drawnCode ? `Which cards helped against ${wheelOutcome.eventName || drawnCode}` : `${wheelTeam}'s cards · ${coinsSpentW} of ${coinCapW} coins`}
                       </div>
                       {/* c + d) cards */}
                       <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr', gap: 8, alignContent: 'start' }}>
-                        {ids.length === 0
+                        {orderedIds.length === 0
                           ? <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No cards.</p>
-                          : ids.map(renderCard)}
+                          : orderedIds.map(renderCard)}
                       </div>
                     </div>
                   )
@@ -1393,8 +1417,12 @@ export default function PortsControlCenter() {
                     const code = wheelOutcome.eventCode
                     const sqBg = EVENT_HEX[code] || COLOR.ice
                     const sqFg = textOnColour(EVENT_HEX[code] || '#C5E4FF')
-                    const bigNum = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(38px, 6vh, 60px)', lineHeight: 1 }
-                    const sideLine = { fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, lineHeight: 1.5, textAlign: 'right', whiteSpace: 'nowrap' }
+                    const bigNum = { fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(34px, 5.5vh, 56px)', lineHeight: 1 }
+                    const P = (e.rawLossesAvoidedPct ?? 0) / 10                 // 0–10 preparedness
+                    const fillPct = Math.max(0, Math.min(100, e.rawLossesAvoidedPct ?? 0)) // unrounded bar width (E3)
+                    const { damageShown, potentialShown, avoidedShown } = damageBreakdown(e.damageBill, e.impact)
+                    const score10 = (e.strategyScoreRaw ?? 0) * 10             // 0–10 for the segments
+                    const scoreStr = (Math.round(score10 * 10) / 10).toFixed(1)
                     return (
                       <div style={{ flex: 1, minWidth: 0, maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 14 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -1406,21 +1434,60 @@ export default function PortsControlCenter() {
                             <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: 'clamp(28px, 4vw, 52px)', letterSpacing: LS.tight, lineHeight: 1 }}>{wheelOutcome.eventName || code}</div>
                           </div>
                         </div>
-                        <div style={{ border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-                          <div>
-                            <p style={uiLabel}>Luck · this spin</p>
-                            <div style={bigNum}>{Math.round(e.lossesAvoidedPct ?? 0)}%</div>
-                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>of losses avoided</p>
+                        {/* THIS EVENT box */}
+                        <div style={{ border: HAIRLINE, background: COLOR.paper, color: COLOR.ink, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                            <span style={uiLabel}>This event</span>
+                            <span style={{ ...uiLabel, color: COLOR.ink60 }}>Depends on the wheel</span>
                           </div>
-                          <p style={sideLine}>Damage: {e.damageBill != null ? e.damageBill.toFixed(1) : '—'} coins (instead of {e.impact ?? '—'})</p>
+                          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                            <div>
+                              <div style={bigNum}>{formatPercent(P)}</div>
+                              <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '2px 0 0' }}>Protection this event</p>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ ...bigNum, fontSize: 'clamp(26px, 4vh, 40px)' }}>{formatEurBn(damageShown)}</div>
+                              <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '2px 0 0' }}>Damage sustained</p>
+                            </div>
+                          </div>
+                          <div role="img" aria-label={`Losses avoided ${formatEurBn(avoidedShown)} of ${formatEurBn(potentialShown)} potential losses`}
+                            style={{ position: 'relative', height: 16, background: COLOR.ice, border: HAIRLINE }}>
+                            <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${fillPct}%`, background: COLOR.harbour }} />
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold }}>
+                            <span><span style={{ color: COLOR.harbour }}>■</span> Losses avoided {formatEurBn(avoidedShown)}</span>
+                            <span>Potential losses {formatEurBn(potentialShown)}</span>
+                          </div>
+                          <p style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, margin: 0, lineHeight: 1.35 }}>Potential losses = what this event would cost your port with none of your solutions.</p>
                         </div>
-                        <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-                          <div>
-                            <p style={{ ...uiLabel, color: COLOR.onHarbour }}>Strategy · your plan</p>
-                            <div style={bigNum}>{e.strategyScore ?? '—'}%</div>
-                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, margin: 0, opacity: 0.85 }}>strategy score</p>
+                        {/* YOUR STRATEGY box */}
+                        <div style={{ border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                            <span style={{ ...uiLabel, color: COLOR.onHarbour }}>Your strategy</span>
+                            <span style={{ ...uiLabel, color: 'rgba(255,255,255,0.7)' }}>All possible events</span>
                           </div>
-                          <p style={sideLine}>Expected protection {Math.round(e.expectedProtection ?? 0)}%<br />Coins on useful cards {e.coinsThatHelped ?? 0} of {e.heldCost ?? 0}</p>
+                          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                              <span style={bigNum}>{scoreStr}</span>
+                              <span style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 700, opacity: 0.85 }}>/ 10</span>
+                            </div>
+                            <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: 600, textAlign: 'right', maxWidth: 180, opacity: 0.9, lineHeight: 1.3 }}>Same score whatever the wheel draws</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 3 }}>
+                            {Array.from({ length: 10 }).map((_, i) => {
+                              const fill = Math.max(0, Math.min(1, score10 - i))
+                              return (
+                                <div key={i} style={{ flex: 1, height: 12, background: 'rgba(255,255,255,0.25)', position: 'relative' }}>
+                                  <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${fill * 100}%`, background: COLOR.onHarbour }} />
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <p style={{ fontFamily: FONT.sans, fontSize: FS.micro, margin: 0, opacity: 0.85 }}>10 = the best combination possible for your port and budget</p>
+                          <details style={{ fontFamily: FONT.sans, fontSize: FS.sm }}>
+                            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How is this score calculated?</summary>
+                            <p style={{ margin: '6px 0 0', opacity: 0.9, lineHeight: 1.4 }}>Your strategy compares how much of the likely losses your cards would avoid, across every event on this round's wheel, with the best combination of cards your port could buy with the same budget and starting culture. It does not depend on what the wheel drew.</p>
+                          </details>
                         </div>
                       </div>
                     )
