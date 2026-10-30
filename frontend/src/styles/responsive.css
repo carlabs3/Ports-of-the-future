@@ -1,0 +1,55 @@
+/* ============================================================================
+   Responsive rules — the ONLY breakpoints are the four named in breakpoints.js:
+     phone  < 640px · tablet 640–1023 · laptop 1024–1599 · large ≥ 1600
+   Layout that can be pure CSS lives here (reactive without a resize listener);
+   JS branching uses useViewport(). Keep these widths in sync with breakpoints.js.
+   ========================================================================== */
+
+/* Rule 3 — no sideways page scroll, ever. Wide content scrolls inside its own
+   box via .scroll-x below. */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* Rule 3 — a box whose wide content (tables, charts) scrolls horizontally inside
+   itself instead of pushing the page. */
+.scroll-x { overflow-x: auto; max-width: 100%; }
+
+/* Rule 1 — card images render ONLY on large (≥1600). Below that the whole image
+   block is removed (not squeezed); the card keeps number, name, tags, status.
+   When shown it holds a 16/9 ratio with object-fit: cover (set on the element). */
+.cc-card-image { display: none; }
+@media (min-width: 1600px) { .cc-card-image { display: flex; } }
+
+/* Post-spin result row — 4 columns from 1280, 2×2 from 768–1279, 1 below 768. */
+.cc-result-grid { display: grid; grid-template-columns: 1fr; }
+@media (min-width: 768px)  { .cc-result-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1280px) { .cc-result-grid { grid-template-columns: repeat(4, 1fr); } }
+
+/* Card grid — cards sit in rows; each card's height follows its own content, not
+   the tallest image in the row. */
+.cc-card-grid { align-content: start; align-items: start; }
+
+/* Rule 5 — port banners: fixed responsive height; the caption row is a column on
+   phone/tablet (culture box under the port name) and a row from laptop up. */
+.cc-banner { height: clamp(160px, 24vh, 260px); }
+.cc-banner-row { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+@media (min-width: 1024px) {
+  .cc-banner-row { flex-direction: row; align-items: flex-end; justify-content: space-between; }
+}
+
+/* Rule 6 — footer NOW bar: the .cc-screen flex column already reserves its height
+   (it is a non-shrinking last child). On phones, keep the Next button clear of the
+   iOS home indicator. */
+.cc-conductor { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Two-up panels that stack below 1100 (standings boards, debrief awards, the two
+   lower CAP charts). Side by side from 1100, stacked below. */
+.two-up { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 1100px) { .two-up { grid-template-columns: 1fr 1fr; } }
+
+/* Fact boxes — 3 → 2 → 1. */
+.fact-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 680px)  { .fact-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1100px) { .fact-grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* Rule 8 — touch targets on participant screens are at least 44×44px. */
+.tap-target { min-height: 44px; min-width: 44px; }

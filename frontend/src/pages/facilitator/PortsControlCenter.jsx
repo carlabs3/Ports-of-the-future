@@ -36,7 +36,7 @@ function MeasureCardImage({ id, title }) {
   const [failed, setFailed] = useState(false)
   const src = `/solutions/measure-${String(id).padStart(2, '0')}.webp`
   return (
-    <div style={{ width: '100%', aspectRatio: '16 / 9', background: COLOR.ice, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="cc-card-image" style={{ width: '100%', aspectRatio: '16 / 9', background: COLOR.ice, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
       {failed ? (
         <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.semibold, color: COLOR.ink, textAlign: 'center', padding: '8px 10px', lineHeight: 1.25 }}>{title}</span>
       ) : (
@@ -1399,10 +1399,10 @@ export default function PortsControlCenter() {
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1, minHeight: 0 }}>
                       {/* 1 · port banner */}
-                      <div style={{ position: 'relative', height: 220, flexShrink: 0, border: `2px solid ${COLOR.ink}`, overflow: 'hidden', background: bandBg }}>
+                      <div className="cc-banner" style={{ position: 'relative', flexShrink: 0, border: `2px solid ${COLOR.ink}`, overflow: 'hidden', background: bandBg }}>
                         {wheelImage && <img src={wheelImage} alt={`Illustration of the port of ${wheelComp.portName || wheelTeam}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 35%, rgba(0,0,0,0.78))' }} />
-                        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '16px 20px', color: '#fff', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 22%, rgba(0,0,0,0.55) 58%, rgba(0,0,0,0.86))' }} />
+                        <div className="cc-banner-row" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '16px 20px', color: '#fff' }}>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, letterSpacing: LS.mono, textTransform: 'uppercase', opacity: 0.85 }}>Round {currentRound} · {roundYear(currentRound)} · {wheelTeam}</div>
                             <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(30px, 3vw, 48px)', lineHeight: 1, letterSpacing: LS.display }}>{wheelComp.portName}</div>
@@ -1416,8 +1416,8 @@ export default function PortsControlCenter() {
                         </div>
                       </div>
 
-                      {/* 2 · four columns (H1) */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', border: `2px solid ${COLOR.ink}`, overflow: 'hidden', flexShrink: 0 }}>
+                      {/* 2 · four columns (H1) — 4 / 2×2 / 1 by width (cc-result-grid) */}
+                      <div className="cc-result-grid" style={{ border: `2px solid ${COLOR.ink}`, overflow: 'hidden', flexShrink: 0 }}>
                         {/* 1 · the wheel drew */}
                         <div style={col}>
                           <div style={colLabel}>1 · The wheel drew</div>
@@ -1483,7 +1483,7 @@ export default function PortsControlCenter() {
                       {/* 4 · cards — full width */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0 }}>
                         <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, letterSpacing: LS.mono, textTransform: 'uppercase', flexShrink: 0 }}>Your cards against {wheelOutcome.eventName || code}</div>
-                        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10, alignContent: 'start' }}>
+                        <div className="cc-card-grid" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
                           {orderedIds.length === 0 ? <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No cards.</p> : orderedIds.map(id => renderCard(id, true))}
                         </div>
                       </div>
@@ -1509,7 +1509,7 @@ export default function PortsControlCenter() {
                         <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, marginTop: 2, lineHeight: 1.35 }}>{cultureText}</div>
                       </div>
                       <div style={{ fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, letterSpacing: LS.mono, textTransform: 'uppercase', flexShrink: 0 }}>{wheelTeam}'s cards</div>
-                      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: ids.length > 5 ? '1fr 1fr' : '1fr', gap: 8, alignContent: 'start' }}>
+                      <div className="cc-card-grid" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: ids.length > 5 ? '1fr 1fr' : '1fr', gap: 8 }}>
                         {ids.length === 0 ? <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No cards.</p> : orderedIds.map(id => renderCard(id, false))}
                       </div>
                     </div>
@@ -1718,15 +1718,15 @@ export default function PortsControlCenter() {
               return (
                 <>
                   {/* G4-style port banner */}
-                  <div style={{ position: 'relative', height: 230, flexShrink: 0, border: `2px solid ${COLOR.ink}`, overflow: 'hidden', background: COLOR.ice }}>
+                  <div className="cc-banner" style={{ position: 'relative', flexShrink: 0, border: `2px solid ${COLOR.ink}`, overflow: 'hidden', background: COLOR.ice }}>
                     {t.portImage && <img src={t.portImage} alt={`Illustration of the port of ${t.portName || 'this port'}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 35%, rgba(0,0,0,0.78))' }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 22%, rgba(0,0,0,0.55) 58%, rgba(0,0,0,0.86))' }} />
                     <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: `2px solid ${COLOR.ink}`, padding: '4px 8px' }}>
                       {arrow('←', -1, debriefTeamIdx === 0)}
                       <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono, fontWeight: 700 }}>TEAM {debriefTeamIdx + 1} OF {n}</span>
                       {arrow('→', 1, debriefTeamIdx >= n - 1)}
                     </div>
-                    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '16px 20px', color: '#fff', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                    <div className="cc-banner-row" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '16px 20px', color: '#fff' }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 'clamp(28px, 3vw, 44px)', letterSpacing: LS.display, lineHeight: 1 }}>{t.group}</div>
                         <div style={{ fontFamily: FONT.sans, fontSize: FS.sm, opacity: 0.9, marginTop: 4 }}>{sub}</div>
@@ -1921,7 +1921,7 @@ export default function PortsControlCenter() {
       </div>
 
       {/* ═══ CONDUCTOR bar — one primary action, always here (facilitator guidance text removed) ═══ */}
-      <div style={{ flexShrink: 0, minHeight: 72, background: COLOR.ink, color: COLOR.onInk, borderTop: HAIRLINE, display: 'flex', alignItems: 'center', gap: 16, padding: '0 24px' }}>
+      <div className="cc-conductor" style={{ flexShrink: 0, minHeight: 72, background: COLOR.ink, color: COLOR.onInk, borderTop: HAIRLINE, display: 'flex', alignItems: 'center', gap: 16, padding: '0 24px' }}>
         <div style={{ flex: 1, minWidth: 0 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {(conductor.secondaries || []).map((s, i) => (
