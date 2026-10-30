@@ -79,9 +79,9 @@ const SUMMARY_AREA_KEYS = ['governance', 'organisation', 'budget', 'measures', '
 
 // ── CAP breakdown by a profile dimension (port size / governance / …) ────────
 // Pure + testable. `results` are per-participant records with a `score`, an
-// `areas` map and the dimension's field. Returns only groups with n ≥ 3 (privacy:
-// a smaller group would expose one person's score); everyone else is counted in
-// `hiddenCount` but still folded into `roomMean`. `scores` are bare numbers
+// `areas` map and the dimension's field. Returns every non-empty group (n ≥ 1);
+// participants with no answer for this field are not in any group but are counted
+// in `noAnswerCount` and still folded into `roomMean`. `scores` are bare numbers
 // (sorted high→low) — no ids, names or teams ever appear.
 const round1cap = x => Math.round(x * 10) / 10
 
@@ -100,15 +100,15 @@ export function computeCapBreakdown(results = [], dimensionKey) {
   const groups = []
   dim.groups.forEach((g, i) => {
     const recs = buckets.get(g.key) || []
-    if (recs.length < 3) return // privacy: hide groups under 3 people
+    if (recs.length === 0) return // leave out empty groups only
     const scores = recs.map(r => r.score).sort((a, b) => b - a)
     const mean = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
     const areaMeans = SUMMARY_AREA_KEYS.map(k => round1cap(recs.reduce((s, r) => s + (r.areas?.[k] ?? 0), 0) / recs.length))
     groups.push({ key: g.key, label: g.label, color: CAP_GROUP_COLORS[i], n: recs.length, mean, areaMeans, scores })
   })
 
-  const shownN = groups.reduce((s, g) => s + g.n, 0)
-  const hiddenCount = all.length - shownN
+  // Participants with no answer for this field: not in any group, still in roomMean.
+  const noAnswerCount = all.filter(r => !buckets.has(r[dim.field])).length
 
   let biggestGapArea = null
   if (groups.length >= 2) {
@@ -119,7 +119,7 @@ export function computeCapBreakdown(results = [], dimensionKey) {
     }
   }
 
-  return { dimension: dimensionKey, field: dim.field, title: dim.title, byLabel: dim.byLabel, prompt: dim.prompt, groups, roomMean, hiddenCount, biggestGapArea }
+  return { dimension: dimensionKey, field: dim.field, title: dim.title, byLabel: dim.byLabel, prompt: dim.prompt, groups, roomMean, noAnswerCount, biggestGapArea }
 }
 
 // All four dimensions at once, for the results payload.

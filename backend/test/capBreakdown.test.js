@@ -1,4 +1,4 @@
-// CAP breakdown by a profile dimension (privacy ≥3, means, areaMeans, gaps).
+// CAP breakdown by a profile dimension (every non-empty group, means, areaMeans, gaps).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { computeCapBreakdown } from '../src/services/parSubmissionService.js'
@@ -37,26 +37,30 @@ test('three groups (6/10/8): means, areaMeans and high→low scores', () => {
   assert.equal(byKey.large.color, '#13245E')
 })
 
-test('a 2-person group is hidden, counted in hiddenCount, kept in roomMean', () => {
+test('a 1-person group is present with n = 1 (no minimum size); empty groups omitted', () => {
   const results = [
-    ...many('small', [40, 50, 60]),        // n=3 shown
-    ...many('medium', [100, 0]),           // n=2 hidden
+    ...many('small', [40, 50, 60]),  // n=3
+    ...many('medium', [100]),        // n=1 — still shown
   ]
   const b = computeCapBreakdown(results, 'portSize')
-  assert.deepEqual(b.groups.map(g => g.key), ['small']) // medium absent
-  assert.equal(b.hiddenCount, 2)
-  // roomMean over all 5 scores: (40+50+60+100+0)/5 = 50
-  assert.equal(b.roomMean, 50)
+  const byKey = Object.fromEntries(b.groups.map(g => [g.key, g]))
+  assert.equal(byKey.medium.n, 1)
+  assert.equal(byKey.medium.mean, 100)
+  assert.equal(b.noAnswerCount, 0)
+  // only the two non-empty groups appear (large etc. are absent)
+  assert.deepEqual(b.groups.map(g => g.key).sort(), ['medium', 'small'])
+  // roomMean over all 4 scores: (40+50+60+100)/4 = 62.5 → 63
+  assert.equal(b.roomMean, 63)
 })
 
-test('participants with no answer for the field count in hiddenCount', () => {
+test('participants with no answer for the field count in noAnswerCount, stay in roomMean', () => {
   const results = [
     ...many('small', [40, 50, 60]), // shown
     P('', 70, areas(14, 14, 14, 14, 14)),  // no port size
     P('', 30, areas(6, 6, 6, 6, 6)),
   ]
   const b = computeCapBreakdown(results, 'portSize')
-  assert.equal(b.hiddenCount, 2)
+  assert.equal(b.noAnswerCount, 2)
   assert.equal(b.groups.length, 1)
   // roomMean includes the two no-answer people: (40+50+60+70+30)/5 = 50
   assert.equal(b.roomMean, 50)

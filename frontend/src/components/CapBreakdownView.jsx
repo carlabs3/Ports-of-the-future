@@ -1,8 +1,8 @@
 import { COLOR, FONT, FS, FW, LS, HAIRLINE } from '../styles/tokens.js'
 
 // CAP results "By <dimension>" view (three visuals), driven entirely by the
-// server payload. All groups are shown side by side; the server already dropped
-// any group under 3 people (privacy).
+// server payload. Every non-empty group is shown side by side; participants with
+// no answer for this field are not grouped but still count in the room mean.
 const BANDS = [
   { name: 'REACTIVE', lo: 0, hi: 25, shade: '#F3F4F6' },
   { name: 'AWARE', lo: 26, hi: 50, shade: '#E4E8EF' },
@@ -15,7 +15,7 @@ const clampPct = v => Math.max(0, Math.min(100, v))
 
 export default function CapBreakdownView({ breakdown }) {
   if (!breakdown) return null
-  const { title, byLabel, groups = [], roomMean = 0, hiddenCount = 0, biggestGapArea = null } = breakdown
+  const { title, byLabel, groups = [], roomMean = 0, noAnswerCount = 0, biggestGapArea = null } = breakdown
   const shownPeople = groups.reduce((s, g) => s + g.n, 0)
   const totalBars = shownPeople
   const barGap = totalBars > 30 ? 3 : 5
@@ -24,8 +24,10 @@ export default function CapBreakdownView({ breakdown }) {
     return (
       <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.display, margin: 0 }}>{title}</h2>
-        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No group has 3 or more people yet.</p>
-        <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>Groups with fewer than 3 people are not shown, so no one’s answers can be identified.{hiddenCount > 0 ? ` ${hiddenCount} people not shown: groups under 3 people or no answer.` : ''}</p>
+        <p style={{ fontFamily: FONT.sans, fontSize: FS.body, color: COLOR.ink60, margin: 0 }}>No one has answered this question yet.</p>
+        {noAnswerCount > 0 && (
+          <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>{noAnswerCount} {noAnswerCount === 1 ? 'person' : 'people'} did not answer this question.</p>
+        )}
       </div>
     )
   }
@@ -152,10 +154,12 @@ export default function CapBreakdownView({ breakdown }) {
         </div>
       </div>
 
-      {/* footer privacy line */}
-      <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0, flexShrink: 0 }}>
-        Groups with fewer than 3 people are not shown, so no one’s answers can be identified.{hiddenCount > 0 ? ` ${hiddenCount} people not shown: groups under 3 people or no answer.` : ''}
-      </p>
+      {/* footer: no-answer count, only when some did not answer */}
+      {noAnswerCount > 0 && (
+        <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0, flexShrink: 0 }}>
+          {noAnswerCount} {noAnswerCount === 1 ? 'person' : 'people'} did not answer this question.
+        </p>
+      )}
     </div>
   )
 }
