@@ -1920,12 +1920,9 @@ export default function PortsControlCenter() {
 
       </div>
 
-      {/* ═══ CONDUCTOR bar — one instruction + one primary action, always here ═══ */}
+      {/* ═══ CONDUCTOR bar — one primary action, always here (facilitator guidance text removed) ═══ */}
       <div style={{ flexShrink: 0, minHeight: 72, background: COLOR.ink, color: COLOR.onInk, borderTop: HAIRLINE, display: 'flex', alignItems: 'center', gap: 16, padding: '0 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flex: 1, minWidth: 0 }}>
-          <span style={{ fontFamily: FONT.mono, fontSize: FS.label, letterSpacing: LS.mono, textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)', flexShrink: 0 }}>Now</span>
-          <span style={{ fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.medium, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conductor.text}</span>
-        </div>
+        <div style={{ flex: 1, minWidth: 0 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {(conductor.secondaries || []).map((s, i) => (
             <button key={i} onClick={s.onClick} disabled={s.disabled}
