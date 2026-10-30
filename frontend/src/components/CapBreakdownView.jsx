@@ -17,8 +17,6 @@ export default function CapBreakdownView({ breakdown }) {
   if (!breakdown) return null
   const { title, byLabel, groups = [], roomMean = 0, noAnswerCount = 0, biggestGapArea = null } = breakdown
   const shownPeople = groups.reduce((s, g) => s + g.n, 0)
-  const totalBars = shownPeople
-  const barGap = totalBars > 30 ? 3 : 5
 
   if (groups.length === 0) {
     return (
@@ -85,39 +83,8 @@ export default function CapBreakdownView({ breakdown }) {
         </div>
       </div>
 
-      {/* Visuals 2 + 3 side by side from 1100, stack below (.two-up) */}
-      <div className="two-up" style={{ flex: 1, minHeight: 0 }}>
-        {/* Visual 2 · every participant */}
-        <div style={{ border: HAIRLINE, padding: '14px 18px', display: 'flex', flexDirection: 'column', minHeight: 320 }}>
-          <div style={{ ...mono, color: COLOR.ink }}>Every participant</div>
-          <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '2px 0 10px' }}>Grouped by {byLabel}, highest to lowest within each group</p>
-          <div style={{ position: 'relative', flex: 1, minHeight: 200, border: HAIRLINE }}>
-            {BANDS.map((b, i) => (
-              <div key={b.name} style={{ position: 'absolute', left: 0, right: 0, bottom: `${i * 25}%`, height: '25%', background: b.shade, borderTop: i ? `1px solid ${COLOR.ink}` : 'none', display: 'flex', alignItems: 'center' }}>
-                <span style={{ padding: '0 6px', fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, lineHeight: 1.2 }}>{b.name}<br />{b.lo}–{b.hi}</span>
-              </div>
-            ))}
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', gap: 18, padding: '0 8px 0 92px', overflowX: 'auto', overflowY: 'hidden' }}>
-              {groups.map(g => (
-                <div key={g.key} style={{ flex: `${g.n} 1 0`, minWidth: 'min-content', height: '100%', display: 'flex', alignItems: 'flex-end', gap: barGap }}>
-                  {g.scores.map((s, i) => <div key={i} style={{ flex: '1 1 0', minWidth: 4, height: `${clampPct(s)}%`, background: g.color }} />)}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 18, padding: '6px 8px 0 92px' }}>
-            {groups.map(g => (
-              <div key={g.key} style={{ flex: `${g.n} 1 0`, minWidth: 0 }}>
-                <div style={{ height: 4, background: g.color }} />
-                <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, marginTop: 3, lineHeight: 1.25, overflowWrap: 'break-word' }}>{g.label.toUpperCase()} · {g.n} · AVG {g.mean}</div>
-              </div>
-            ))}
-          </div>
-          <p style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, margin: '8px 0 0' }}>Background: CAP bands, same shades as the scale above</p>
-        </div>
-
-        {/* Visual 3 · the five areas */}
-        <div style={{ border: HAIRLINE, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 320 }}>
+      {/* Visual 2 · the five areas (full width; scrolls inside its box if needed) */}
+      <div style={{ border: HAIRLINE, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0, overflow: 'auto' }}>
           <div style={{ ...mono, color: COLOR.ink }}>The five areas · average by {byLabel}</div>
           {AREA_NAMES.map((name, ai) => {
             const vals = groups.map(g => g.areaMeans[ai] ?? 0)
@@ -152,7 +119,6 @@ export default function CapBreakdownView({ breakdown }) {
             ))}
           </div>
         </div>
-      </div>
 
       {/* footer: no-answer count, only when some did not answer */}
       {noAnswerCount > 0 && (

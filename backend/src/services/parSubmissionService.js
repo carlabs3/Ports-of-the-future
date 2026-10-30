@@ -81,8 +81,8 @@ const SUMMARY_AREA_KEYS = ['governance', 'organisation', 'budget', 'measures', '
 // Pure + testable. `results` are per-participant records with a `score`, an
 // `areas` map and the dimension's field. Returns every non-empty group (n ≥ 1);
 // participants with no answer for this field are not in any group but are counted
-// in `noAnswerCount` and still folded into `roomMean`. `scores` are bare numbers
-// (sorted high→low) — no ids, names or teams ever appear.
+// in `noAnswerCount` and still folded into `roomMean`. Each group returns only
+// AGGREGATES (n, mean, areaMeans) — no per-participant scores, ids, names or teams.
 const round1cap = x => Math.round(x * 10) / 10
 
 export function computeCapBreakdown(results = [], dimensionKey) {
@@ -101,10 +101,11 @@ export function computeCapBreakdown(results = [], dimensionKey) {
   dim.groups.forEach((g, i) => {
     const recs = buckets.get(g.key) || []
     if (recs.length === 0) return // leave out empty groups only
-    const scores = recs.map(r => r.score).sort((a, b) => b - a)
-    const mean = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
+    // Aggregates only — no per-participant scores leave the server (the only
+    // consumer, the "every participant" chart, was removed).
+    const mean = Math.round(recs.reduce((s, r) => s + r.score, 0) / recs.length)
     const areaMeans = SUMMARY_AREA_KEYS.map(k => round1cap(recs.reduce((s, r) => s + (r.areas?.[k] ?? 0), 0) / recs.length))
-    groups.push({ key: g.key, label: g.label, color: CAP_GROUP_COLORS[i], n: recs.length, mean, areaMeans, scores })
+    groups.push({ key: g.key, label: g.label, color: CAP_GROUP_COLORS[i], n: recs.length, mean, areaMeans })
   })
 
   // Participants with no answer for this field: not in any group, still in roomMean.

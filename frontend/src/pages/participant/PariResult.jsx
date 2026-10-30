@@ -5,6 +5,7 @@ import { socket } from '../../utils/socket.js'
 import { BACKEND_URL } from '../../utils/config.js'
 import { COLOR, FONT, FS, FW, LS, HAIRLINE, BAND_RAMP, BAND_ORDER } from '../../styles/tokens.js'
 import { pickExtremes } from '../../utils/areaExtremes.js'
+import { clampScore } from '../../utils/bandGauge.js'
 
 // Band ranges for the gauge. The band VALUE still comes from the server
 // (getBand via result.band); these ranges are display only (the four getBand
@@ -118,7 +119,7 @@ export default function PariResult() {
 
   const band = BAND_RAMP[result.band] || { label: result.band, bg: COLOR.ink, text: COLOR.onInk, border: HAIRLINE }
   const areas = result.areas || {}
-  const score = Math.max(0, Math.min(100, Number(result.score) || 0)) // marker position
+  const score = clampScore(result.score) // marker position (arrow tip), 0–100
   const curRange = BAND_RANGES[result.band] || { lo: 0, hi: 100 }
   // Keep the score bubble inside the bar at the extremes.
   const bubbleShift = score <= 6 ? '0' : score >= 94 ? '-100%' : '-50%'
@@ -165,14 +166,17 @@ export default function PariResult() {
           <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, color: COLOR.ink60 }}>{curRange.lo}–{curRange.hi} of 100</span>
         </div>
 
-        {/* Score marker, above the bar */}
+        {/* Score marker, above the bar. The bubble and the arrow are anchored
+            independently at score%: the bubble is shifted to stay inside the bar at
+            the extremes, while the arrow's TIP always sits exactly at score% (a
+            10px-wide box centred with translateX(-50%)). */}
         <div style={{ position: 'relative', height: 30 }}>
-          <div style={{ position: 'absolute', left: `${score}%`, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <span style={{ transform: `translateX(${bubbleShift})`, whiteSpace: 'nowrap', fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, color: COLOR.onInk, background: COLOR.ink, padding: '2px 8px', lineHeight: 1.3 }}>
-              {result.score}
-            </span>
+          <span style={{ position: 'absolute', bottom: 8, left: `${score}%`, transform: `translateX(${bubbleShift})`, whiteSpace: 'nowrap', fontFamily: FONT.mono, fontSize: FS.sm, fontWeight: FW.bold, color: COLOR.onInk, background: COLOR.ink, padding: '2px 8px', lineHeight: 1.3 }}>
+            {result.score}
+          </span>
+          <span style={{ position: 'absolute', bottom: 0, left: `${score}%`, transform: 'translateX(-50%)', width: 10, display: 'flex', justifyContent: 'center' }}>
             <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: `6px solid ${COLOR.ink}` }} />
-          </div>
+          </span>
         </div>
 
         {/* The bar: four equal quarters, only the current band at full strength */}

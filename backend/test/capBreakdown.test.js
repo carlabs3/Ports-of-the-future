@@ -13,7 +13,7 @@ function many(portSize, scores) {
   return scores.map(s => P(portSize, s, areas(s / 5, s / 5, s / 5, s / 5, s / 5)))
 }
 
-test('three groups (6/10/8): means, areaMeans and high→low scores', () => {
+test('three groups (6/10/8): means and areaMeans (aggregates only)', () => {
   const results = [
     ...many('small', [40, 50, 60, 30, 55, 45]),   // n=6, mean 46.67 → 47
     ...many('medium', [50, 52, 48, 60, 40, 55, 45, 58, 42, 50]), // n=10, mean 50
@@ -24,11 +24,8 @@ test('three groups (6/10/8): means, areaMeans and high→low scores', () => {
   assert.equal(byKey.small.n, 6);  assert.equal(byKey.small.mean, 47)
   assert.equal(byKey.medium.n, 10); assert.equal(byKey.medium.mean, 50)
   assert.equal(byKey.large.n, 8);  assert.equal(byKey.large.mean, 73)
-  // scores sorted high→low
-  for (const g of b.groups) {
-    const sorted = [...g.scores].sort((x, y) => y - x)
-    assert.deepEqual(g.scores, sorted)
-  }
+  // no per-participant scores are exposed
+  for (const g of b.groups) assert.equal('scores' in g, false)
   // areaMeans: flat profile → each = mean/5, round 1 dp. small mean 46.67 → 9.3
   assert.deepEqual(byKey.small.areaMeans, [9.3, 9.3, 9.3, 9.3, 9.3])
   // group colours by config order
@@ -81,15 +78,15 @@ test('biggestGapArea is null with a single shown group', () => {
   assert.equal(b.biggestGapArea, null)
 })
 
-test('payload carries no ids, names or teams — only bare scores', () => {
+test('payload carries aggregates only — no per-participant scores, ids, names or teams', () => {
   const results = [...many('small', [40, 50, 60]), ...many('large', [70, 80, 90])]
   const b = computeCapBreakdown(results, 'portSize')
   const json = JSON.stringify(b)
   // No participant-identifying data: no team names, participant/submission ids.
   assert.equal(/Team |participantId|submissionId|"_id"/i.test(json), false)
-  // Each group item exposes only the aggregate fields — never a team/group id.
+  // Each group item exposes only the aggregate fields — no `scores` array.
   for (const g of b.groups) {
-    assert.deepEqual(Object.keys(g).sort(), ['areaMeans', 'color', 'key', 'label', 'mean', 'n', 'scores'].sort())
-    for (const s of g.scores) assert.equal(typeof s, 'number')
+    assert.deepEqual(Object.keys(g).sort(), ['areaMeans', 'color', 'key', 'label', 'mean', 'n'].sort())
+    assert.equal('scores' in g, false)
   }
 })
