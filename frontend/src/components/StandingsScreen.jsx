@@ -77,6 +77,7 @@ export default function StandingsScreen({ standings, year, portImage }) {
           {boardHead(COLOR.ice, COLOR.ink, 'Losses avoided so far · Best protected', 'Depends on the wheel')}
           {byAvoided.map(t => {
             const band = getProtectionBand(t.avoidedPct)
+            const noMoney = t.missingPotential || !(t.totalPotential > 0)
             return (
               <div key={t.group} style={rowBase}>
                 <span style={rankCell}>{t.avoidedRank}</span>
@@ -84,9 +85,9 @@ export default function StandingsScreen({ standings, year, portImage }) {
                 <Thumb src={portImage(t.portId)} alt={`Illustration of the port of ${t.portName || 'this port'}`} />
                 {nameBlock(t)}
                 <div style={{ flexShrink: 0, textAlign: 'right', minWidth: 150 }}>
-                  <div style={{ fontFamily: FONT.mono, fontSize: FS.h3, fontWeight: 800, color: band.color }}>{band.icon} {t.avoidedPct}%</div>
-                  <PotentialLossBar damage={t.totalDamageRaw} potential={t.totalPotential} height={10} style={{ marginTop: 4 }} />
-                  <div style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, marginTop: 3 }}>{formatEurM(t.avoidedShown)} of {formatEurM(t.totalPotential)} avoided</div>
+                  <div style={{ fontFamily: FONT.mono, fontSize: FS.h3, fontWeight: 800, color: band.color }}>{noMoney ? '—' : `${band.icon} ${t.avoidedPct}%`}</div>
+                  {!noMoney && <PotentialLossBar damage={t.totalDamageRaw} potential={t.totalPotential} height={10} style={{ marginTop: 4 }} />}
+                  <div style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, marginTop: 3 }}>{noMoney ? 'Losses not available' : `${formatEurM(t.avoidedShown)} of ${formatEurM(t.totalPotential)} avoided`}</div>
                 </div>
               </div>
             )

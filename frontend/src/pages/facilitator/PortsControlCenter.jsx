@@ -1388,6 +1388,7 @@ export default function PortsControlCenter() {
                   const protShown = Math.round(e.rawLossesAvoidedPct ?? 0)
                   const band = getProtectionBand(protShown)
                   const { damageShown, potentialShown, avoidedShown } = damageBreakdown(e.damageBill, e.potentialLossM)
+                  const noMoney = !(potentialShown > 0) // guard: unreadable money → show "—"
                   const score10 = (e.strategyScoreRaw ?? 0) * 10
                   const scoreStr = (Math.round(score10 * 10) / 10).toFixed(1)
                   // H1: the four columns' big numbers share one size + sit on the
@@ -1427,7 +1428,7 @@ export default function PortsControlCenter() {
                             <div style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: 'clamp(18px, 2vw, 26px)', letterSpacing: LS.tight, lineHeight: 1.05 }}>{wheelOutcome.eventName || code}</div>
                           </div>
                           <div style={{ marginTop: 'auto' }}>
-                            <div style={bigNum4}>{formatEurM(potentialShown)}</div>
+                            <div style={bigNum4}>{noMoney ? '—' : formatEurM(potentialShown)}</div>
                             <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '4px 0 0' }}>potential losses for your port</p>
                           </div>
                         </div>
@@ -1440,16 +1441,16 @@ export default function PortsControlCenter() {
                             <div style={{ margin: '8px 0 0' }}>
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: band.color, color: '#fff', fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, padding: '3px 8px' }}>{band.icon} {band.label}</span>
                             </div>
-                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, margin: '6px 0 0', fontWeight: 600 }}>{formatEurM(avoidedShown)} avoided</p>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink, margin: '6px 0 0', fontWeight: 600 }}>{noMoney ? '—' : `${formatEurM(avoidedShown)} avoided`}</p>
                           </div>
                         </div>
                         {/* 3 · damage sustained */}
                         <div style={col}>
                           <div style={colLabel}>3 · Damage sustained</div>
                           <div style={{ marginTop: 'auto' }}>
-                            <div style={bigNum4}>{formatEurM(damageShown)}</div>
-                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '4px 0 8px' }}>of {formatEurM(potentialShown)}</p>
-                            <PotentialLossBar damage={e.damageBill} potential={e.potentialLossM} />
+                            <div style={bigNum4}>{noMoney ? '—' : formatEurM(damageShown)}</div>
+                            <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: '4px 0 8px' }}>{noMoney ? 'losses not available' : `of ${formatEurM(potentialShown)}`}</p>
+                            {!noMoney && <PotentialLossBar damage={e.damageBill} potential={e.potentialLossM} />}
                             <p style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, color: COLOR.ink60, margin: '6px 0 0' }}><span style={{ color: '#3A62AE' }}>■</span> damage sustained · <span style={{ color: '#9db6e0' }}>□</span> avoided</p>
                           </div>
                         </div>
@@ -1561,6 +1562,8 @@ export default function PortsControlCenter() {
             }
             const finalScore10 = fs => formatScore10((fs || 0) / 100)   // 0–100 → "X.X / 10"
             const YEARS = ['2026', '2031', '2036']
+            // Money guard: show "—" when a potential loss is 0 or missing (unreadable units).
+            const money = (value, potential) => (potential > 0 ? formatEurM(value) : '—')
             const totals = Object.fromEntries(teams.map(t => [t.group, debriefTotals(t.rounds)]))
             const awards = debrief?.awards || { bestStrategy: [], mostAvoided: [] }
             const teamByGroup = g => teams.find(t => t.group === g)
@@ -1635,7 +1638,7 @@ export default function PortsControlCenter() {
                         {headerRow('Most losses avoided', 'Depends on the wheel', false)}
                         <div style={{ fontFamily: FONT.sans, fontSize: FS.h3, fontWeight: 800 }}>{names(most)}{most.length === 1 && most[0].portName ? <span style={{ fontWeight: 500, color: COLOR.ink60 }}> · {most[0].portName}</span> : null}</div>
                         <div style={bigNum}>{mostTot?.avoidedPct ?? 0}%</div>
-                        <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>{formatEurM(mostTot?.avoidedShown || 0)} of {formatEurM(mostTot?.totalPotential || 0)} potential losses avoided over the three rounds</p>
+                        <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>{money(mostTot?.avoidedShown || 0, mostTot?.totalPotential)} of {money(mostTot?.totalPotential || 0, mostTot?.totalPotential)} potential losses avoided over the three rounds</p>
                       </div>
                     </div>
                   </div>
@@ -1683,7 +1686,7 @@ export default function PortsControlCenter() {
                                   <td key={rn} style={td}>{!r ? '—' : isStrat ? (
                                     <><div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{formatScore10(r.strategyScoreRaw)}</div><div style={{ fontSize: FS.micro, color: COLOR.ink60 }}>{r.eventName || r.drawnEvent}</div></>
                                   ) : (
-                                    <><div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{formatEurM(r.damageBill)} of {formatEurM(r.potentialLossM)}</div><PotentialLossBar damage={r.damageBill} potential={r.potentialLossM} height={8} /><div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 2 }}>{r.eventName || r.drawnEvent}</div></>
+                                    <><div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{money(r.damageBill, r.potentialLossM)} of {money(r.potentialLossM, r.potentialLossM)}</div>{r.potentialLossM > 0 && <PotentialLossBar damage={r.damageBill} potential={r.potentialLossM} height={8} />}<div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 2 }}>{r.eventName || r.drawnEvent}</div></>
                                   )}</td>
                                 ) })}
                                 {isStrat ? (
@@ -1696,7 +1699,7 @@ export default function PortsControlCenter() {
                                   <td style={{ ...td, ...colHi(true), minWidth: 170 }}>
                                     <div style={{ fontFamily: FONT.mono, fontWeight: 700 }}>{tot.avoidedPct}% avoided</div>
                                     <PotentialLossBar damage={tot.totalDamageRaw} potential={tot.totalPotential} height={10} />
-                                    <div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 3 }}>{formatEurM(tot.totalDamageShown)} damage of {formatEurM(tot.totalPotential)}</div>
+                                    <div style={{ fontSize: FS.micro, color: COLOR.ink60, marginTop: 3 }}>{money(tot.totalDamageShown, tot.totalPotential)} damage of {money(tot.totalPotential, tot.totalPotential)}</div>
                                   </td>
                                 )}
                                 <td style={td}><span style={{ display: 'inline-block', fontFamily: FONT.mono, fontWeight: 700, border: `2px solid ${COLOR.ink}`, padding: '2px 8px' }}>#{otherRank[t.group]}</span></td>
@@ -1711,7 +1714,7 @@ export default function PortsControlCenter() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                     {factBox('Room average strategy', finalScore10(roomAvgRaw), 'across the room')}
-                    {factBox('Room losses avoided', `${formatEurM(roomAvoided)} of ${formatEurM(roomPotential)}`, 'over the three rounds')}
+                    {factBox('Room losses avoided', roomPotential > 0 ? `${formatEurM(roomAvoided)} of ${formatEurM(roomPotential)}` : '—', 'over the three rounds')}
                     {factBox("Coins that didn't help", coinsNoHelp, 'across all three rounds')}
                   </div>
                 </>
@@ -1771,13 +1774,13 @@ export default function PortsControlCenter() {
                         {[1, 2, 3].map(rn => {
                           const r = roundOf(t, rn)
                           if (!r) return <tr key={rn}><td style={td}><strong>Round {rn} · {YEARS[rn - 1]}</strong></td><td style={td} colSpan={4}>—</td></tr>
-                          const dmg = r.damageBill, pot = r.potentialLossM
+                          const pot = r.potentialLossM
                           const luckPts = Math.round(r.rawLossesAvoidedPct || 0) - Math.round(r.expectedProtection || 0)
                           return (
                             <tr key={rn}>
                               <td style={td}><strong>Round {rn} · {YEARS[rn - 1]}</strong><div style={{ fontSize: FS.sm, color: COLOR.ink60 }}>{r.eventName || r.drawnEvent}</div></td>
                               <td style={{ ...td, fontFamily: FONT.mono, fontWeight: 700 }}>{formatPercent((r.rawLossesAvoidedPct || 0) / 10)}</td>
-                              <td style={td}><div style={{ fontFamily: FONT.mono, fontWeight: 700, marginBottom: 6 }}>{formatEurM(dmg)} of {formatEurM(pot)}</div><PotentialLossBar damage={r.damageBill} potential={r.potentialLossM} /></td>
+                              <td style={td}><div style={{ fontFamily: FONT.mono, fontWeight: 700, marginBottom: 6 }}>{money(r.damageBill, pot)} of {money(pot, pot)}</div>{pot > 0 && <PotentialLossBar damage={r.damageBill} potential={r.potentialLossM} />}</td>
                               <td style={{ ...td, fontSize: FS.sm, fontWeight: 600, color: COLOR.ink, whiteSpace: 'nowrap' }}>{getLuckLabel(luckPts)}</td>
                               <td style={{ ...td, fontFamily: FONT.mono, fontWeight: 700 }}>{formatScore10(r.strategyScoreRaw)}</td>
                             </tr>
@@ -1786,7 +1789,7 @@ export default function PortsControlCenter() {
                         <tr style={{ background: COLOR.ink, color: COLOR.onInk }}>
                           <td style={{ ...td, borderBottom: 'none' }}><strong>All three rounds</strong><div style={{ fontSize: FS.sm, opacity: 0.8 }}>Final results</div></td>
                           <td style={{ ...td, borderBottom: 'none', fontFamily: FONT.mono, fontWeight: 700 }}>{tot.avoidedPct}%</td>
-                          <td style={{ ...td, borderBottom: 'none' }}><div style={{ fontFamily: FONT.mono, fontWeight: 700, marginBottom: 6 }}>{formatEurM(tot.totalDamageShown)} of {formatEurM(tot.totalPotential)} potential losses</div><PotentialLossBar damage={tot.totalDamageRaw} potential={tot.totalPotential} /><div style={{ fontSize: FS.micro, opacity: 0.85, marginTop: 4 }}>{formatEurM(tot.avoidedShown)} avoided ({tot.avoidedPct}%)</div></td>
+                          <td style={{ ...td, borderBottom: 'none' }}><div style={{ fontFamily: FONT.mono, fontWeight: 700, marginBottom: 6 }}>{money(tot.totalDamageShown, tot.totalPotential)} of {money(tot.totalPotential, tot.totalPotential)} potential losses</div>{tot.totalPotential > 0 && <PotentialLossBar damage={tot.totalDamageRaw} potential={tot.totalPotential} />}<div style={{ fontSize: FS.micro, opacity: 0.85, marginTop: 4 }}>{tot.totalPotential > 0 ? `${formatEurM(tot.avoidedShown)} avoided (${tot.avoidedPct}%)` : '—'}</div></td>
                           <td style={{ ...td, borderBottom: 'none', fontSize: FS.sm, opacity: 0.85 }}>Strategy = average of the three rounds</td>
                           <td style={{ ...td, borderBottom: 'none', fontFamily: FONT.mono, fontWeight: 700 }}>{finalScore10(t.finalScore)}</td>
                         </tr>

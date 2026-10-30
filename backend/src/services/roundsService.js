@@ -82,10 +82,11 @@ export function unlockRound(state) {
 }
 
 // Record a spin for the current round (v5): compute P, losses avoided, damage (at
-// full precision, using the port+round impact), expected protection (round wheel),
-// strategy score, coins that helped, and append the snapshot. New spins store the
-// drawn event's `impact`; `lossValue` is no longer written (kept readable for old
-// sessions — D4).
+// full precision, using the drawn event's potential loss), expected protection
+// (round wheel), strategy score, coins that helped, and append the snapshot. New
+// spins store the potential loss in € millions and tag the entry `moneyUnit:'eurM'`
+// so readers never mistake it for a coin-era entry; `impact`/`lossValue` are not
+// written (kept readable for old sessions — D4).
 export function recordSpin(state, event) {
   if (roundSpun(state)) return { ok: false, error: 'This round has already been spun.' }
   const port = PORTS_BY_ID[state.portId]
@@ -117,7 +118,8 @@ export function recordSpin(state, event) {
     rawLossesAvoidedPct: prep.rawLossesAvoidedPct,
     lossesAvoidedPct:    prep.lossesAvoidedPct,
     damageBill:          damage,          // € millions, full precision (display rounds)
-    potentialLossM:      potential,        // the drawn event's potential loss €M (J3)
+    potentialLossM:      potential,        // the drawn event's potential loss €M (J1/J3)
+    moneyUnit:           'eurM',           // explicit: damageBill/potentialLossM are € millions
     expectedProtection:  expected,
     strategyScore:       Math.round(strategyRaw * 100), // rounded whole % (back-compat)
     strategyScoreRaw:    strategyRaw,                    // unrounded ratio (ranking + /10 display)

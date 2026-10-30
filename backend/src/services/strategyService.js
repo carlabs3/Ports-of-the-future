@@ -133,9 +133,13 @@ export function computeStandings(strategies = [], throughRound = 1) {
   const rows = strategies.map(s => {
     const played = (s.rounds || []).filter(r => r.round <= throughRound)
     const raws = played.map(r => r.strategyScoreRaw != null ? r.strategyScoreRaw : (r.strategyScore != null ? r.strategyScore / 100 : null)).filter(v => v != null)
-    const totalDamageRaw = played.reduce((a, r) => a + roundDamageM(r), 0)       // €M (J3)
-    const totalPotential = played.reduce((a, r) => a + roundPotentialM(r), 0)    // €M (J3)
+    const totalDamageRaw = played.reduce((a, r) => a + roundDamageM(r), 0)       // €M
+    const totalPotential = played.reduce((a, r) => a + roundPotentialM(r), 0)    // €M
     const totalDamageShown = played.reduce((a, r) => a + Math.round(roundDamageM(r)), 0) // J5: whole
+    // Guard: a played round must have a positive potential loss. If not, the money
+    // is unreadable (bad/missing units) — flag it so the UI shows "—", never numbers.
+    const missingPotential = played.length > 0 && !(totalPotential > 0)
+    if (missingPotential) console.error(`computeStandings: group ${s.group} has ${played.length} played round(s) but total potential loss is ${totalPotential} — showing "—"`)
     return {
       group: s.group,
       portId: s.portId ?? null,
@@ -144,8 +148,9 @@ export function computeStandings(strategies = [], throughRound = 1) {
       totalPotential,
       avoidedPctRaw: totalPotential > 0 ? 1 - totalDamageRaw / totalPotential : 0,
       totalDamageShown,
-      avoidedShown: totalPotential - totalDamageShown,                      // J5: whole
+      avoidedShown: Math.max(0, totalPotential - totalDamageShown),         // J5: whole, never negative
       avoidedPct: totalPotential > 0 ? Math.round((1 - totalDamageRaw / totalPotential) * 100) : 0, // from raw
+      missingPotential,
     }
   })
 

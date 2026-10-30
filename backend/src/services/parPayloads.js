@@ -60,6 +60,10 @@ export function buildWheelPayload({ port, doc, round }) {
 // inside `entry`, ONLY the drawn event's potential loss/damage (D4).
 export function buildDrawPayload({ port, group, round, eventCode, entry }) {
   const L = roundLikelihoods(port, round)
+  // Normalise the entry's money to € millions through the shared helpers, so the
+  // post-spin view reads the same figures as standings and the debrief.
+  const o = plainRound(entry)
+  const normEntry = o ? { ...o, damageBill: roundDamageM(o), potentialLossM: roundPotentialM(o) } : o
   return {
     group,
     portName:           port?.name || null,
@@ -68,7 +72,7 @@ export function buildDrawPayload({ port, group, round, eventCode, entry }) {
     eventName:          EVENTS_BY_CODE[eventCode]?.name || eventCode,
     exposure:           exposureSlices(port, round),
     illustrationMotifs: topExposureEvents(L),
-    entry,
+    entry:              normEntry,
   }
 }
 

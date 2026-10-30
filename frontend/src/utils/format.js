@@ -32,7 +32,7 @@ export function debriefTotals(rounds = []) {
   const totalDamageShown = rounds.reduce((s, r) => s + Math.round(Number(r.damageBill) || 0), 0)
   const totalDamageRaw = rounds.reduce((s, r) => s + (Number(r.damageBill) || 0), 0)
   const totalPotential = rounds.reduce((s, r) => s + (Number(r.potentialLossM) || 0), 0)
-  const avoidedShown = totalPotential - totalDamageShown
+  const avoidedShown = Math.max(0, totalPotential - totalDamageShown) // never negative
   const avoidedPctRaw = totalPotential > 0 ? 1 - totalDamageRaw / totalPotential : 0
   const avoidedPct = Math.round(avoidedPctRaw * 100) // F3: shown % always from raw
   return { totalDamageShown, totalDamageRaw, totalPotential, avoidedShown, avoidedPctRaw, avoidedPct }

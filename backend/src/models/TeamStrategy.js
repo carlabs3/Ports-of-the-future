@@ -19,8 +19,10 @@ const roundSchema = new Schema({
   drawnEvent:        { type: String, default: null },  // event code, e.g. 'SS'
   rawLossesAvoidedPct: Number,                         // full precision
   lossesAvoidedPct:  Number,                           // displayed (0–100, 1 dp)
-  damageBill:        Number,                            // full precision (v5: impact×(1−P/10))
-  impact:            Number,                            // v5: the drawn event's impact this port/round (1–5)
+  damageBill:        Number,                            // full precision damage (€M for eurM entries)
+  potentialLossM:    Number,                            // J1: drawn event's potential loss, € millions
+  moneyUnit:         { type: String, default: null },   // 'eurM' = money fields are already € millions
+  impact:            Number,                            // legacy (coin-era): drawn event's impact 1–5
   expectedProtection: Number,                          // %
   strategyScore:     Number,                           // whole % (round(raw×100))
   strategyScoreRaw:  Number,                           // v5: unrounded exp÷best (ranking + /10)
