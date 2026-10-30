@@ -12,10 +12,6 @@ const BANDS = [
 const AREA_NAMES = ['Governance & Strategy', 'Organisation & People', 'Budget & Finance', 'Implemented Measures', 'Preparedness & Monitoring']
 const round1 = x => Math.round(x * 10) / 10
 const clampPct = v => Math.max(0, Math.min(100, v))
-// Minimum height of one area bar (px). Bars shrink to fill the five-areas chart
-// so every group stays visible on a projector; below this they would be too thin
-// to read, so the chart falls back to scrolling instead.
-const MIN_BAR = 10
 
 export default function CapBreakdownView({ breakdown }) {
   if (!breakdown) return null
@@ -87,36 +83,54 @@ export default function CapBreakdownView({ breakdown }) {
         </div>
       </div>
 
-      {/* Visual 2 · the five areas (full width). Bars shrink to fill the space so
-          every group stays visible on a projector — no scroll unless even the
-          readable minimum (MIN_BAR) does not fit (then overflowY is the fallback).
-          The group colour key is the header above, so no in-chart legend. */}
-      <div style={{ border: HAIRLINE, padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minHeight: 0, overflowY: 'auto' }}>
-          <div style={{ ...mono, color: COLOR.ink, flexShrink: 0 }}>The five areas · average by {byLabel}</div>
-          {AREA_NAMES.map((name, ai) => {
-            const vals = groups.map(g => g.areaMeans[ai] ?? 0)
-            const gap = round1(Math.max(...vals) - Math.min(...vals))
-            const isBig = biggestGapArea && biggestGapArea.area === ai
-            return (
-              <div key={name} style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', border: isBig ? `2px solid ${COLOR.ink}` : 'none', padding: isBig ? '2px 6px' : '0', background: isBig ? '#F6F8FB' : 'transparent' }}>
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                  <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: 700 }}>{name}</span>
-                  <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, whiteSpace: 'nowrap' }}>{isBig ? 'BIGGEST GAP' : 'GAP'} · max − min = {gap}</span>
+      {/* Visual 2 · the five areas as grouped vertical columns (areas on the x
+          axis, one column per group). Column height = the area mean on the 0–100
+          scale (mean ÷ 20), the same scale for every area. Height-agnostic: more
+          groups add width, not height, so it fits any viewport without scrolling. */}
+      <div style={{ border: HAIRLINE, padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 }}>
+          {/* title + one shared group legend */}
+          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ ...mono, color: COLOR.ink }}>The five areas · average by {byLabel}</div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {groups.map(g => (
+                <span key={g.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 12, height: 12, background: g.color, flexShrink: 0 }} />
+                  <span style={{ fontFamily: FONT.sans, fontSize: FS.micro }}>{g.label}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* plot: five area column-groups across the x axis */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 10, alignItems: 'stretch' }}>
+            {AREA_NAMES.map((name, ai) => {
+              const vals = groups.map(g => g.areaMeans[ai] ?? 0)
+              const gap = round1(Math.max(...vals) - Math.min(...vals))
+              const isBig = biggestGapArea && biggestGapArea.area === ai
+              return (
+                <div key={name} style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                  {/* columns grow from the baseline; paddingTop reserves room for the
+                      value labels so a near-100% column never overflows the top */}
+                  <div style={{ flex: 1, minHeight: 0, paddingTop: 16, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 4, borderBottom: `2px solid ${COLOR.ink}` }}>
+                    {groups.map(g => {
+                      const v = g.areaMeans[ai] ?? 0
+                      const h = clampPct(v / 20 * 100)
+                      return (
+                        <div key={g.key} title={`${g.label}: ${round1(v)}`} style={{ flex: '1 1 0', minWidth: 0, maxWidth: 44, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
+                          <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, lineHeight: 1, marginBottom: 2 }}>{round1(v)}</span>
+                          <div style={{ width: '100%', height: `${h}%`, minHeight: 2, background: g.color }} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {/* x-axis area label (+ gap; biggest gap highlighted) */}
+                  <div style={{ flexShrink: 0, textAlign: 'center', marginTop: 4, padding: '2px 4px', background: isBig ? '#F6F8FB' : 'transparent', border: isBig ? `1px solid ${COLOR.ink}` : '1px solid transparent' }}>
+                    <div style={{ fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: 700, lineHeight: 1.15 }}>{name}</div>
+                    <div style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60 }}>{isBig ? 'BIGGEST GAP' : 'Δ'} {gap}</div>
+                  </div>
                 </div>
-                {/* bars share this area's height; each shrinks to MIN_BAR before scroll */}
-                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center', marginTop: 3 }}>
-                  {groups.map(g => (
-                    <div key={g.key} style={{ flex: '1 1 0', minHeight: MIN_BAR, maxHeight: 22, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{ flex: 1, height: '100%', minHeight: MIN_BAR, background: COLOR.ice, position: 'relative' }}>
-                        <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${clampPct((g.areaMeans[ai] ?? 0) / 20 * 100)}%`, background: g.color }} />
-                      </div>
-                      <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, lineHeight: 1, width: 30, textAlign: 'right' }}>{round1(g.areaMeans[ai] ?? 0)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
 
       {/* footer: no-answer count, only when some did not answer */}
