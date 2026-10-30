@@ -1522,31 +1522,6 @@ export default function PortsControlCenter() {
                   </div>
                 )
               })()}
-
-              {/* ZONE 3 · bottom strip — team chips with the protection band (G3) */}
-              <div style={{ flexShrink: 0, borderTop: HAIRLINE, paddingTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', minHeight: 56 }}>
-                <span style={{ ...uiLabel, whiteSpace: 'nowrap' }}>Round {currentRound} · {roundYear(currentRound)} · {drawnGroups.size} of {groupStats.length} spun</span>
-                <div style={{ flex: 1, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {groupStats.map(g => {
-                    const strat = strategyByGroup[g.group]
-                    const entry = (strat?.rounds || []).find(r => r.round === g.currentRound)
-                    const isNow = g.group === wheelTeam
-                    const done = drawnGroups.has(g.group)
-                    const band = done && entry ? getProtectionBand(Math.round(entry.lossesAvoidedPct ?? 0)) : null
-                    return (
-                      <button key={g.group} onClick={() => openWheel(g.group)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, border: HAIRLINE, borderRadius: 0, background: band ? band.bg : (isNow ? COLOR.ink : COLOR.paper), color: isNow && !band ? COLOR.onInk : COLOR.ink, padding: '8px 10px', cursor: 'pointer' }}>
-                        <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: FW.bold }}>{g.group}</span>
-                        {done && entry ? (
-                          <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: FW.bold, color: band.color }}>{band.icon} {Math.round(entry.lossesAvoidedPct ?? 0)}%</span>
-                        ) : (
-                          <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: isNow ? COLOR.onInk : '#5C6B7A' }}>{isNow ? 'now' : 'Waiting'}</span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
             </>
           )}
         </div>
