@@ -51,20 +51,21 @@ colours (7). Sections below that still describe v3 behaviour (single-round draw,
   all ports). SECRET (never served before the moment allowed, D3/D4): per-round
   **`wheels`** `{ 1|2|3: { year, likelihoods } }` — likelihoods are **percent in
   steps of 5, summing to 100** (replaces the v4 single `exposureWeights` summing
-  to 10); and per-port **`impacts`** (coins 1–5 per event, used in rounds 1–2) plus
-  **`impactRound3Plus`** (the two events that gain +1 impact in round 3 / 2036).
+  to 10). Ports no longer carry an impact table (J1/J2/J6): potential losses live
+  on the events, the same for every port and round.
 - **28 measures** (`config/measures.js`, Appendix A); #19/#20 are enablers with no
   protection and `raisesCultureLevel: true`. New: #27 Snow & ice clearance fleet,
   #28 Harbour ice management.
-- **7 events** (`config/events.js`), single names per Appendix D (no global
-  `lossValue` any more — damage is per port and per round).
+- **7 events** (`config/events.js`), single names per Appendix D, each carrying one
+  **`potentialLossM`** (€ millions, J1): SS 600 · WS 500 · RF 400 · DR/WF/SI 300 ·
+  HW 200. This is the single source of money (no per-port `impacts`, no global
+  `lossValue`); coins are now only the budget and the card costs.
 - **`roundGrants = [6, 3, 3]`** in `config/game.js` (D2): per-round coin grants →
   cumulative budgets 6 / 9 / 12.
 - `validateConfig()` fail-fasts at boot on: a wheel's likelihoods not summing to
-  100; a likelihood not a multiple of 5; an event with likelihood > 0 but no
-  impact; an impact outside 1–5 (incl. after the round-3 +1); a deck referencing a
-  missing measure or missing a shared card; total card count ≠ 85; measure
-  count ≠ 28; cost ∉ [1,5]; protection score ∉ [0,10]; the enabler flag/rule.
+  100; a likelihood not a multiple of 5; an event with `potentialLossM` ≤ 0; a deck
+  referencing a missing measure or missing a shared card; total card count ≠ 85;
+  measure count ≠ 28; cost ∉ [1,5]; protection score ∉ [0,10]; the enabler flag/rule.
 - New sessions store `configVersion: 'v5'` (D10); older sessions keep their stored
   spin results — nothing is recomputed from live config at read time.
 
@@ -175,29 +176,31 @@ Server → client: `participant:joined {total}`, `par:update {individual,groups}
 
 ## Results display units (E-decisions)
 
-Display and copy only — no scoring formula changed. **1 impact coin = €1bn.**
-Money formatting lives in one place (`frontend/src/utils/format.js`):
-`formatEurBn` (one decimal, always), `formatEurBnInt` (whole €bn, the debrief
-impact table only), `formatPercent` (P → whole %), `formatScore10` (raw ratio →
-`X.X / 10`), and the `damageBreakdown` E3 helper. Card ordering / culture-line
-copy live in `postSpin.js`.
+Display and copy only — no scoring formula changed. **All money is shown in whole
+€ millions (J4); the engine already works in €M.** Money formatting lives in one
+place (`frontend/src/utils/format.js`): `formatEurM` (whole €M, thousands
+separator — e.g. `€267M`, `€1,350M`), `formatPercent` (P → whole %),
+`formatScore10` (raw ratio → `X.X / 10`), the `damageBreakdown` E3/J5 helper and
+the `debriefTotals` aggregator. Card ordering / culture-line copy live in
+`postSpin.js`.
 
 | Metric | Shown as | Calculation (unchanged) |
 |---|---|---|
 | Protection this event | 0–100 % (half up) | P × 10 |
-| Damage sustained | €bn, one decimal | impact × (1 − P/10) |
-| Potential losses | €bn | the drawn event's impact for that port and round |
-| Losses avoided | €bn | potentialShown − damageShown (E3) |
+| Damage sustained | €M, whole | potentialLossM × (1 − P/10) |
+| Potential losses | €M, whole | the drawn event's `potentialLossM` (same for every port) |
+| Losses avoided | €M, whole | potentialShown − damageShown (E3/J5) |
 | Your strategy | score / 10, one decimal | (expected ÷ best) × 10 |
 | Expected protection | not shown on the post-spin panel | still computed for the strategy score |
 
 Coins remain the unit for **budget and card costs only**; damage never uses the
 word "coin".
 
-- **E1** Round only at display: % half up (D9), money `€X.Xbn` (always one
-  decimal), strategy `X.X / 10`. Computation stays on unrounded values.
-- **E2** €bn is a display conversion (1 coin = €1bn) in one shared formatter.
-- **E3** `damageShown = round1(damage)`, `potentialShown = round1(impact)`,
+- **E1/J5** Round only at display: % half up (D9), money whole `€…M`, strategy
+  `X.X / 10`. Computation stays on unrounded €M values.
+- **E2/J4** Money is shown in whole € millions; `€bn` is gone. Old coin-era round
+  entries are normalised to €M at read time (`roundMoney.js`, 1 coin = €1000M).
+- **E3/J5** `damageShown = round(damage)`, `potentialShown = round(potentialLossM)`,
   `avoidedShown = potentialShown − damageShown`; the on-screen figures always add
   up. The protection bar width uses unrounded P.
 - **E4** The round panel shows the round's strategy to one decimal; the final
@@ -205,16 +208,16 @@ word "coin".
   expected ÷ best) and rounds only for display. Teams share a rank only when
   their unrounded means are exactly equal.
 - **E5** Reveal timing unchanged: the post-spin panel shows only the drawn
-  event's impact (D4); no other event's impact is sent to draw it.
+  event's potential loss (D4); no other event's loss is sent to draw it.
 - **E6** Post-spin card order: HELPED, then RAISED CULTURE, then the rest
   (MAX-CULTURE enablers + NOT THIS TIME), each group by number; the drawn event's
   tag is highlighted.
 - **E7** A culture block states where the multiplier came from (started level +
   which enabler cards raised it / none held / already at Proactive).
-- **E8** Debrief uses the same units: total damage in €bn, average strategy as
-  `/10`, and the "Impact by port" table in whole €bn (`€2bn → €3bn`).
-- **E9** Every damage figure (post-spin, debrief totals, impact-by-port) uses the
-  shared €bn formatter; "coins that didn't help" stays a budget metric.
+- **E8** Debrief uses the same units: total damage in €M, average strategy as
+  `/10`. With one loss per event there is no longer an "Impact by port" table.
+- **E9** Every damage figure (post-spin, debrief totals, standings) uses the
+  shared `formatEurM`; "coins that didn't help" stays a budget metric.
 
 ## Secret-data rule (the core invariant)
 

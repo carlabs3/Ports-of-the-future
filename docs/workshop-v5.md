@@ -19,9 +19,9 @@ This version follows the review comments on v4. The table lists each comment and
 | **Comment** | **Change in v5** |
 | --- | --- |
 | Round 2: 3 extra coins, many good cards cost 3 | Rounds 2 and 3 now add 3 coins each (6 → 9 → 12). Applied to round 3 as well, for the same reason; easy to revert. |
-| The game is in 2026; frequency and impact won't be the same in 10 years | Each round is a point in time: round 1 is 2026, round 2 is 2031, round 3 is 2036. The wheel changes every round (more heat, more surge, less snow and ice), and in 2036 two hazards per port get worse. |
-| Frequency vs intensity is confusing | The two are now separate. The wheel only decides how likely each event is. Impact is a separate number per port and per event, and teams estimate it themselves on the events worksheet. |
-| Event sheet: ask for impact instead | The events worksheet asks each team how hard each event would hit their port today (1 to 5 coins), given what is already in place. The real values are revealed at the debrief. |
+| The game is in 2026; frequency and impact won't be the same in 10 years | Each round is a point in time: round 1 is 2026, round 2 is 2031, round 3 is 2036. The wheel changes every round (more heat, more surge, less snow and ice). The potential losses themselves do not change between rounds. |
+| Frequency vs intensity is confusing | The two are now separate. The wheel only decides how likely each event is. The potential loss is a separate number — one per event, the same for every port (storm surge the biggest, heatwave the smallest). |
+| Event sheet: ask for priorities instead | The events worksheet asks each team to rank the seven events by how much they should worry about them, combining likelihood with the printed potential loss, and to say why. |
 | Nord-Maris: 'quay closure (high water)' reads like flooding | Renamed 'quay closures (sea overtopping)'. River flooding now has its own clue (canal overflow) and its own line in the chart. |
 | Meridia: no clue for windstorm | Added the cold northerly wind that closes the cruise quay above 60 km/h. |
 | Coralia: no clue for heatwave | Added heat exhaustion during long cruise turnarounds and the rented generator for reefers. |
@@ -36,13 +36,13 @@ This version follows the review comments on v4. The table lists each comment and
 
 ## Still to update outside this document
 
-- The app: new scoring (impact per port, three time points, new costs and cards).
+- The app: new scoring (one potential loss per event in € millions, three time points, new costs and cards).
 
 - The A4 challenge cards: new texts, the 'Already in place' box, the Nord-Maris chart label, the Sabkha illustration.
 
-- The events worksheet: add the impact column.
+- The events worksheet: switch to the priority-ranking column (no secret impact to estimate).
 
-- The Velmar example slides: the numbers change with the new scoring (section 6).
+- The worked-example slides: the numbers change with the new scoring — use the Nord-Maris example (section 6).
 
 # 1. The workshop
 
@@ -73,7 +73,7 @@ The game then moves forward in time. In 2031 and again in 2036 the team gets mor
 | Facilitation | One lead facilitator, one assistant for the app and scores |
 | Room | Six tables, projector, internet. Phones for the CAP index, one iPad per table |
 | Per table | A4 port report · 13–15 solution cards in the port's colour · events worksheet · 12 coin tokens (6 + 3 + 3) |
-| Facilitator | Likelihood and impact tables, benchmarks (sections 7 and 8) |
+| Facilitator | Likelihood and potential-loss tables, benchmarks (sections 7 and 8) |
 
 ## Flow
 
@@ -82,7 +82,7 @@ The game then moves forward in time. In 2031 and again in 2036 the team gets mor
 | 10 min | Introduction | Why extreme weather matters for ports; the story and the rules |
 | 10 min | CAP index | Each participant answers 10 questions on their phone. The screen shows the room's anonymous results. |
 | 5 min | Table culture level | Each table averages its CAP scores. The average sets its culture level. |
-| 15 min | Port challenge | Teams read their report aloud, place the port on the map and fill in the impact column of the events worksheet. |
+| 15 min | Port challenge | Teams read their report aloud, place the port on the map and rank the events on the worksheet by priority. |
 | 20 min | Round 1 · 2026 | 6 coins. Teams choose their cards and write one line on why. |
 | 10 min | Wheel 2026 | The app spins each port's wheel and shows protection and damage. |
 | 15 min | Round 2 · 2031 | +3 coins, no returns, new wheel, new spin |
@@ -523,15 +523,15 @@ Each event has one short name and a code used on the cards and the wheel. Storms
 
 Sea-level rise and erosion are slow changes, not events on the wheel. They show up in the game through the rising likelihood of storm surge between 2026 and 2036.
 
-## Likelihood and impact are two different things
+## Likelihood and potential loss are two different things
 
-The wheel only decides how likely each event is. How much damage an event does is a separate number, the impact, expressed in coins from 1 to 5. Impact depends on the port: on how exposed it is and on what is already in place. A storm surge costs Nord-Maris 5 coins because its quays are barely above the 2013 record; the same surge costs Boreal 3.
+The wheel only decides how likely each event is. How much an event would cost if it hit, unprotected, is a separate number — the potential loss. Each event carries one potential loss, in € millions, the same for every port: a storm surge is the biggest single event anywhere, a heatwave the smallest (section 7). What differs between ports is how *likely* each event is (the wheel) and which solutions make physical sense there (the deck). A card that is excellent against surge is wasted where the wheel almost never draws surge.
 
 ## The events worksheet
 
-Before choosing any card, each team fills in the events worksheet. For each of the seven events it writes how hard the event would hit its port today, from 1 to 5 coins, and one line on why. This forces the team to read the 'Already in place' section and to discuss what the port can and cannot absorb. At the debrief the facilitator shows the real impact values (section 7) and the teams compare.
+Before choosing any card, each team ranks the seven events by how much they should worry about them — combining how likely the event is for their port with how much it would cost — and writes one line on why. This forces the team to read the report and the 'Already in place' section and to agree on what matters most. The potential losses are printed on the event cards, so this is a prioritisation exercise, not a guessing game.
 
-| **Code** | **Event** | **Impact on our port (1–5)** | **Why? What is already in place?** |
+| **Code** | **Event** | **Our priority (1 = highest)** | **Why? What is already in place?** |
 | --- | --- | --- | --- |
 | SS | Storm surge |  |  |
 | RF | River flooding |  |  |
@@ -775,47 +775,48 @@ P never goes above 10. Two cards of 5 give 7.5, not 10, and one well-chosen card
 
 ## The numbers after each spin
 
-Display units only; the formulas are unchanged. 1 impact coin = €1bn.
+Display units only; the formulas are unchanged. All money is shown in € millions, whole numbers. Coins stay on screen only for the budget and the card costs — they are never money. Each event has one potential loss, the same for every port and round (section 7).
 
 | **Number** | **How it is calculated** |
 | --- | --- |
 | Protection this event (%) | P × 10, for the event the wheel drew (P from the formula above). |
-| Damage sustained (€bn) | Impact of that event for this port × (1 − P/10), shown in €bn. |
-| Potential losses (€bn) | The impact of the drawn event for this port and round — what it would cost with none of the team's solutions. |
-| Losses avoided (€bn) | Potential losses − damage sustained. |
-| Your strategy (/10) | (Expected protection ÷ the best expected protection the port could reach with the same budget and starting culture level) × 10. The app finds the best by testing every affordable combination. Expected protection — damage avoided across all events, each weighted by its likelihood on the wheel and its impact for the port, divided by the total possible damage; it does not depend on what the wheel drew — is still computed for the score but no longer shown on its own. |
+| Damage sustained (€M) | Potential loss of the drawn event × (1 − P/10), shown in € millions. |
+| Potential losses (€M) | The drawn event's potential loss — what it would cost with none of the team's solutions. The same figure for every port. |
+| Losses avoided (€M) | Potential losses − damage sustained. |
+| Your strategy (/10) | (Expected protection ÷ the best expected protection the port could reach with the same budget and starting culture level) × 10. The app finds the best by testing every affordable combination. Expected protection — damage avoided across all events, each weighted by its likelihood on the wheel and its potential loss, divided by the total possible damage; it does not depend on what the wheel drew — is still computed for the score but no longer shown on its own. |
 
 ## Rounds and time
 
-- Round 1, 2026: 6 coins. The wheel is unknown when teams choose; they rely on the report and their own impact estimates.
+- Round 1, 2026: 6 coins. The wheel is unknown when teams choose; they rely on the report and their own reading of what would hurt most.
 
 - At the first spin the app shows the 2026 wheel.
 
 - Round 2, 2031: +3 coins. Unspent coins carry over. No cards may be returned this round. The wheel shifts to 2031.
 
-- Round 3, 2036: +3 coins. A team may return any number of its cards before the spin, each for its full cost, and spend the coins on others. The wheel shifts again, and two hazards per port now hit one coin harder.
+- Round 3, 2036: +3 coins. A team may return any number of its cards before the spin, each for its full cost, and spend the coins on others. The wheel shifts again (the potential losses do not change — only the likelihoods do).
 
 - Final ranking: the average strategy score over the three rounds. The total damage over the three spins is shown next to it as the 'luck' result.
 
 Why both numbers: in a test of 20,000 simulated games run on the v4 rules, a median strategy did as well as or better than the best one in 20–30% of single spins at four of the six ports, and still up to 17% of the time over three spins. Ranking on damage alone would reward luck.
 
-## Worked example: Port of Velmar
+## Worked example: Nord-Maris in 2026
 
-Velmar is a fictional estuary port that no table plays, so the example gives away nothing. Wheel in 2026: river flooding 40%, storm surge 30%, windstorm 20%, heatwave 10%. Impact for Velmar: river flooding 4 coins, storm surge 4, windstorm 3, heatwave 1.
+Nord-Maris starts Developing (× 1.0). Its 2026 wheel: storm surge 40%, windstorm 30%, river flooding 10%, heatwave 10%, snow & ice 10%. Potential losses are the same for every port: storm surge €600M, windstorm €500M, river flooding €400M, snow & ice €300M, heatwave €200M.
 
-The table's CAP is 42 (Aware, × 0.9). It buys Drainage system upgrade (3 coins, RF 7), Green infrastructure (2 coins, RF 5, HW 2) and Governance protocols (1 coin), which lifts it to Developing (× 1.0). The wheel draws river flooding: P = 10 × [1 − (1 − 0.7) × (1 − 0.5)] = 8.5, and the damage is 4 × 0.15 = 0.6 coin instead of 4. Had the wheel drawn storm surge, P would be 0 and the damage 4 coins.
+With 6 coins the team buys Elevated critical infrastructure (#2, 4 coins), Governance & institutional protocols (#19, 1 coin, an enabler that lifts the culture to Proactive, × 1.1) and Parametric climate insurance (#23, 1 coin). #2 covers storm surge and river flooding well; the enabler and the insurance add a thin layer against everything. The wheel draws snow & ice, which #2 does not touch, so only the culture lift and the insurance apply: P = 1.1, protection 11%, and the damage is €300M × (1 − 0.11) = €267M instead of €300M — €33M avoided.
 
-| **Event** | **Likelihood** | **Impact** | **Protection** | **Damage avoided (likelihood × impact × P/10)** |
+| **Event** | **Likelihood** | **Potential loss** | **Protection** | **Damage avoided (likelihood × loss × P/10)** |
 | --- | --- | --- | --- | --- |
-| River flooding | 40% | 4 | 8.5 | 1.36 |
-| Storm surge | 30% | 4 | 0 | 0 |
-| Windstorm | 20% | 3 | 0 | 0 |
-| Heatwave | 10% | 1 | 2.0 | 0.02 |
-| Total |  |  | possible: 3.5 | avoided: 1.38 |
+| Storm surge | 40% | €600M | 80% | 190.9 |
+| Windstorm | 30% | €500M | 11% | 16.5 |
+| River flooding | 10% | €400M | 50% | 20.1 |
+| Heatwave | 10% | €200M | 11% | 2.2 |
+| Snow & ice | 10% | €300M | 11% | 3.3 |
+| Total |  | possible: 480 | | avoided: 232.9 |
 
-Expected protection: 1.38 ÷ 3.5 = 39%. The best possible for Velmar with 6 coins, starting Aware, is 59%. Strategy score: 67%. The team protected itself very well against flooding and not at all against surge and wind, which together carry half of the possible damage.
+Expected protection: 232.9 ÷ 480 = 48.5%. The best possible for Nord-Maris with 6 coins, starting Developing, is 60.6%. Strategy score: 8.0 / 10. The plan is well judged — it covers the two events that carry most of the likely damage (surge and flooding) — yet the wheel drew the one hazard it left open. A good expected plan can still meet bad luck on the day, which is why the final ranking averages three rounds.
 
-# 7. Facilitator only: likelihood, impact and benchmarks
+# 7. Facilitator only: likelihood, potential loss and benchmarks
 
 ## Likelihood on the wheel (%) by round
 
@@ -869,48 +870,49 @@ Trends follow the direction of the IPCC AR6 findings: hot extremes more frequent
 | 2031 | 15 | 45 | 10 | 30 |
 | 2036 | 20 | 45 | 5 | 30 |
 
-## Impact (coins) for each port
+## Potential loss (€ millions) per event
 
-2026 values reflect each port's exposure and what is already in place. In 2036 two hazards per port gain one coin (marked ↑). Use this table at the debrief to compare with the teams' estimates.
+One loss per event, the same for every port and every round. This is what the event would cost with none of the team's solutions in place; the wheel decides how likely it is, which differs by port and year.
 
-| **Port** | **Storm surge** | **River flooding** | **Heatwave** | **Windstorm** | **Drought** | **Wildfire** | **Snow ****&**** ice** |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Nord-Maris | 5 | 2 ↑3 | 1 ↑2 | 4 | – | – | 2 |
-| Meridia | – | 3 | 4 ↑5 | 2 | 3 ↑4 | 4 | – |
-| Riu Verd | – | 4 ↑5 | 3 ↑4 | – | 5 | 2 | – |
-| Boreal | 3 ↑4 | 1 ↑2 | – | 3 | – | – | 5 |
-| Coralia | 4 ↑5 | 3 | 2 ↑3 | 5 | – | – | – |
-| Sabkha | 3 ↑4 | – | 4 ↑5 | 2 | 4 | – | – |
+| **Event** | **Potential loss** |
+| --- | --- |
+| Storm surge | €600M |
+| Windstorm | €500M |
+| River flooding | €400M |
+| Drought | €300M |
+| Wildfire | €300M |
+| Snow & ice | €300M |
+| Heatwave | €200M |
 
 ## Benchmarks: best expected protection (%)
 
-Budget 6 coins in 2026, 9 in 2031, 12 in 2036. A Proactive table protects more with the same coins: that is the culture effect.
+Budget 6 coins in 2026, 9 in 2031, 12 in 2036. A Proactive table protects more with the same coins: that is the culture effect. Round-to-round gains now come only from the larger budget — the potential losses no longer change between rounds.
 
 | **Port** | **Reactive (26 / 31 / 36)** | **Aware** | **Developing** | **Proactive** |
 | --- | --- | --- | --- | --- |
-| Nord-Maris | 51 / 68 / 79 | 56 / 73 / 83 | 61 / 77 / 85 | 65 / 81 / 87 |
-| Meridia | 56 / 70 / 78 | 60 / 74 / 82 | 64 / 77 / 84 | 68 / 79 / 86 |
-| Riu Verd | 51 / 69 / 78 | 56 / 75 / 83 | 62 / 78 / 84 | 67 / 80 / 86 |
-| Boreal | 53 / 68 / 76 | 58 / 72 / 80 | 62 / 76 / 84 | 66 / 80 / 86 |
-| Coralia | 50 / 68 / 75 | 55 / 72 / 80 | 59 / 75 / 82 | 64 / 78 / 84 |
-| Sabkha | 54 / 70 / 78 | 58 / 74 / 82 | 63 / 77 / 84 | 68 / 80 / 86 |
+| Nord-Maris | 51 / 65 / 79 | 56 / 70 / 83 | 61 / 75 / 85 | 65 / 79 / 87 |
+| Meridia | 47 / 62 / 72 | 51 / 66 / 77 | 56 / 69 / 79 | 59 / 72 / 81 |
+| Riu Verd | 48 / 67 / 76 | 53 / 73 / 81 | 59 / 76 / 83 | 64 / 79 / 85 |
+| Boreal | 54 / 67 / 78 | 58 / 71 / 81 | 63 / 75 / 84 | 67 / 78 / 86 |
+| Coralia | 51 / 66 / 77 | 55 / 71 / 81 | 60 / 74 / 84 | 64 / 78 / 86 |
+| Sabkha | 44 / 58 / 71 | 48 / 63 / 76 | 52 / 68 / 79 | 56 / 71 / 81 |
 
 ## Answer key: best strategy in 2026 (Aware table, 6 coins)
 
 | **Port** | **Best combination** |
 | --- | --- |
 | Nord-Maris | Structural health monitoring + Early warning & forecasting system + Emergency response plan & drills |
-| Meridia | Emergency response plan & drills + Worker heat-protection protocol + Governance & institutional protocols + Firebreaks & vegetation management |
+| Meridia | Early warning & forecasting system + Emergency response plan & drills + Parametric climate insurance + Worker heat-protection protocol |
 | Riu Verd | Worker heat-protection protocol + Multimodal shift platform + Adaptive dredging & sediment management |
 | Boreal | Structural health monitoring + Emergency response plan & drills + Multimodal shift platform |
-| Coralia | Emergency response plan & drills + Wind-resistant mooring & crane reinforcement + Governance & institutional protocols |
-| Sabkha | Worker heat-protection protocol + Alternative water supply & reuse + Governance & institutional protocols + Cool surfaces & shaded yards |
+| Coralia | Early warning & forecasting system + Emergency response plan & drills + Nature-based coastal & riverbank protection |
+| Sabkha | Early warning & forecasting system + Emergency response plan & drills + Parametric climate insurance + Worker heat-protection protocol |
 
 There is no single right answer: several combinations come within two or three points of the best in every port. The emergency plan appears in most best strategies, which makes it a good 'no-regret' discussion point.
 
 # 8. Debrief
 
-- Compare your impact estimates with the real values. Where were you furthest off, and why?
+- Compare your event priorities with how the rounds actually played out. Where were you furthest off, and why?
 
 - Which clue in the report drove your first choice? Which one did you miss?
 
@@ -938,9 +940,9 @@ There is no single right answer: several combinations come within two or three p
 
 Protection scores follow a simple rule. Engineered measures designed against one hazard score 7 or 8, never 9 or 10, because design standards get exceeded by extreme events. Physical measures that cover only part of a hazard or part of the port score 4 to 6. Warning and operational measures score 2 or 3. Early warning is anchored on the estimate that 24 hours of warning can cut damage by about 30%, scored at 2 because a port can act on only part of a warning.
 
-The game balance was tested by computing every affordable combination of cards for every port, round and culture level. With the v5 costs and impacts, the best expected protection in 2026 ranges from 55% to 60% across the six ports, so no port starts at a disadvantage, and the best combination differs from port to port.
+The game balance was tested by computing every affordable combination of cards for every port, round and culture level. With one potential loss per event, the best expected protection in 2026 (Aware, 6 coins) ranges from about 48% at Sabkha to 58% at Boreal across the six ports, and the best combination differs from port to port. The spread is driven by how each port's wheel weights the larger-loss events.
 
-**Limits to say out loud at the debrief. **Scores, costs, impacts and wheel weights are teaching estimates, not published values; the literature gives no clean percentages per measure and hazard. The trends between 2026 and 2036 follow the direction of the IPCC findings, not their magnitude. The ports and their data are fictional. The Coralia chart shows stronger storms, not more frequent ones, in line with the IPCC finding that the share of intense tropical cyclones has likely increased.
+**Limits to say out loud at the debrief. **Scores, costs, potential losses and wheel weights are teaching estimates, not published values; the literature gives no clean percentages per measure and hazard. The trends between 2026 and 2036 follow the direction of the IPCC findings, not their magnitude. The ports and their data are fictional. The Coralia chart shows stronger storms, not more frequent ones, in line with the IPCC finding that the share of intense tropical cyclones has likely increased.
 
 ## Sources
 

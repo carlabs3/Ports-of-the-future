@@ -1,5 +1,5 @@
 import { COLOR, FONT, FS, FW, LS, HAIRLINE } from '../styles/tokens.js'
-import { formatEurBn, formatScore10 } from '../utils/format.js'
+import { formatEurM, formatScore10 } from '../utils/format.js'
 import { getProtectionBand } from '../utils/protectionBand.js'
 import PotentialLossBar from './PotentialLossBar.jsx'
 
@@ -86,7 +86,7 @@ export default function StandingsScreen({ standings, year, portImage }) {
                 <div style={{ flexShrink: 0, textAlign: 'right', minWidth: 150 }}>
                   <div style={{ fontFamily: FONT.mono, fontSize: FS.h3, fontWeight: 800, color: band.color }}>{band.icon} {t.avoidedPct}%</div>
                   <PotentialLossBar damage={t.totalDamageRaw} potential={t.totalPotential} height={10} style={{ marginTop: 4 }} />
-                  <div style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, marginTop: 3 }}>{formatEurBn(t.avoidedShown)} of {formatEurBn(t.totalPotential)} avoided</div>
+                  <div style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, marginTop: 3 }}>{formatEurM(t.avoidedShown)} of {formatEurM(t.totalPotential)} avoided</div>
                 </div>
               </div>
             )

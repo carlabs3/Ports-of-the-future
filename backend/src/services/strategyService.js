@@ -96,7 +96,7 @@ export function computeFinalRanking(teams = []) {
       finalScore: raws.length ? mean(raws) * 100 : 0,                         // unrounded (display rounds)
       totalDamage: totalDamageRaw,                                            // kept for back-compat
       totalDamageRaw,                                                         // Σ damageBill (F2, raw)
-      totalPotential,                                                         // Σ impact (F2)
+      totalPotential,                                                         // Σ potentialLossM €M (F2)
       avoidedPctRaw: totalPotential > 0 ? 1 - totalDamageRaw / totalPotential : 0, // F2 (raw ratio 0..1)
     }
   })
