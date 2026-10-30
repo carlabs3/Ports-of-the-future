@@ -39,8 +39,8 @@ const teamStrategySchema = new Schema({
 
   startingBand:    { type: String, enum: ['reactive', 'aware', 'developing', 'proactive', null], default: null },
   portfolio:       { type: [Number], default: [] },
-  coins:           { type: Number, default: 6 },
-  roundStartCoins: { type: Number, default: 6 },
+  coins:           { type: Number, default: 3 },  // round-1 grant (config roundGrants[0])
+  roundStartCoins: { type: Number, default: 3 },
   currentRound:    { type: Number, default: 1 },
   roundLocked:     { type: Boolean, default: false },
   roundBought:     { type: [Number], default: [] },

@@ -190,7 +190,7 @@ export default function PortsControlCenter() {
   // currentRound, roundLocked, roundBudget, portfolio:[{id,name,cost}],
   // roundBought, roundReturned, rounds:[...] }.
   const [measuresCatalog, setMeasuresCatalog] = useState([]) // [{ id, name, cost }]
-  const [roundBudgets, setRoundBudgets]       = useState([6, 9, 12]) // cumulative, display only (v5)
+  const [roundBudgets, setRoundBudgets]       = useState([3, 6, 9]) // cumulative, display only (v5); server overwrites
   const [strategyByGroup, setStrategyByGroup] = useState({})
   const [editingGroup, setEditingGroup]       = useState(null) // the team now dictating
   const [addError, setAddError]               = useState('')  // inline error from buy/undo/return/lock

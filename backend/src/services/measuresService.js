@@ -1,9 +1,9 @@
 import { MEASURES, MEASURES_BY_ID } from '../config/measures.js'
 
-// Round-1 budget (6 coins). In v5 the budget grows across rounds (cumulative
-// 6/9/12 via config/game.js roundGrants); this flat constant is legacy and only
-// used by this service's own validation helpers (test-only — see MEASURE_BUDGET
-// note in the Commit 5 cleanup).
+// Legacy flat budget constant. The live round flow uses the cumulative budgets
+// (3 / 6 / 9 via config/game.js roundGrants); this constant is used only by this
+// service's own validation helpers, which are exercised in tests and not wired
+// into the round routes. Left at 6 on purpose — it is not the live budget.
 export const MEASURE_BUDGET = 6
 
 // Sum of costs of the given measure ids. Assumes ids are valid.

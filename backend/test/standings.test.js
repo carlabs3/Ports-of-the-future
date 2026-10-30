@@ -55,39 +55,47 @@ test('exactly-equal values share a rank', () => {
 })
 
 // ── regression: fresh session, real spins → correct standings (not ×1000) ────
+// Uses the 3/6/9 budget: a 3-coin round-1 plan. Money assertions are invariants
+// (€M range + add-up), not plan-specific damage literals — those return with the
+// re-scripted cases once the Commit-2 benchmarks are approved.
 const fresh = (portId, startingBand) => ({
-  portId, startingBand, portfolio: [], coins: 6, roundStartCoins: 6, currentRound: 1,
+  portId, startingBand, portfolio: [], coins: 3, roundStartCoins: 3, currentRound: 1,
   roundLocked: false, roundBought: [], roundReturned: null, roundRefund: 0, rounds: [],
 })
 
-test('fresh session with 2 rounds spun gives correct standings (Case A round 1)', () => {
+test('fresh session with 2 rounds spun gives correct standings (€M, not ×1000)', () => {
   const s = fresh('nord-maris', 'developing')
-  for (const id of [2, 19, 23]) assert.equal(buyCard(s, id).ok, true) // 6 coins
+  for (const id of [19, 8]) assert.equal(buyCard(s, id).ok, true) // 1 + 2 = 3 coins
+  assert.equal(s.coins, 0)
   assert.equal(lockRound(s).ok, true)
-  assert.equal(recordSpin(s, 'SI').ok, true) // Case A: potential 300, damage 267
+  assert.equal(recordSpin(s, 'SI').ok, true) // SI potential 300
 
   // Every entry carries the explicit €M marker + a stored potential loss.
   assert.equal(s.rounds[0].moneyUnit, 'eurM')
   assert.equal(s.rounds[0].potentialLossM, 300)
 
+  const d1 = Math.round(s.rounds[0].damageBill)
+  assert.ok(d1 >= 0 && d1 <= 300, `round-1 damage €${d1}M is in €M range (not ×1000)`)
   const after1 = computeStandings([{ group: 'A', portId: 'nord-maris', rounds: s.rounds }], 1).teams[0]
   assert.equal(after1.missingPotential, false)
   assert.equal(after1.totalPotential, 300)
-  assert.equal(after1.totalDamageShown, 267) // NOT 267000
-  assert.equal(after1.avoidedShown, 33)
-  assert.equal(after1.avoidedPct, 11)
+  assert.equal(after1.totalDamageShown, d1)
+  assert.equal(after1.avoidedShown, 300 - d1)
+  assert.ok(after1.avoidedShown >= 0)
 
-  // Round 2: carry on, draw storm surge (potential 600).
+  // Round 2: grant +3, keep the plan, draw storm surge (potential 600).
   assert.equal(advanceRound(s).ok, true)
+  assert.equal(s.coins, 3)                 // 0 + 3
   assert.equal(lockRound(s).ok, true)
   assert.equal(recordSpin(s, 'SS').ok, true)
   const d2 = Math.round(s.rounds[1].damageBill)
+  assert.ok(d2 >= 0 && d2 <= 600, `round-2 damage €${d2}M is in €M range`)
 
   const after2 = computeStandings([{ group: 'A', portId: 'nord-maris', rounds: s.rounds }], 2).teams[0]
   assert.equal(after2.missingPotential, false)
   assert.equal(after2.totalPotential, 900)            // 300 + 600, not ×1000
-  assert.equal(after2.totalDamageShown, 267 + d2)
-  assert.equal(after2.avoidedShown, 900 - (267 + d2))
+  assert.equal(after2.totalDamageShown, d1 + d2)
+  assert.equal(after2.avoidedShown, 900 - (d1 + d2))
   assert.ok(after2.avoidedShown >= 0)
 })
 

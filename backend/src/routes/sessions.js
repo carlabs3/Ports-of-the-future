@@ -7,6 +7,7 @@ import ParIndexResult from '../models/ParIndexResult.js'
 import { generateCode } from '../utils/generateCode.js'
 import { generateTeamNames, validateTeamCount, assignRandomPorts } from '../services/portAssignmentService.js'
 import { buildSessionSummary } from '../services/parSubmissionService.js'
+import { roundGrants } from '../config/game.js'
 
 export default function sessionsRouter(io) {
   const router = Router()
@@ -37,9 +38,6 @@ export default function sessionsRouter(io) {
         step3Revealed:   session.step3Revealed,
         winnersRevealed: session.winnersRevealed,
         configVersion:   session.configVersion || null,
-        // Legacy (pre-v4) sessions are test data — flag so the UI can say the
-        // session was created with an older version of the workshop.
-        isLegacy:        session.configVersion !== 'v4',
       })
     } catch {
       res.status(500).json({ error: 'Error al obtener sesión' })
@@ -69,13 +67,17 @@ export default function sessionsRouter(io) {
         name: name || '',
         groups,
         portAssignments,
-        configVersion: 'v4',
+        configVersion: 'v5.1',
       })
 
-      // Create one TeamStrategy per group. v4 defaults apply: portfolio empty,
-      // coins 6, round 1, startingBand null until PARI/lock.
+      // Create one TeamStrategy per group. Starting balance = the round-1 grant
+      // (config roundGrants[0]), so the budget is config-driven, not a model
+      // default. Portfolio empty, round 1, startingBand null until PARI/lock.
       await TeamStrategy.insertMany(
-        portAssignments.map(pa => ({ sessionCode: code, group: pa.group, portId: pa.portId }))
+        portAssignments.map(pa => ({
+          sessionCode: code, group: pa.group, portId: pa.portId,
+          coins: roundGrants[0], roundStartCoins: roundGrants[0],
+        }))
       )
 
       res.status(201).json(session)

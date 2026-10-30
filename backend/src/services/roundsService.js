@@ -32,10 +32,10 @@ export function buyCard(state, measureId) {
 }
 
 // Return one held card (G1). Policy comes from config/game.js returnPolicy:
-// round 1 has nothing to return; round 2 is 'none' (rejected); round 3 is 'full'
-// — any number of held cards, each refunded its FULL cost. Only before the spin
-// (409 once the round has been spun, as for unlock). `roundRefund` accumulates
-// the coins refunded this round (for the coin meter and the spin record).
+// round 1 has nothing to return; rounds 2 and 3 are 'full' — any number of held
+// cards, each refunded its FULL cost. Only before the spin (409 once the round
+// has been spun, as for unlock). `roundRefund` accumulates the coins refunded
+// this round (for the coin meter and the spin record).
 export function returnCard(state, measureId) {
   if (roundSpun(state)) return { ok: false, error: 'This round has already been spun.' }
   if (state.roundLocked) return { ok: false, error: 'This round is locked.' }
@@ -131,8 +131,8 @@ export function recordSpin(state, event) {
   return { ok: true, entry }
 }
 
-// Advance to the next round: grant the round's coins (config roundGrants: +3 in
-// rounds 2 and 3), reset the round's working state.
+// Advance to the next round: grant the round's coins (config roundGrants: +3 each
+// round), reset the round's working state.
 export function advanceRound(state) {
   if (state.currentRound >= 3) return { ok: false, error: 'All three rounds are complete.' }
   if (!roundSpun(state)) return { ok: false, error: 'The current round has not been spun yet.' }
