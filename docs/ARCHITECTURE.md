@@ -21,13 +21,13 @@ The workshop moved to **v4**. Decisions, each replacing earlier ones:
   permutation of the 6. Teams stay named Team A, Team B … Replaces "max 8 tables".
 - **D14 · Damage bill** = event losses × (1 − P/10), rounded to the nearest 0.5
   (halves up). A score only; it never removes coins.
-- **D15 · Card returns (G1)** — round 1: nothing to return. Round 2: **no returns**
-  (the server rejects with 409 `Returns are not allowed in round 2.`). Round 3: a
+- **D15 · Card returns (G1)** — round 1: nothing to return. **Rounds 2 and 3**: a
   table may return **any number** of held cards, each for its **full cost**.
-  Returns only before the spin (409 once the round has been spun). Returning an
-  enabler lowers the culture level (it falls out of the held portfolio). The
-  policy lives in `config/game.js` (`returnPolicy: { 2: 'none', 3: 'full' }`);
-  routes read it, never hard-coding round numbers.
+  Returns only before the spin (409 once the round has been spun) and only while
+  the round is unlocked. Returning an enabler lowers the culture level (it falls
+  out of the held portfolio). The policy lives in `config/game.js`
+  (`returnPolicy: { 2: 'full', 3: 'full' }`); routes read it, never hard-coding
+  round numbers.
 - **D16 · Rounding** — full precision internally; P shown to 1 decimal; percentages
   as whole numbers (halves up).
 - **D17 · Ports have a colour** *(superseded — originally "ports have no colour")* —
@@ -60,14 +60,18 @@ colours (7). Sections below that still describe v3 behaviour (single-round draw,
   **`potentialLossM`** (€ millions, J1): SS 600 · WS 500 · RF 400 · DR/WF/SI 300 ·
   HW 200. This is the single source of money (no per-port `impacts`, no global
   `lossValue`); coins are now only the budget and the card costs.
-- **`roundGrants = [6, 3, 3]`** in `config/game.js` (D2): per-round coin grants →
-  cumulative budgets 6 / 9 / 12.
+- **`roundGrants = [3, 3, 3]`** in `config/game.js` (D2): per-round coin grants →
+  cumulative budgets 3 / 6 / 9. The round-1 grant is also the team's starting
+  balance (set at team creation from `roundGrants[0]`).
 - `validateConfig()` fail-fasts at boot on: a wheel's likelihoods not summing to
   100; a likelihood not a multiple of 5; an event with `potentialLossM` ≤ 0; a deck
   referencing a missing measure or missing a shared card; total card count ≠ 85;
   measure count ≠ 28; cost ∉ [1,5]; protection score ∉ [0,10]; the enabler flag/rule.
-- New sessions store `configVersion: 'v5'` (D10); older sessions keep their stored
-  spin results — nothing is recomputed from live config at read time.
+- New sessions store `configVersion: 'v5.1'` (traceability only — there is no
+  per-version branching). Already-played round entries keep their stored spin
+  results (damage, strategy score). Live config (budgets, grants, benchmarks)
+  applies to new actions, so a session still in progress at deploy adopts the
+  current rules.
 
 ## Stack & layout
 

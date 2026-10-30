@@ -575,8 +575,8 @@ export default function PortsControlCenter() {
   // get their starting level from the PARI mean automatically on lock.
   const editingCount = groupStats.find(g => g.group === editingGroup)?.count ?? 0
   const needsStartingLevel = !!editingStrat && editingStrat.startingBand == null && editingCount === 0
-  // G1: returns only in round 3 (round 2 has none), any number, before the lock.
-  const canReturn = !!editingStrat && editingStrat.currentRound === 3 && !editingStrat.roundLocked
+  // G1: returns in rounds 2 and 3, any number, each for full cost, before the lock.
+  const canReturn = !!editingStrat && editingStrat.currentRound >= 2 && !editingStrat.roundLocked
 
   // Readback for the dictating team, from the cards it holds and their total
   // cost, e.g. "Team D: cards 13 and 24. Five coins. Correct?"
@@ -621,11 +621,11 @@ export default function PortsControlCenter() {
       strategyCall('post', '/undo', { measureId: m.id })
     }
   }
-  // Return an owned (previous-round) card — the game's half-refund return, one per
-  // round. Confirms first.
+  // Return an owned (previous-round) card — the game's return (G1): rounds 2 and
+  // 3, any number, each for its FULL cost. Confirms first.
   function onReturnCard(m) {
     if (busy) return
-    const refund = m.cost || 0 // G1: full cost in round 3
+    const refund = m.cost || 0 // G1: full cost
     if (!window.confirm(`Return ${m.name} (#${m.id}) for ${refund} coin${refund !== 1 ? 's' : ''}?`)) return
     strategyCall('post', '/return', { measureId: m.id })
   }
@@ -1141,7 +1141,7 @@ export default function PortsControlCenter() {
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', background: COLOR.ice, border: HAIRLINE, padding: '14px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
               <span style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.tight }}>Round {currentRound} · {roundYear(currentRound)}</span>
-              <span style={uiLabel}>{roundBudgets[currentRound - 1]}-coin budget{currentRound >= 2 ? ' · one return allowed' : ''}</span>
+              <span style={uiLabel}>{roundBudgets[currentRound - 1]}-coin budget{currentRound >= 2 ? ' · returns allowed' : ''}</span>
             </div>
             <span style={{ fontFamily: FONT.mono, fontSize: FS.body, fontWeight: FW.bold }}>
               {groupStats.filter(g => g.roundLocked).length} of {groupStats.length} locked this round
@@ -1290,7 +1290,7 @@ export default function PortsControlCenter() {
                           {owned && canReturn && (
                             <button type="button" onClick={() => onReturnCard(m)} disabled={busy}
                               style={{ border: `2px solid ${COLOR.ink}`, borderTop: 'none', borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontFamily: FONT.sans, fontSize: FS.micro, fontWeight: FW.semibold, padding: '8px 10px', cursor: busy ? 'default' : 'pointer' }}>
-                              Return for {m.cost} coin{m.cost !== 1 ? 's' : ''}
+                              Return · +{m.cost} coin{m.cost !== 1 ? 's' : ''}
                             </button>
                           )}
                         </div>

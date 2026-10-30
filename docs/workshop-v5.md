@@ -18,7 +18,7 @@ This version follows the review comments on v4. The table lists each comment and
 
 | **Comment** | **Change in v5** |
 | --- | --- |
-| Round 2: 3 extra coins, many good cards cost 3 | Rounds 2 and 3 now add 3 coins each (6 → 9 → 12). Applied to round 3 as well, for the same reason; easy to revert. |
+| Budget pacing | Every round grants 3 coins (3 → 6 → 9 cumulative). Teams start small and build up; unspent coins carry over. One-line revert in config/game.js. |
 | The game is in 2026; frequency and impact won't be the same in 10 years | Each round is a point in time: round 1 is 2026, round 2 is 2031, round 3 is 2036. The wheel changes every round (more heat, more surge, less snow and ice). The potential losses themselves do not change between rounds. |
 | Frequency vs intensity is confusing | The two are now separate. The wheel only decides how likely each event is. The potential loss is a separate number — one per event, the same for every port (storm surge the biggest, heatwave the smallest). |
 | Event sheet: ask for priorities instead | The events worksheet asks each team to rank the seven events by how much they should worry about them, combining likelihood with the printed potential loss, and to say why. |
@@ -48,7 +48,7 @@ This version follows the review comments on v4. The table lists each comment and
 
 ## The story
 
-It is 2026. Each table is the adaptation and resilience team of a port. The board has asked an external consultancy for a climate vulnerability assessment, and the report has just arrived. The team has a first budget of 6 coins. It has to read the report, discuss it, agree on what matters most and decide which measures to put in place.
+It is 2026. Each table is the adaptation and resilience team of a port. The board has asked an external consultancy for a climate vulnerability assessment, and the report has just arrived. The team has a first budget of 3 coins. It has to read the report, discuss it, agree on what matters most and decide which measures to put in place.
 
 The game then moves forward in time. In 2031 and again in 2036 the team gets more money, can adjust its plan, and faces the weather of that year. The climate does not stand still between rounds: some events become more likely, and some hit harder.
 
@@ -72,7 +72,7 @@ The game then moves forward in time. In 2031 and again in 2036 the team gets mor
 | Participants | 24–36: six tables of 4 to 6 people, one port per table |
 | Facilitation | One lead facilitator, one assistant for the app and scores |
 | Room | Six tables, projector, internet. Phones for the CAP index, one iPad per table |
-| Per table | A4 port report · 13–15 solution cards in the port's colour · events worksheet · 12 coin tokens (6 + 3 + 3) |
+| Per table | A4 port report · 13–15 solution cards in the port's colour · events worksheet · 9 coin tokens (3 + 3 + 3) |
 | Facilitator | Likelihood and potential-loss tables, benchmarks (sections 7 and 8) |
 
 ## Flow
@@ -83,9 +83,9 @@ The game then moves forward in time. In 2031 and again in 2036 the team gets mor
 | 10 min | CAP index | Each participant answers 10 questions on their phone. The screen shows the room's anonymous results. |
 | 5 min | Table culture level | Each table averages its CAP scores. The average sets its culture level. |
 | 15 min | Port challenge | Teams read their report aloud, place the port on the map and rank the events on the worksheet by priority. |
-| 20 min | Round 1 · 2026 | 6 coins. Teams choose their cards and write one line on why. |
+| 20 min | Round 1 · 2026 | 3 coins. Teams choose their cards and write one line on why. |
 | 10 min | Wheel 2026 | The app spins each port's wheel and shows protection and damage. |
-| 15 min | Round 2 · 2031 | +3 coins, no returns, new wheel, new spin |
+| 15 min | Round 2 · 2031 | +3 coins, return any number of cards for full cost, new wheel, new spin |
 | 15 min | Round 3 · 2036 | +3 coins, return any number of cards for full cost, new wheel, new spin |
 | 10 min | Results | Damage over three spins next to the strategy score |
 | 10 min | Debrief | Impact estimates vs real values, what made a strategy work, what to take home |
@@ -787,13 +787,13 @@ Display units only; the formulas are unchanged. All money is shown in € millio
 
 ## Rounds and time
 
-- Round 1, 2026: 6 coins. The wheel is unknown when teams choose; they rely on the report and their own reading of what would hurt most.
+- Round 1, 2026: 3 coins. The wheel is unknown when teams choose; they rely on the report and their own reading of what would hurt most.
 
 - At the first spin the app shows the 2026 wheel.
 
-- Round 2, 2031: +3 coins. Unspent coins carry over. No cards may be returned this round. The wheel shifts to 2031.
+- Round 2, 2031: +3 coins (6 cumulative). Unspent coins carry over. A team may return any number of its cards before the spin, each for its full cost, and spend the coins on others. The wheel shifts to 2031.
 
-- Round 3, 2036: +3 coins. A team may return any number of its cards before the spin, each for its full cost, and spend the coins on others. The wheel shifts again (the potential losses do not change — only the likelihoods do).
+- Round 3, 2036: +3 coins (9 cumulative). A team may again return any number of its cards before the spin, each for its full cost, and spend the coins on others. The wheel shifts again (the potential losses do not change — only the likelihoods do).
 
 - Final ranking: the average strategy score over the three rounds. The total damage over the three spins is shown next to it as the 'luck' result.
 
@@ -886,29 +886,29 @@ One loss per event, the same for every port and every round. This is what the ev
 
 ## Benchmarks: best expected protection (%)
 
-Budget 6 coins in 2026, 9 in 2031, 12 in 2036. A Proactive table protects more with the same coins: that is the culture effect. Round-to-round gains now come only from the larger budget — the potential losses no longer change between rounds.
+Budget 3 coins in 2026, 6 in 2031, 9 in 2036. A Proactive table protects more with the same coins: that is the culture effect. Round-to-round gains come only from the larger budget — the potential losses no longer change between rounds.
 
 | **Port** | **Reactive (26 / 31 / 36)** | **Aware** | **Developing** | **Proactive** |
 | --- | --- | --- | --- | --- |
-| Nord-Maris | 51 / 65 / 79 | 56 / 70 / 83 | 61 / 75 / 85 | 65 / 79 / 87 |
-| Meridia | 47 / 62 / 72 | 51 / 66 / 77 | 56 / 69 / 79 | 59 / 72 / 81 |
-| Riu Verd | 48 / 67 / 76 | 53 / 73 / 81 | 59 / 76 / 83 | 64 / 79 / 85 |
-| Boreal | 54 / 67 / 78 | 58 / 71 / 81 | 63 / 75 / 84 | 67 / 78 / 86 |
-| Coralia | 51 / 66 / 77 | 55 / 71 / 81 | 60 / 74 / 84 | 64 / 78 / 86 |
-| Sabkha | 44 / 58 / 71 | 48 / 63 / 76 | 52 / 68 / 79 | 56 / 71 / 81 |
+| Nord-Maris | 30 / 51 / 67 | 34 / 56 / 72 | 37 / 60 / 76 | 40 / 65 / 81 |
+| Meridia | 31 / 48 / 61 | 35 / 53 / 66 | 38 / 57 / 70 | 42 / 61 / 73 |
+| Riu Verd | 29 / 49 / 67 | 32 / 54 / 72 | 36 / 59 / 75 | 39 / 65 / 79 |
+| Boreal | 30 / 53 / 68 | 34 / 58 / 72 | 37 / 63 / 76 | 40 / 67 / 79 |
+| Coralia | 30 / 50 / 65 | 34 / 55 / 69 | 37 / 59 / 74 | 40 / 64 / 79 |
+| Sabkha | 28 / 45 / 59 | 31 / 50 / 64 | 34 / 53 / 69 | 37 / 57 / 72 |
 
-## Answer key: best strategy in 2026 (Aware table, 6 coins)
+## Answer key: best strategy in 2026 (Aware table, 3 coins)
 
 | **Port** | **Best combination** |
 | --- | --- |
-| Nord-Maris | Structural health monitoring + Early warning & forecasting system + Emergency response plan & drills |
-| Meridia | Early warning & forecasting system + Emergency response plan & drills + Parametric climate insurance + Worker heat-protection protocol |
-| Riu Verd | Worker heat-protection protocol + Multimodal shift platform + Adaptive dredging & sediment management |
-| Boreal | Structural health monitoring + Emergency response plan & drills + Multimodal shift platform |
-| Coralia | Early warning & forecasting system + Emergency response plan & drills + Nature-based coastal & riverbank protection |
-| Sabkha | Early warning & forecasting system + Emergency response plan & drills + Parametric climate insurance + Worker heat-protection protocol |
+| Nord-Maris | Emergency response plan & drills + Parametric climate insurance |
+| Meridia | Emergency response plan & drills + Worker heat-protection protocol |
+| Riu Verd | Stormwater retention & storage basins |
+| Boreal | Emergency response plan & drills + Parametric climate insurance |
+| Coralia | Emergency response plan & drills + Parametric climate insurance |
+| Sabkha | Emergency response plan & drills + Worker heat-protection protocol |
 
-There is no single right answer: several combinations come within two or three points of the best in every port. The emergency plan appears in most best strategies, which makes it a good 'no-regret' discussion point.
+There is no single right answer: several combinations come within a point or two of the best in every port. At 3 coins a plan is only one or two cards, so the choice is sharp — the emergency plan appears in most best strategies, which makes it a good 'no-regret' discussion point.
 
 # 8. Debrief
 
@@ -940,7 +940,7 @@ There is no single right answer: several combinations come within two or three p
 
 Protection scores follow a simple rule. Engineered measures designed against one hazard score 7 or 8, never 9 or 10, because design standards get exceeded by extreme events. Physical measures that cover only part of a hazard or part of the port score 4 to 6. Warning and operational measures score 2 or 3. Early warning is anchored on the estimate that 24 hours of warning can cut damage by about 30%, scored at 2 because a port can act on only part of a warning.
 
-The game balance was tested by computing every affordable combination of cards for every port, round and culture level. With one potential loss per event, the best expected protection in 2026 (Aware, 6 coins) ranges from about 48% at Sabkha to 58% at Boreal across the six ports, and the best combination differs from port to port. The spread is driven by how each port's wheel weights the larger-loss events.
+The game balance was tested by computing every affordable combination of cards for every port, round and culture level. With one potential loss per event and a 3-coin opening budget, the best expected protection in 2026 (Aware) ranges from about 31% at Sabkha to 35% at Meridia across the six ports, and the best combination differs from port to port. Protection then grows across the rounds as the budget builds to 6 and 9 coins. The spread is driven by how each port's wheel weights the larger-loss events.
 
 **Limits to say out loud at the debrief. **Scores, costs, potential losses and wheel weights are teaching estimates, not published values; the literature gives no clean percentages per measure and hazard. The trends between 2026 and 2036 follow the direction of the IPCC findings, not their magnitude. The ports and their data are fictional. The Coralia chart shows stronger storms, not more frequent ones, in line with the IPCC finding that the share of intense tropical cyclones has likely increased.
 
