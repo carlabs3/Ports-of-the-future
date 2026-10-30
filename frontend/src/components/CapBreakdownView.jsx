@@ -12,6 +12,10 @@ const BANDS = [
 const AREA_NAMES = ['Governance & Strategy', 'Organisation & People', 'Budget & Finance', 'Implemented Measures', 'Preparedness & Monitoring']
 const round1 = x => Math.round(x * 10) / 10
 const clampPct = v => Math.max(0, Math.min(100, v))
+// Minimum height of one area bar (px). Bars shrink to fill the five-areas chart
+// so every group stays visible on a projector; below this they would be too thin
+// to read, so the chart falls back to scrolling instead.
+const MIN_BAR = 10
 
 export default function CapBreakdownView({ breakdown }) {
   if (!breakdown) return null
@@ -83,41 +87,36 @@ export default function CapBreakdownView({ breakdown }) {
         </div>
       </div>
 
-      {/* Visual 2 · the five areas (full width; scrolls inside its box if needed) */}
-      <div style={{ border: HAIRLINE, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <div style={{ ...mono, color: COLOR.ink }}>The five areas · average by {byLabel}</div>
+      {/* Visual 2 · the five areas (full width). Bars shrink to fill the space so
+          every group stays visible on a projector — no scroll unless even the
+          readable minimum (MIN_BAR) does not fit (then overflowY is the fallback).
+          The group colour key is the header above, so no in-chart legend. */}
+      <div style={{ border: HAIRLINE, padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <div style={{ ...mono, color: COLOR.ink, flexShrink: 0 }}>The five areas · average by {byLabel}</div>
           {AREA_NAMES.map((name, ai) => {
             const vals = groups.map(g => g.areaMeans[ai] ?? 0)
             const gap = round1(Math.max(...vals) - Math.min(...vals))
             const isBig = biggestGapArea && biggestGapArea.area === ai
             return (
-              <div key={name} style={{ border: isBig ? `2px solid ${COLOR.ink}` : 'none', padding: isBig ? '6px 8px' : '0', background: isBig ? '#F6F8FB' : 'transparent' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+              <div key={name} style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', border: isBig ? `2px solid ${COLOR.ink}` : 'none', padding: isBig ? '2px 6px' : '0', background: isBig ? '#F6F8FB' : 'transparent' }}>
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
                   <span style={{ fontFamily: FONT.sans, fontSize: FS.sm, fontWeight: 700 }}>{name}</span>
                   <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, whiteSpace: 'nowrap' }}>{isBig ? 'BIGGEST GAP' : 'GAP'} · max − min = {gap}</span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
+                {/* bars share this area's height; each shrinks to MIN_BAR before scroll */}
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center', marginTop: 3 }}>
                   {groups.map(g => (
-                    <div key={g.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{ flex: 1, height: 10, background: COLOR.ice, position: 'relative' }}>
+                    <div key={g.key} style={{ flex: '1 1 0', minHeight: MIN_BAR, maxHeight: 22, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ flex: 1, height: '100%', minHeight: MIN_BAR, background: COLOR.ice, position: 'relative' }}>
                         <div style={{ position: 'absolute', inset: '0 auto 0 0', height: '100%', width: `${clampPct((g.areaMeans[ai] ?? 0) / 20 * 100)}%`, background: g.color }} />
                       </div>
-                      <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, width: 30, textAlign: 'right' }}>{round1(g.areaMeans[ai] ?? 0)}</span>
+                      <span style={{ fontFamily: FONT.mono, fontSize: FS.micro, fontWeight: 700, lineHeight: 1, width: 30, textAlign: 'right' }}>{round1(g.areaMeans[ai] ?? 0)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )
           })}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
-            <span style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60 }}>Bars per area, top to bottom:</span>
-            {groups.map(g => (
-              <span key={g.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 12, height: 12, background: g.color }} />
-                <span style={{ fontFamily: FONT.sans, fontSize: FS.micro }}>{g.label}</span>
-              </span>
-            ))}
-          </div>
         </div>
 
       {/* footer: no-answer count, only when some did not answer */}
