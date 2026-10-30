@@ -21,53 +21,38 @@ test('potentialLossM: the J1 table (SS 600 … HW 200), same for all ports', () 
 })
 
 // ── Case A · Nord-Maris, Developing, #2 #19 #23, round 1 (worked example) ────
-// SKIPPED pending Commit 2: the best-protection benchmarks (and the strategy
-// scores derived from them) change with the 3/6/9 budget. Re-enabled with the
-// recomputed numbers once approved.
-test('Case A: expected 48.5%, best 60.6%, strategy 8.0, SI damage €267M', { skip: 'benchmarks recomputed in Commit 2 (budget 3/6/9)' }, () => {
-  const p = PORTS_BY_ID['nord-maris']
-  const measures = [2, 19, 23]
-  const eff = applyCultureMeasureBonus('developing', measures) // #19 enabler → capped at proactive
-  const exp = expectedProtection({ measures, effectiveBand: eff, likelihoods: p.wheels[1].likelihoods })
-  const best = bestPossibleExpectedProtection('nord-maris', 1, 'developing')
-  assert.ok(Math.abs(exp - 48.5) < 0.1, `expected ≈48.5, got ${exp}`)
-  assert.ok(Math.abs(best - 60.6) < 0.1, `best ≈60.6, got ${best}`)
-  assert.equal(roundHalfUp((exp / best) * 10), 8) // 8.0/10
-
-  const dmg = computeDamage({ measures, event: 'SI', effectiveBand: eff })
-  assert.equal(potentialLossM('SI'), 300)
-  assert.ok(Math.abs(dmg - 267) < 0.5, `SI damage ≈€267M, got ${dmg}`)
-  assert.equal(300 - roundHalfUp(dmg), 33) // avoided €33M
+// ── Best round-1 Aware combination at 3 coins reaches the Aware/r1 benchmark ──
+// Pins both the reported combos and the round-1 Aware benchmarks (budget 3). A
+// combo's expected protection, rounded, equals that port's Aware r1 value.
+test('each port: the best 3-coin Aware round-1 combo reaches its benchmark', () => {
+  const COMBOS = {
+    'nord-maris': { cards: [10, 23], pct: 34 },
+    'meridia':    { cards: [10, 11], pct: 35 },
+    'riu-verd':   { cards: [22],     pct: 32 },
+    'boreal':     { cards: [10, 23], pct: 34 },
+    'coralia':    { cards: [10, 23], pct: 34 },
+    'sabkha':     { cards: [10, 11], pct: 31 },
+  }
+  for (const [portId, { cards, pct }] of Object.entries(COMBOS)) {
+    const p = PORTS_BY_ID[portId]
+    const eff = applyCultureMeasureBonus('aware', cards)
+    const exp = expectedProtection({ measures: cards, effectiveBand: eff, likelihoods: p.wheels[1].likelihoods })
+    assert.equal(roundHalfUp(exp), pct, `${portId}: combo rounds to ${roundHalfUp(exp)}, expected ${pct}`)
+    assert.equal(roundHalfUp(bestPossibleExpectedProtection(portId, 1, 'aware')), pct, `${portId}: Aware r1 benchmark`)
+  }
 })
 
-// ── Case B · Meridia, Aware, #8 #11 #19 #23 #26, round 1 ─────────────────────
-test('Case B: expected 44.0%, best 51.5%, strategy 8.6, WF damage €173M', { skip: 'benchmarks recomputed in Commit 2 (budget 3/6/9)' }, () => {
-  const p = PORTS_BY_ID['meridia']
-  const measures = [8, 11, 19, 23, 26]
-  const eff = applyCultureMeasureBonus('aware', measures)
-  const exp = expectedProtection({ measures, effectiveBand: eff, likelihoods: p.wheels[1].likelihoods })
-  const best = bestPossibleExpectedProtection('meridia', 1, 'aware')
-  assert.ok(Math.abs(exp - 44.0) < 0.1, `expected ≈44.0, got ${exp}`)
-  assert.ok(Math.abs(best - 51.5) < 0.1, `best ≈51.5, got ${best}`)
-  assert.equal(((exp / best) * 10).toFixed(1), '8.6') // strategy 8.6/10
-
-  const dmg = computeDamage({ measures, event: 'WF', effectiveBand: eff })
-  assert.equal(potentialLossM('WF'), 300)
-  assert.ok(Math.abs(dmg - 173) < 0.6, `WF damage ≈€173M, got ${dmg}`)
-  assert.equal(300 - roundHalfUp(dmg), 127) // avoided €127M
-})
-
-// ── Appendix H · all 72 best-expected-protection benchmarks (recomputed J2) ──
-// Weights are now potentialLossM (€M), not per-port impacts; these values come
-// straight from the brute-force bestPossibleExpectedProtection (no hand-edits).
-test('all 72 benchmarks match the recomputed Appendix H (round 1 / 2 / 3)', { skip: 'benchmarks recomputed in Commit 2 (budget 3/6/9)' }, () => {
+// ── Appendix H · all 72 best-expected-protection benchmarks (budget 3/6/9) ───
+// Weights are potentialLossM (€M); values come straight from the brute-force
+// bestPossibleExpectedProtection at the 3/6/9 cumulative budget (no hand-edits).
+test('all 72 benchmarks match the recomputed Appendix H (round 1 / 2 / 3)', () => {
   const H = {
-    'nord-maris': { reactive: [51, 65, 79], aware: [56, 70, 83], developing: [61, 75, 85], proactive: [65, 79, 87] },
-    'meridia':    { reactive: [47, 62, 72], aware: [51, 66, 77], developing: [56, 69, 79], proactive: [59, 72, 81] },
-    'riu-verd':   { reactive: [48, 67, 76], aware: [53, 73, 81], developing: [59, 76, 83], proactive: [64, 79, 85] },
-    'boreal':     { reactive: [54, 67, 78], aware: [58, 71, 81], developing: [63, 75, 84], proactive: [67, 78, 86] },
-    'coralia':    { reactive: [51, 66, 77], aware: [55, 71, 81], developing: [60, 74, 84], proactive: [64, 78, 86] },
-    'sabkha':     { reactive: [44, 58, 71], aware: [48, 63, 76], developing: [52, 68, 79], proactive: [56, 71, 81] },
+    'nord-maris': { reactive: [30, 51, 67], aware: [34, 56, 72], developing: [37, 60, 76], proactive: [40, 65, 81] },
+    'meridia':    { reactive: [31, 48, 61], aware: [35, 53, 66], developing: [38, 57, 70], proactive: [42, 61, 73] },
+    'riu-verd':   { reactive: [29, 49, 67], aware: [32, 54, 72], developing: [36, 59, 75], proactive: [39, 65, 79] },
+    'boreal':     { reactive: [30, 53, 68], aware: [34, 58, 72], developing: [37, 63, 76], proactive: [40, 67, 79] },
+    'coralia':    { reactive: [30, 50, 65], aware: [34, 55, 69], developing: [37, 59, 74], proactive: [40, 64, 79] },
+    'sabkha':     { reactive: [28, 45, 59], aware: [31, 50, 64], developing: [34, 53, 69], proactive: [37, 57, 72] },
   }
   for (const [portId, byBand] of Object.entries(H)) {
     for (const band of BAND_ORDER) {
