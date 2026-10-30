@@ -314,7 +314,7 @@ export default function PariCalculator() {
         </div>
 
         {/* Footer */}
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px 24px', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
           <button onClick={() => { if (canContinue) { setProfileStep(0); setPhase('profile') } }} disabled={!canContinue}
             style={{ display: 'block', width: '100%', maxWidth: 560, margin: '0 auto', height: 56, border: HAIRLINE, borderRadius: 0, background: canContinue ? COLOR.ink : COLOR.paper, color: canContinue ? COLOR.onInk : COLOR.ink40, fontFamily: FONT.sans, fontSize: FS.body, fontWeight: FW.semibold, letterSpacing: LS.tight, cursor: canContinue ? 'pointer' : 'not-allowed' }}>
             Continue →
@@ -426,7 +426,7 @@ export default function PariCalculator() {
         )}
 
         {/* Footer: back + next (same pattern as the scored questions) */}
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px 24px', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
           <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', display: 'flex', gap: 10 }}>
             <button onClick={profileBack}
               style={{ width: 56, height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontSize: FS.h3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
@@ -505,7 +505,7 @@ export default function PariCalculator() {
       </div>
 
       {/* Footer */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px 24px', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', background: COLOR.paper, borderTop: HAIRLINE, zIndex: 10 }}>
         <div style={{ maxWidth: 560, width: '100%', margin: '0 auto', display: 'flex', gap: 10 }}>
           <button onClick={handlePrev}
             style={{ width: 56, height: 56, border: HAIRLINE, borderRadius: 0, background: COLOR.paper, color: COLOR.ink, fontSize: FS.h3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>

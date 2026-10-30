@@ -46,6 +46,16 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .two-up { display: grid; grid-template-columns: 1fr; gap: 16px; }
 @media (min-width: 1100px) { .two-up { grid-template-columns: 1fr 1fr; } }
 
+/* Standings rows — one line on laptop+, value block wraps under the name on
+   tablet/phone. */
+.standings-row { flex-wrap: wrap; }
+@media (min-width: 1024px) { .standings-row { flex-wrap: nowrap; } }
+.standings-value { text-align: right; flex-shrink: 0; }
+@media (max-width: 1023px) { .standings-value { flex: 1 0 100%; text-align: left; } }
+
+/* A table that scrolls horizontally inside its own box below a width (debrief
+   ranking < 1100, debrief-B round table < 1024). Pair with .scroll-x on the box. */
+
 /* Fact boxes — 3 → 2 → 1. */
 .fact-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 @media (min-width: 680px)  { .fact-grid { grid-template-columns: 1fr 1fr; } }

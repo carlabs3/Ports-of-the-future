@@ -6,7 +6,7 @@ export default function SessionEnd() {
   const navigate = useNavigate()
 
   return (
-    <div style={{ minHeight: '100vh', background: COLOR.paper, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100dvh', background: COLOR.paper, display: 'flex', flexDirection: 'column' }}>
       <div style={{ background: COLOR.sky, color: COLOR.ink, padding: '48px 24px', borderBottom: HAIRLINE }}>
         <div style={{ maxWidth: 480, margin: '0 auto', width: '100%' }}>
           <div style={{ fontSize: '3rem', marginBottom: 16, lineHeight: 1 }}>🌍</div>

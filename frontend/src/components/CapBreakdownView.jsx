@@ -85,8 +85,8 @@ export default function CapBreakdownView({ breakdown }) {
         </div>
       </div>
 
-      {/* Visuals 2 + 3 side by side (stack under 1100 px) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 16, flex: 1, minHeight: 0 }}>
+      {/* Visuals 2 + 3 side by side from 1100, stack below (.two-up) */}
+      <div className="two-up" style={{ flex: 1, minHeight: 0 }}>
         {/* Visual 2 · every participant */}
         <div style={{ border: HAIRLINE, padding: '14px 18px', display: 'flex', flexDirection: 'column', minHeight: 320 }}>
           <div style={{ ...mono, color: COLOR.ink }}>Every participant</div>
@@ -97,9 +97,9 @@ export default function CapBreakdownView({ breakdown }) {
                 <span style={{ padding: '0 6px', fontFamily: FONT.mono, fontSize: FS.micro, color: COLOR.ink60, lineHeight: 1.2 }}>{b.name}<br />{b.lo}–{b.hi}</span>
               </div>
             ))}
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', gap: 18, padding: '0 8px 0 92px' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', gap: 18, padding: '0 8px 0 92px', overflowX: 'auto', overflowY: 'hidden' }}>
               {groups.map(g => (
-                <div key={g.key} style={{ flex: `${g.n} 1 0`, minWidth: 0, height: '100%', display: 'flex', alignItems: 'flex-end', gap: barGap }}>
+                <div key={g.key} style={{ flex: `${g.n} 1 0`, minWidth: 'min-content', height: '100%', display: 'flex', alignItems: 'flex-end', gap: barGap }}>
                   {g.scores.map((s, i) => <div key={i} style={{ flex: '1 1 0', minWidth: 4, height: `${clampPct(s)}%`, background: g.color }} />)}
                 </div>
               ))}

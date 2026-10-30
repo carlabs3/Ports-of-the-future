@@ -51,17 +51,17 @@ export default function StandingsScreen({ standings, year, portImage }) {
         <h2 style={{ fontFamily: FONT.sans, fontWeight: FW.display, fontSize: FS.h2, letterSpacing: LS.display, margin: 0 }}>Standings after round {through}</h2>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
+      <div className="two-up">
         {/* LEFT · strategy */}
         <div style={{ border: HAIRLINE }}>
           {boardHead(COLOR.harbour, COLOR.onHarbour, 'Strategy so far · Best plans', 'Your decisions')}
           {byStrategy.map(t => (
-            <div key={t.group} style={rowBase}>
+            <div key={t.group} className="standings-row" style={rowBase}>
               <span style={rankCell}>{t.strategyRank}</span>
               <Move m={t.strategyMove} />
               <Thumb src={portImage(t.portId)} alt={`Illustration of the port of ${t.portName || 'this port'}`} />
               {nameBlock(t)}
-              <div style={{ flexShrink: 0, textAlign: 'right', minWidth: 120 }}>
+              <div className="standings-value" style={{ minWidth: 120 }}>
                 <div style={{ fontFamily: FONT.mono, fontSize: FS.h3, fontWeight: 800 }}>{formatScore10((t.finalScore || 0) / 100)}</div>
                 <div style={{ height: 10, background: COLOR.ice, border: HAIRLINE, marginTop: 4 }}>
                   <div style={{ width: `${Math.max(0, Math.min(100, t.finalScore || 0))}%`, height: '100%', background: COLOR.harbour }} />
@@ -79,12 +79,12 @@ export default function StandingsScreen({ standings, year, portImage }) {
             const band = getProtectionBand(t.avoidedPct)
             const noMoney = t.missingPotential || !(t.totalPotential > 0)
             return (
-              <div key={t.group} style={rowBase}>
+              <div key={t.group} className="standings-row" style={rowBase}>
                 <span style={rankCell}>{t.avoidedRank}</span>
                 <Move m={t.avoidedMove} />
                 <Thumb src={portImage(t.portId)} alt={`Illustration of the port of ${t.portName || 'this port'}`} />
                 {nameBlock(t)}
-                <div style={{ flexShrink: 0, textAlign: 'right', minWidth: 150 }}>
+                <div className="standings-value" style={{ minWidth: 150 }}>
                   <div style={{ fontFamily: FONT.mono, fontSize: FS.h3, fontWeight: 800, color: band.color }}>{noMoney ? '—' : `${band.icon} ${t.avoidedPct}%`}</div>
                   {!noMoney && <PotentialLossBar damage={t.totalDamageRaw} potential={t.totalPotential} height={10} style={{ marginTop: 4 }} />}
                   <div style={{ fontFamily: FONT.sans, fontSize: FS.micro, color: COLOR.ink60, marginTop: 3 }}>{noMoney ? 'Losses not available' : `${formatEurM(t.avoidedShown)} of ${formatEurM(t.totalPotential)} avoided`}</div>

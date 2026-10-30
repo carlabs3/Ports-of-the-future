@@ -1596,8 +1596,8 @@ export default function PortsControlCenter() {
                     <span style={{ fontFamily: FONT.mono, fontSize: FS.sm, letterSpacing: LS.mono, color: COLOR.ink60 }}>2026 · 2031 · 2036</span>
                   </div>
 
-                  {/* awards — port photo on the left */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 16 }}>
+                  {/* awards — port photo on the left; side by side from 1100, stack below */}
+                  <div className="two-up">
                     <div style={{ display: 'flex', border: HAIRLINE, background: COLOR.harbour, color: COLOR.onHarbour, minHeight: 150, overflow: 'hidden' }}>
                       {best[0]?.portImage && <img src={best[0].portImage} alt={`Illustration of the port of ${best[0].portName || 'this port'}`} style={{ width: 220, flexShrink: 0, objectFit: 'cover' }} />}
                       <div style={{ flex: 1, minWidth: 0, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1687,7 +1687,7 @@ export default function PortsControlCenter() {
                   </div>
                   <p style={{ fontFamily: FONT.sans, fontSize: FS.sm, color: COLOR.ink60, margin: 0 }}>{isStrat ? 'Round cells: strategy score and the event drawn. Last column: the team’s place in the losses ranking.' : 'Bars: blue = damage sustained, light = losses avoided. Last column: the team’s place in the strategy ranking.'}</p>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                  <div className="fact-grid">
                     {factBox('Room average strategy', finalScore10(roomAvgRaw), 'across the room')}
                     {factBox('Room losses avoided', roomPotential > 0 ? `${formatEurM(roomAvoided)} of ${formatEurM(roomPotential)}` : '—', 'over the three rounds')}
                     {factBox("Coins that didn't help", coinsNoHelp, 'across all three rounds')}
