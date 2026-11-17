@@ -170,6 +170,129 @@ export default function Home() {
             style={{ backgroundImage: `url(${HOME_IMG.heroShip}), linear-gradient(#D9EBF9 0 76%, #76AFF4 76% 100%)` }}
           />
         </section>
+
+        {/* ── Why now (sea) ──────────────────────────────────────────────── */}
+        <section id={c.whyNow.anchor} className="home-section home-why">
+          <div className="home-wrap">
+            <p className="home-eyebrow home-eyebrow--onsea">{c.whyNow.eyebrow}</p>
+            <h2 className="home-h2">{c.whyNow.h2}</h2>
+            <p className="home-why__text">{c.whyNow.text}</p>
+
+            <div className="home-why__stats">
+              <div className="home-stat home-stat--white">
+                <span className="home-stat__big">{c.whyNow.stats[0].big}</span>
+                <p className="home-stat__text">{c.whyNow.stats[0].text}</p>
+              </div>
+              <div className="home-stat home-stat--ink">
+                <span className="home-stat__big">{c.whyNow.stats[1].big}</span>
+                <p className="home-stat__text">{c.whyNow.stats[1].text}</p>
+              </div>
+            </div>
+
+            <p className="home-why__source">{c.whyNow.source}</p>
+          </div>
+        </section>
+
+        {/* ── The experience (white) ─────────────────────────────────────── */}
+        <section id={c.experience.anchor} className="home-section">
+          <div className="home-wrap">
+            <p className="home-eyebrow home-eyebrow--onlight">{c.experience.eyebrow}</p>
+            <h2 className="home-h2">{c.experience.h2}</h2>
+
+            <div className="home-exp__grid">
+              {c.experience.steps.map((st, i) => (
+                <div key={st.n} className="home-exp__card">
+                  <div className="home-exp__panel">
+                    <img src={[HOME_IMG.selfAssessment, HOME_IMG.readTheRisk, HOME_IMG.stormWave][i]} alt="" />
+                  </div>
+                  <div className="home-exp__body">
+                    <div className="home-exp__meta">
+                      <span>{st.n}</span>
+                      <span>{st.time}</span>
+                    </div>
+                    <h3 className="home-card-title">{st.title}</h3>
+                    <p className="home-exp__text">{st.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="home-exp__strip">
+              <p className="home-exp__strip-text">{c.experience.debrief.text}</p>
+              <span className="home-exp__strip-meta">{c.experience.debrief.n} · {c.experience.debrief.time}</span>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Why this workshop (ink) ────────────────────────────────────── */}
+        <section id={c.whyWorkshop.anchor} className="home-section home-whyws">
+          <div className="home-wrap">
+            <p className="home-eyebrow home-eyebrow--ondark home-eyebrow--strong">{c.whyWorkshop.eyebrow}</p>
+            <h2 className="home-h2 home-h2--wide">{c.whyWorkshop.h2}</h2>
+
+            <div className="home-whyws__grid">
+              {c.whyWorkshop.items.map((it, i) => {
+                const color = ['var(--home-blue-100)', 'var(--home-blue-300)', 'var(--home-sea)', 'var(--home-gold)'][i]
+                return (
+                  <div key={it.n} className="home-whyws__col" style={{ borderTopColor: color }}>
+                    <span className="home-whyws__num" style={{ color }}>{it.n}</span>
+                    <div className="home-whyws__col-body">
+                      <h3 className="home-whyws__title">{it.title}</h3>
+                      <p className="home-whyws__text">{it.text}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Made to measure (white) ────────────────────────────────────── */}
+        <section id={c.madeToMeasure.anchor} className="home-section">
+          <div className="home-wrap">
+            <p className="home-eyebrow home-eyebrow--onlight home-eyebrow--strong">{c.madeToMeasure.eyebrow}</p>
+            <h2 className="home-h2 home-h2--wide">{c.madeToMeasure.h2}</h2>
+
+            <div className="home-mtm__grid">
+              {c.madeToMeasure.cards.map(card => (
+                <div key={card.title} className="home-mtm__card">
+                  <h3 className="home-card-title">{card.title}</h3>
+                  <p className="home-mtm__text">{card.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Who it’s for (sky) ─────────────────────────────────────────── */}
+        <section id={c.whoFor.anchor} className="home-section home-who">
+          <div className="home-wrap">
+            <p className="home-eyebrow home-eyebrow--onlight">{c.whoFor.eyebrow}</p>
+            <h2 className="home-h2">{c.whoFor.h2}</h2>
+
+            <div className="home-who__grid">
+              {c.whoFor.cards.map((card, i) => {
+                const panel = [
+                  { img: HOME_IMG.isometricPort, mode: 'cover',  bg: 'var(--home-blue-100)' },
+                  { img: HOME_IMG.people,        mode: 'bottom', bg: 'var(--home-blue-300)' },
+                  { img: HOME_IMG.railTerminal,  mode: 'cover',  bg: 'var(--home-sky-pale)' },
+                ][i]
+                return (
+                  <div key={card.title} className="home-who__card">
+                    <div className={`home-who__panel home-who__panel--${panel.mode}`} style={{ background: panel.bg }}>
+                      <img src={panel.img} alt="" />
+                    </div>
+                    <div className="home-who__body">
+                      <p className="home-who__tag">{card.tags.join(' · ')}</p>
+                      <h3 className="home-card-title">{card.title}</h3>
+                      <p className="home-who__text">{card.text}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
