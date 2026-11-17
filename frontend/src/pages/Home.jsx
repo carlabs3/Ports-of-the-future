@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useSession } from '../context/SessionContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { BACKEND_URL } from '../utils/config.js'
 import { landing } from '../content/landing.js'
 import { HOME_IMG } from '../assets/home/images.js'
 import '../styles/landing.css'
@@ -23,6 +24,26 @@ function PhoneIcon() {
     </svg>
   )
 }
+
+// 32px stroke icons for the practical-part tiles (currentColor = ink).
+function Icon({ children }) {
+  return (
+    <svg className="home-practical__icon" width="32" height="32" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  )
+}
+const ClockIcon  = () => <Icon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>
+const PairIcon   = () => <Icon><circle cx="9" cy="8" r="3" /><path d="M3 20a6 6 0 0 1 12 0" /><path d="M16 5.5a3 3 0 0 1 0 5" /><path d="M17 14a6 6 0 0 1 4 6" /></Icon>
+const TrioIcon   = () => <Icon><circle cx="12" cy="7" r="3" /><circle cx="5" cy="9" r="2.3" /><circle cx="19" cy="9" r="2.3" /><path d="M6.5 20a5.5 5.5 0 0 1 11 0" /><path d="M2 20a4 4 0 0 1 4-4" /><path d="M22 20a4 4 0 0 0-4-4" /></Icon>
+const GlobeIcon  = () => <Icon><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c3 3.5 3 14.5 0 18c-3-3.5-3-14.5 0-18Z" /></Icon>
+const CheckIcon  = ({ color }) => (
+  <svg className="home-provide__check" width="20" height="20" viewBox="0 0 24 24" fill="none"
+    stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 12.5l4.5 4.5L19 6.5" />
+  </svg>
+)
 
 export default function Home() {
   const navigate = useNavigate()
@@ -293,6 +314,62 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {/* ── The practical part (ink) ───────────────────────────────────── */}
+        <section className="home-section home-practical">
+          <div className="home-wrap">
+            <p className="home-eyebrow home-eyebrow--ondark">{c.practical.eyebrow}</p>
+            <h2 className="home-h2">{c.practical.h2}</h2>
+
+            <div className="home-practical__tiles">
+              {c.practical.tiles.map((t, i) => (
+                <div key={t.label} className="home-practical__tile">
+                  {[<ClockIcon key="c" />, <PairIcon key="p" />, <TrioIcon key="t" />, <GlobeIcon key="g" />][i]}
+                  <span className="home-practical__big">{t.big}</span>
+                  <span className="home-practical__label">{t.label}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="home-practical__cards">
+              <div className="home-provide-card">
+                <h3 className="home-provide-card__title">{c.practical.weBring.title}</h3>
+                <ul className="home-provide-card__list">
+                  {c.practical.weBring.items.map(item => (
+                    <li key={item}><CheckIcon color="var(--home-sea)" /><span>{item}</span></li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="home-provide-card">
+                <h3 className="home-provide-card__title">{c.practical.youProvide.title}</h3>
+                <ul className="home-provide-card__list">
+                  {c.practical.youProvide.items.map(item => (
+                    <li key={item}><CheckIcon color="var(--home-gold)" /><span>{item}</span></li>
+                  ))}
+                </ul>
+                <p className="home-provide-card__price">{c.practical.youProvide.price}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Request a workshop (sea) ───────────────────────────────────── */}
+        <section id={c.request.anchor} className="home-section home-request">
+          <div className="home-wrap home-request__grid">
+            <div className="home-request__info">
+              <p className="home-eyebrow home-eyebrow--onsea">{c.request.eyebrow}</p>
+              <h2 className="home-h2">{c.request.h2}</h2>
+              <p className="home-request__text">{c.request.text}</p>
+            </div>
+
+            <RequestForm content={c} />
+
+            <p className="home-request__email">
+              {c.request.emailPrefix}{c.request.emailName} · <a href={`mailto:${c.request.email}`}>{c.request.email}</a>
+            </p>
+          </div>
+        </section>
       </main>
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
@@ -323,5 +400,78 @@ export default function Home() {
         </div>
       </footer>
     </div>
+  )
+}
+
+// Request form — four Appendix A fields + consent + hidden honeypot. Posts to
+// /api/contact (backend unchanged; it validates name/organisation/email/consent
+// and treats everything else as optional). Keeps typed values on error.
+function RequestForm({ content }) {
+  const f = content.request
+  const empty = { name: '', organisation: '', email: '', message: '', consent: false, website: '' }
+  const [form, setForm] = useState(empty)
+  const [state, setState] = useState('idle') // idle | sending | success | error
+
+  const set = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (state === 'sending') return
+    setState('sending')
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/contact`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      })
+      if (!res.ok) throw new Error()
+      setState('success')
+    } catch {
+      setState('error')
+    }
+  }
+
+  if (state === 'success') {
+    return (
+      <div className="home-request__form">
+        <p className="home-form__status">{f.success}</p>
+      </div>
+    )
+  }
+
+  return (
+    <form className="home-request__form" onSubmit={handleSubmit}>
+      {/* honeypot — hidden from humans; if filled, the backend silently drops it */}
+      <div className="home-honeypot" aria-hidden="true">
+        <label htmlFor="rf-website">Website</label>
+        <input id="rf-website" name="website" tabIndex={-1} autoComplete="off" value={form.website} onChange={set('website')} />
+      </div>
+
+      <div className="home-field">
+        <label htmlFor="rf-name">{f.fields.name}</label>
+        <input id="rf-name" className="home-input" value={form.name} onChange={set('name')} required />
+      </div>
+      <div className="home-field">
+        <label htmlFor="rf-org">{f.fields.organisation}</label>
+        <input id="rf-org" className="home-input" value={form.organisation} onChange={set('organisation')} required />
+      </div>
+      <div className="home-field">
+        <label htmlFor="rf-email">{f.fields.email}</label>
+        <input id="rf-email" className="home-input" type="email" value={form.email} onChange={set('email')} required />
+      </div>
+      <div className="home-field">
+        <label htmlFor="rf-message">{f.fields.message}</label>
+        <textarea id="rf-message" className="home-input home-input--area" value={form.message} onChange={set('message')} />
+      </div>
+
+      <label className="home-consent">
+        <input type="checkbox" checked={form.consent} onChange={set('consent')} required />
+        <span>{f.consent}</span>
+      </label>
+
+      {state === 'error' && <p className="home-form__status home-form__status--err">{f.error}</p>}
+
+      <button type="submit" className="home-btn home-request__submit" disabled={state === 'sending'}>
+        {state === 'sending' ? f.sending : f.submit}
+      </button>
+    </form>
   )
 }
