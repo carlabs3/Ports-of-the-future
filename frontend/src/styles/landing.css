@@ -1,137 +1,203 @@
-/* Landing page layout. Colours, fonts and sizes come only from tokens.css
-   (var(--…)). Flat: 1px --ink rules, 0 radius, no shadows. Full width with 72px
-   side padding on desktop, 24px on mobile. Responsive via clamp()/media. */
+/* ============================================================================
+   Ports of the Future — public home page.
+   EVERYTHING here is scoped under `.home` so the new palette cannot collide with
+   the app's global tokens (--sky, --ice, --ink, …) in tokens.css. The new design
+   tokens are defined ONLY on `.home` with a --home- prefix. tokens.css,
+   tokens.js and every other screen are untouched.
+   Grows across commits: C1 tokens + shell (header, footer), C2 hero, C3 content,
+   C4 practical/request.
+   ========================================================================== */
 
-.lp { width: 100%; background: var(--paper); color: var(--ink); font-family: var(--font-sans); overflow-x: hidden; }
+.home {
+  /* ── Design tokens (scoped — never leak to the app) ───────────────────── */
+  --home-ink:       #0B1B33; /* text, primary buttons, dark sections */
+  --home-ink-2:     #111E33; /* "Your audience" card only */
+  --home-muted:     #33435E; /* secondary text on white */
+  --home-sky:       #D9EBF9; /* hero, "Who it’s for" background */
+  --home-sky-pale:  #EBF2FC; /* pale panels, "Your language" card */
+  --home-blue-100:  #CCE2FB; /* illustration panels, light cards, input borders */
+  --home-blue-300:  #85ADEA; /* card fill, accent on dark */
+  --home-sea:       #76AFF4; /* "Why now", experience cards, request section */
+  --home-blue-600:  #3F67A8; /* card fill (white text), eyebrow on white, borders on dark */
+  --home-gold:      #DDBE56; /* accent card, "04" accent */
+  --home-ok:        #1F9D62; /* green dot on the join card only */
+  --home-white:     #FFFFFF;
 
-.lp-pad { padding-left: 72px; padding-right: 72px; }
-@media (max-width: 768px) { .lp-pad { padding-left: 24px; padding-right: 24px; } }
+  /* Layout */
+  --home-max:  1240px;
+  --home-pad:  32px;
 
-.lp-sec { border-top: 1px solid var(--ink); padding-top: 56px; padding-bottom: 56px; }
-
-/* visible focus everywhere on the landing */
-.lp a:focus-visible, .lp button:focus-visible, .lp input:focus-visible, .lp textarea:focus-visible {
-  outline: 2px solid var(--harbour); outline-offset: 2px;
+  font-family: var(--font-sans);
+  color: var(--home-ink);
+  background: var(--home-white);
+  width: 100%;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* mono section label over a 1px rule: "01 / Why now" */
-.lp-labelrow {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
-  border-bottom: 1px solid var(--ink); padding-bottom: 12px; margin-bottom: 36px;
-}
-.lp-label {
-  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--ink); margin: 0;
+@media (max-width: 768px) {
+  .home { --home-pad: 20px; }
 }
 
-/* ── buttons / inputs ─────────────────────────────────────────────────────── */
-.lp-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  height: 52px; padding: 0 24px; border: 1px solid var(--ink); border-radius: 0;
-  font-family: var(--font-sans); font-size: var(--fs-body); font-weight: 600;
-  letter-spacing: -0.02em; cursor: pointer; text-decoration: none;
-}
-.lp-btn--primary { background: var(--ink); color: var(--paper); }
-.lp-btn--secondary { background: transparent; color: var(--ink); }
-.lp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.lp-field label {
-  display: block; font-family: var(--font-mono); font-size: var(--fs-label);
-  letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); margin-bottom: 8px;
-}
-.lp-input {
-  width: 100%; border: 1px solid var(--ink); border-radius: 0; padding: 14px 16px;
-  font-family: var(--font-sans); font-size: var(--fs-body); background: var(--paper);
-  color: var(--ink); box-sizing: border-box; min-height: 48px;
-}
-.lp-input--mono { font-family: var(--font-mono); font-weight: 700; letter-spacing: 0.08em; }
-textarea.lp-input { min-height: 120px; resize: vertical; }
-
-/* ── header ───────────────────────────────────────────────────────────────── */
-.lp-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 20px 32px;
-  flex-wrap: wrap; padding-top: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--ink);
-}
-.lp-brand { font-family: var(--font-sans); font-weight: 800; font-size: 22px; letter-spacing: -0.02em; color: var(--ink); text-decoration: none; }
-.lp-nav { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
-.lp-nav a { font-family: var(--font-sans); font-size: var(--fs-body); font-weight: 600; color: var(--ink); text-decoration: none; }
-.lp-nav .lp-login { font-family: var(--font-mono); font-size: 13px; }
-
-/* ── hero ─────────────────────────────────────────────────────────────────── */
-.lp-hero { background: var(--sky); color: var(--ink); }
-.lp-hero-grid { display: grid; grid-template-columns: 1fr 380px; gap: 48px; padding-top: 56px; padding-bottom: 56px; align-items: start; }
-.lp-h1 { font-family: var(--font-sans); font-weight: 800; font-size: var(--fs-landing-hero); letter-spacing: -0.055em; line-height: 1.0; margin: 20px 0; }
-.lp-lead { font-size: var(--fs-landing-lead); font-weight: 500; line-height: 1.4; margin: 0 0 28px; max-width: 560px; }
-.lp-hero-cta { display: flex; gap: 12px; flex-wrap: wrap; }
-.lp-card { background: var(--paper); border: 1px solid var(--ink); padding: 24px; }
-.lp-card-row { display: flex; gap: 10px; align-items: stretch; }
-.lp-card-row .lp-input { flex: 1; }
-.lp-panorama { display: block; width: 100%; }
-
-@media (max-width: 900px) {
-  .lp-hero-grid { grid-template-columns: 1fr; gap: 28px; }
-  .lp-hero-card { order: -1; } /* code card first on mobile */
+@media (prefers-reduced-motion: reduce) {
+  .home { scroll-behavior: auto; }
 }
 
-/* ── generic multi-column grids ───────────────────────────────────────────── */
-.lp-cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
-.lp-cols-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 48px; }
-@media (max-width: 900px) { .lp-cols-3, .lp-cols-2 { grid-template-columns: 1fr; gap: 28px; } }
-
-.lp-stat { font-family: var(--font-sans); font-weight: 800; font-size: var(--fs-landing-stat); line-height: 0.95; letter-spacing: -0.04em; margin: 0 0 16px; }
-.lp-para { font-size: var(--fs-body); line-height: 1.5; margin: 0 0 12px; color: var(--ink); }
-.lp-src { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: 0.02em; color: var(--ink); text-decoration: none; }
-.lp-src a { color: var(--ink); }
-
-.lp-h2 { font-family: var(--font-sans); font-weight: 800; font-size: var(--fs-landing-h2); letter-spacing: -0.04em; line-height: 1.05; margin: 0 0 40px; }
-.lp-title { font-family: var(--font-sans); font-weight: 800; font-size: var(--fs-landing-title); letter-spacing: -0.02em; line-height: 1.1; margin: 0 0 10px; }
-
-/* ── experience (4 steps) ─────────────────────────────────────────────────── */
-.lp-steps { display: grid; grid-template-columns: repeat(4, 1fr); }
-.lp-step { padding: 0 24px; }
-.lp-step + .lp-step { border-left: 1px solid var(--ink); }
-.lp-tile { aspect-ratio: 3 / 2; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
-.lp-tile--ice { background: var(--ice); }
-.lp-tile--sky { background: var(--sky); }
-.lp-step-num { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.04em; color: var(--ink); margin: 0 0 6px; }
-@media (max-width: 760px) {
-  .lp-steps { grid-template-columns: 1fr; }
-  .lp-step { padding: 24px 0; }
-  .lp-step + .lp-step { border-left: none; border-top: 1px solid var(--ink); }
+/* Centred content container (max-width 1240, responsive side padding). */
+.home-wrap {
+  max-width: var(--home-max);
+  margin: 0 auto;
+  padding-left: var(--home-pad);
+  padding-right: var(--home-pad);
 }
 
-/* ── photo band ───────────────────────────────────────────────────────────── */
-.lp-photo { position: relative; width: 100%; min-height: 520px; background-color: var(--ice); background-size: cover; background-position: center; }
-.lp-photo-cap { position: absolute; left: 72px; bottom: 48px; max-width: 420px; background: var(--paper); border: 1px solid var(--ink); padding: 20px 24px; font-size: var(--fs-landing-lead); font-weight: 600; line-height: 1.3; }
-@media (max-width: 768px) { .lp-photo-cap { left: 24px; right: 24px; bottom: 24px; } }
+/* Anchor targets clear the top edge comfortably (header is not sticky). */
+.home [id] { scroll-margin-top: 24px; }
 
-/* ── what you get (coloured number tiles) ─────────────────────────────────── */
-.lp-gettile { width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; font-family: var(--font-sans); font-weight: 800; font-size: 48px; margin-bottom: 20px; }
+.home a { color: inherit; text-decoration: none; }
 
-/* ── who it's for ─────────────────────────────────────────────────────────── */
-.lp-aud { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 20px 0; border-top: 1px solid var(--ink); }
-.lp-aud:last-child { border-bottom: 1px solid var(--ink); }
-.lp-aud-label { font-family: var(--font-sans); font-weight: 800; font-size: var(--fs-landing-title); letter-spacing: -0.02em; }
-.lp-aud-num { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--ink); }
-.lp-need-block { background: var(--ink); color: var(--paper); padding: 32px; }
-.lp-need { padding: 18px 0; border-top: 1px solid var(--harbour); }
-.lp-need:first-of-type { border-top: none; }
-.lp-need-title { font-family: var(--font-sans); font-weight: 700; font-size: var(--fs-lg); margin: 0 0 4px; }
-.lp-need-text { font-size: var(--fs-body); color: var(--ice); margin: 0; line-height: 1.4; }
+/* Visible focus everywhere on the home page. */
+.home a:focus-visible,
+.home button:focus-visible,
+.home input:focus-visible,
+.home textarea:focus-visible {
+  outline: 2px solid var(--home-blue-600);
+  outline-offset: 2px;
+}
 
-/* ── request form ─────────────────────────────────────────────────────────── */
-.lp-form { background: var(--ice); padding: 28px; }
-.lp-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.lp-form-grid .lp-full { grid-column: 1 / -1; }
-@media (max-width: 620px) { .lp-form-grid { grid-template-columns: 1fr; } }
-.lp-consent { display: flex; gap: 10px; align-items: flex-start; font-size: var(--fs-sm); line-height: 1.4; }
-.lp-consent input { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
-.lp-honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
-.lp-form-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
-.lp-form-status { font-size: var(--fs-body); font-weight: 600; margin: 0; }
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.home-header {
+  background: var(--home-white);
+  border-bottom: 1px solid var(--home-blue-100);
+}
+.home-header__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 72px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+.home-brand {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--home-ink);
+}
 
-/* ── footer ───────────────────────────────────────────────────────────────── */
-.lp-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px 32px; flex-wrap: wrap; border-top: 1px solid var(--ink); padding-top: 32px; padding-bottom: 40px; }
-.lp-footer a { color: var(--ink); text-decoration: none; }
-.lp-footer-logos { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
-.lp-footer-logos img { height: 28px; width: auto; }
+.home-nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.home-nav a {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--home-ink);
+}
+.home-nav a:hover { color: var(--home-blue-600); }
+.home-nav .home-login {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+/* Mobile menu button — hidden on desktop. */
+.home-menu-btn {
+  display: none;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--home-blue-100);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--home-ink);
+}
+.home-menu-btn svg { display: block; }
+
+/* Full-width dropdown panel (mobile only). */
+.home-menu-panel {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0 16px;
+  border-top: 1px solid var(--home-blue-100);
+}
+.home-menu-panel a {
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--home-ink);
+  padding: 12px 0;
+}
+.home-menu-panel .home-login { font-family: var(--font-mono); font-size: 14px; }
+
+@media (max-width: 767px) {
+  .home-nav { display: none; }
+  .home-menu-btn { display: inline-flex; }
+  .home-menu-panel.is-open { display: flex; }
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.home-footer {
+  background: var(--home-ink);
+  color: var(--home-white);
+}
+
+/* Optional pale strip for logos that don't read on ink (e.g. the EU emblem). */
+.home-footer__logos-strip {
+  background: var(--home-sky-pale);
+  padding: 20px 0;
+}
+.home-footer__logos {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.home-footer__logos img { height: 40px; width: auto; display: block; }
+
+.home-footer__body {
+  padding-top: 56px;
+  padding-bottom: 56px;
+}
+.home-footer__brand {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  margin: 0 0 16px;
+}
+.home-footer__blurb {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--home-blue-100);
+  max-width: 720px;
+  margin: 0 0 24px;
+}
+.home-footer__links {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  margin-bottom: 28px;
+}
+.home-footer__links a:hover { color: var(--home-blue-300); }
+.home-footer__disclaimer {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--home-blue-300);
+  max-width: 820px;
+  margin: 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--home-blue-600);
+}
