@@ -201,3 +201,194 @@
   padding-top: 24px;
   border-top: 1px solid var(--home-blue-600);
 }
+
+/* ── Shared: eyebrow + primary button ──────────────────────────────────────── */
+.home-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+.home-eyebrow--onlight { color: var(--home-blue-600); }
+
+/* Primary buttons elsewhere are square (0 radius); the join-card button overrides. */
+.home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 56px;
+  padding: 0 28px;
+  border: none;
+  border-radius: 0;
+  background: var(--home-ink);
+  color: var(--home-white);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  text-decoration: none;
+}
+.home-btn:hover { opacity: 0.9; }
+
+/* ── Hero ───────────────────────────────────────────────────────────────────
+   Two columns: text (flex 999 1 600px) + join card (flex 1 1 340px). Stacks on
+   mobile. The ship scene is full-bleed below and runs into "Why now". */
+.home-hero { background: var(--home-sky); }
+.home-hero__inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px;
+  align-items: flex-start;
+  padding-top: 72px;
+  padding-bottom: 72px;
+}
+.home-hero__text { flex: 999 1 600px; }
+.home-hero__card { flex: 1 1 340px; max-width: 400px; margin-top: 40px; }
+
+.home-hero__h1 {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: clamp(46px, 7.5vw, 112px);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+  color: var(--home-ink);
+  max-width: 828px;
+  margin: 16px 0 24px;
+}
+.home-hero__lead {
+  font-size: clamp(17px, 2.2vw, 20px);
+  line-height: 1.5;
+  color: var(--home-muted);
+  max-width: 620px;
+  margin: 0 0 28px;
+}
+
+.home-hero__ship {
+  height: clamp(210px, 38vw, 560px);
+  background-repeat: no-repeat, repeat;
+  background-position: center top, 0 0;
+  background-size: auto 100%, auto;
+  /* background-image (ship + sky/sea gradient) set inline from the hashed asset */
+}
+
+@media (max-width: 767px) {
+  .home-hero__inner { gap: 28px; padding-top: 40px; padding-bottom: 40px; }
+  .home-hero__card { max-width: none; width: 100%; margin-top: 8px; }
+  .home-hero__cta { display: flex; width: 100%; }
+}
+
+/* ── Join card ──────────────────────────────────────────────────────────────*/
+.home-joincard {
+  background: var(--home-white);
+  border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(11, 27, 51, .06), 0 12px 32px rgba(11, 27, 51, .10);
+  padding: 24px;
+  overflow: hidden; /* clips the bottom strip to the card radius */
+}
+
+.home-joincard__pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--home-sky-pale);
+  border-radius: 999px;
+  padding: 8px 14px;
+  margin-bottom: 18px;
+  color: var(--home-ink);
+}
+.home-joincard__pill-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.home-joincard__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--home-ok);
+}
+
+.home-joincard__title {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--home-ink);
+  margin: 0 0 8px;
+}
+.home-joincard__text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--home-muted);
+  margin: 0 0 20px;
+}
+.home-joincard__label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--home-muted);
+  margin-bottom: 8px;
+}
+.home-joincard__input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 60px;
+  padding: 0 16px;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--home-ink);
+  background: #F7FAFE;
+  border: 2px solid var(--home-blue-100);
+  border-radius: 14px;
+  outline: none;
+}
+.home-joincard__input::placeholder { color: var(--home-blue-300); }
+.home-joincard__input:focus { border-color: var(--home-blue-600); }
+.home-joincard__err {
+  color: #c0392b;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+/* Overrides .home-btn (defined earlier): rounded + full width inside the card. */
+.home-joincard__btn {
+  width: 100%;
+  margin-top: 16px;
+  border-radius: 14px;
+}
+
+.home-joincard__strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px -24px -24px;
+  padding: 16px 24px;
+  background: var(--home-sky-pale);
+  font-size: 14px;
+  color: var(--home-muted);
+}
+.home-joincard__striplink {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--home-blue-600);
+}
+.home-joincard__striplink:hover { text-decoration: underline; }
+
+@media (max-width: 767px) {
+  .home-joincard__title { font-size: 24px; }
+}
