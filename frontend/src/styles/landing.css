@@ -148,10 +148,7 @@
 }
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
-.home-footer {
-  background: var(--home-ink);
-  color: var(--home-white);
-}
+/* .home-footer is a layout hook; bg + text come from .home-surface-ink (markup). */
 
 /* Optional pale strip for logos that don't read on ink (e.g. the EU emblem). */
 .home-footer__logos-strip {
@@ -245,6 +242,16 @@
 .home a.home-btn:hover,
 .home a.home-btn:focus { color: var(--home-white); }
 
+/* ── Surface classes ─────────────────────────────────────────────────────────
+   Set background AND text colour together. Any heading/paragraph placed on one
+   of these blocks inherits the right colour instead of carrying a hard-coded one,
+   so an "ink on ink" pairing can't happen. Purposeful accents (the 01–04 numbers,
+   the "Why this workshop" eyebrow, the $67bn figure) keep their own classes and
+   win by specificity. Light blocks need no class — they inherit ink from .home. */
+.home-surface-ink  { background: var(--home-ink);      color: var(--home-white); }
+.home-surface-ink2 { background: var(--home-ink-2);    color: var(--home-white); }
+.home-surface-blue { background: var(--home-blue-600);  color: var(--home-white); }
+
 /* ── Hero ───────────────────────────────────────────────────────────────────
    Two columns: text (flex 999 1 600px) + join card (flex 1 1 340px). Stacks on
    mobile. The ship scene is full-bleed below and runs into "Why now". */
@@ -266,9 +273,9 @@
   font-size: clamp(46px, 7.5vw, 112px);
   line-height: 0.95;
   letter-spacing: -0.055em;
-  color: var(--home-ink);
   max-width: 828px;
   margin: 16px 0 24px;
+  /* no colour — inherits ink from .home (hero sits on the light sky surface). */
 }
 .home-hero__lead {
   font-size: clamp(17px, 2.2vw, 20px);
@@ -419,8 +426,9 @@
   font-size: clamp(34px, 4.4vw, 64px);
   line-height: 1;
   letter-spacing: -0.045em;
-  color: var(--home-ink);
   margin: 12px 0 32px;
+  /* no colour here — inherits from the section/surface (ink on light, white on
+     a .home-surface-ink/-blue block). See the surface classes near .home-btn. */
 }
 .home-h2--wide { font-size: clamp(34px, 4.6vw, 72px); }
 
@@ -457,7 +465,8 @@
 @media (max-width: 640px) { .home-why__stats { grid-template-columns: 1fr; } }
 .home-stat { border-radius: 20px; padding: 32px; }
 .home-stat--white { background: var(--home-white); color: var(--home-ink); }
-.home-stat--ink   { background: var(--home-ink);   color: var(--home-white); }
+/* .home-stat--ink is a hook only — bg+text come from .home-surface-ink (applied
+   in the markup); the big-figure accent below keeps its own colour. */
 .home-stat__big {
   display: block;
   font-family: var(--font-sans);
@@ -516,13 +525,12 @@
 }
 .home-exp__text { font-size: 16px; line-height: 1.5; margin: 0; }
 .home-exp__strip {
+  /* bg + text come from .home-surface-ink (applied in the markup). */
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   flex-wrap: wrap;
-  background: var(--home-ink);
-  color: var(--home-white);
   border-radius: 20px;
   padding: 28px 32px;
   margin-top: 16px;
@@ -534,7 +542,7 @@
 }
 
 /* ── Why this workshop (ink) ────────────────────────────────────────────────*/
-.home-whyws { background: var(--home-ink); color: var(--home-white); }
+/* .home-whyws is a layout hook; bg + text come from .home-surface-ink (markup). */
 .home-whyws__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -561,12 +569,12 @@
 .home-mtm__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 @media (max-width: 767px) { .home-mtm__grid { grid-template-columns: repeat(2, 1fr); } }
 .home-mtm__card { border-radius: 20px; padding: 28px; }
-.home-mtm__card:nth-child(1) { background: var(--home-blue-100); color: var(--home-ink); }
-.home-mtm__card:nth-child(2) { background: var(--home-blue-300); color: var(--home-ink); }
-.home-mtm__card:nth-child(3) { background: var(--home-blue-600); color: var(--home-white); }
-.home-mtm__card:nth-child(4) { background: var(--home-ink-2);    color: var(--home-white); }
-.home-mtm__card:nth-child(5) { background: var(--home-gold);     color: var(--home-ink); }
-.home-mtm__card:nth-child(6) { background: var(--home-sky-pale); color: var(--home-ink); }
+/* Light fills: ink text inherited from .home. Dark fills (Your measures, Your
+   audience) use .home-surface-blue / -ink2 in the markup for bg + white text. */
+.home-mtm__card--blue100 { background: var(--home-blue-100); }
+.home-mtm__card--blue300 { background: var(--home-blue-300); }
+.home-mtm__card--gold    { background: var(--home-gold); }
+.home-mtm__card--skypale { background: var(--home-sky-pale); }
 .home-mtm__text { font-size: 16px; line-height: 1.5; margin: 0; }
 @media (max-width: 767px) {
   .home-mtm__card { padding: 18px; border-radius: 16px; }
@@ -615,8 +623,8 @@
    ========================================================================== */
 
 /* ── The practical part (ink) ───────────────────────────────────────────────*/
-.home-practical { background: var(--home-ink); color: var(--home-white); }
-.home-practical .home-h2 { color: var(--home-white); }
+/* .home-practical is a layout hook; bg + text come from .home-surface-ink
+   (markup), so the h2 inherits white with no per-section override. */
 
 .home-practical__tiles {
   display: grid;

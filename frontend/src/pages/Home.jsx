@@ -188,7 +188,7 @@ export default function Home() {
             className="home-hero__ship"
             role="img"
             aria-label={c.hero.shipAlt}
-            style={{ backgroundImage: `url(${HOME_IMG.heroShip}), linear-gradient(#D9EBF9 0 76%, #76AFF4 76% 100%)` }}
+            style={{ backgroundImage: `url(${HOME_IMG.heroShip}), linear-gradient(#D9EBF9 0 77.2%, #76AFF4 77.2% 100%)` }}
           />
         </section>
 
@@ -204,7 +204,7 @@ export default function Home() {
                 <span className="home-stat__big">{c.whyNow.stats[0].big}</span>
                 <p className="home-stat__text">{c.whyNow.stats[0].text}</p>
               </div>
-              <div className="home-stat home-stat--ink">
+              <div className="home-stat home-stat--ink home-surface-ink">
                 <span className="home-stat__big">{c.whyNow.stats[1].big}</span>
                 <p className="home-stat__text">{c.whyNow.stats[1].text}</p>
               </div>
@@ -238,7 +238,7 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="home-exp__strip">
+            <div className="home-exp__strip home-surface-ink">
               <p className="home-exp__strip-text">{c.experience.debrief.text}</p>
               <span className="home-exp__strip-meta">{c.experience.debrief.n} · {c.experience.debrief.time}</span>
             </div>
@@ -246,7 +246,7 @@ export default function Home() {
         </section>
 
         {/* ── Why this workshop (ink) ────────────────────────────────────── */}
-        <section id={c.whyWorkshop.anchor} className="home-section home-whyws">
+        <section id={c.whyWorkshop.anchor} className="home-section home-whyws home-surface-ink">
           <div className="home-wrap">
             <p className="home-eyebrow home-eyebrow--ondark home-eyebrow--strong">{c.whyWorkshop.eyebrow}</p>
             <h2 className="home-h2 home-h2--wide">{c.whyWorkshop.h2}</h2>
@@ -275,12 +275,23 @@ export default function Home() {
             <h2 className="home-h2 home-h2--wide">{c.madeToMeasure.h2}</h2>
 
             <div className="home-mtm__grid">
-              {c.madeToMeasure.cards.map(card => (
-                <div key={card.title} className="home-mtm__card">
-                  <h3 className="home-card-title">{card.title}</h3>
-                  <p className="home-mtm__text">{card.text}</p>
-                </div>
-              ))}
+              {c.madeToMeasure.cards.map((card, i) => {
+                // Fill per spec order; dark fills use a surface class (bg + white).
+                const fill = [
+                  'home-mtm__card--blue100',
+                  'home-mtm__card--blue300',
+                  'home-surface-blue',
+                  'home-surface-ink2',
+                  'home-mtm__card--gold',
+                  'home-mtm__card--skypale',
+                ][i]
+                return (
+                  <div key={card.title} className={`home-mtm__card ${fill}`}>
+                    <h3 className="home-card-title">{card.title}</h3>
+                    <p className="home-mtm__text">{card.text}</p>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </section>
@@ -316,7 +327,7 @@ export default function Home() {
         </section>
 
         {/* ── The practical part (ink) ───────────────────────────────────── */}
-        <section className="home-section home-practical">
+        <section className="home-section home-practical home-surface-ink">
           <div className="home-wrap">
             <p className="home-eyebrow home-eyebrow--ondark">{c.practical.eyebrow}</p>
             <h2 className="home-h2">{c.practical.h2}</h2>
@@ -373,7 +384,7 @@ export default function Home() {
       </main>
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
-      <footer className="home-footer">
+      <footer className="home-footer home-surface-ink">
         {c.footer.partnerLogos.length > 0 && (
           <div className="home-footer__logos-strip">
             <div className="home-wrap home-footer__logos">
