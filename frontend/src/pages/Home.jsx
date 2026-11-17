@@ -233,13 +233,16 @@ export default function Home() {
                     </div>
                     <h3 className="home-card-title">{st.title}</h3>
                     <p className="home-exp__text">{st.text}</p>
+                    {st.emphasis && <p className="home-exp__text home-exp__emph">{st.emphasis}</p>}
                   </div>
                 </div>
               ))}
             </div>
 
             <div className="home-exp__strip home-surface-ink">
-              <p className="home-exp__strip-text">{c.experience.debrief.text}</p>
+              <p className="home-exp__strip-text">
+                <strong className="home-exp__strip-lead">{c.experience.debrief.lead}</strong> {c.experience.debrief.text}
+              </p>
               <span className="home-exp__strip-meta">{c.experience.debrief.n} · {c.experience.debrief.time}</span>
             </div>
           </div>
