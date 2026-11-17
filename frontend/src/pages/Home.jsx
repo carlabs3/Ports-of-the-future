@@ -89,7 +89,7 @@ export default function Home() {
   const facilitatorLabel = user ? c.header.sessionsLabel : c.header.loginLabel
 
   return (
-    <div className="home">
+    <div className="home pof">
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <header className="home-header">

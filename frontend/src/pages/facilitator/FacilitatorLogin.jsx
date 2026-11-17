@@ -1,86 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import api from '../../utils/api.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-
-const s = {
-  page: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#f5f5f5',
-    padding: '2rem',
-  },
-  card: {
-    background: '#ffffff',
-    width: '100%',
-    maxWidth: '400px',
-    padding: '32px',
-    borderRadius: '16px',
-    border: '1px solid #e5e5e5',
-  },
-  title: {
-    fontWeight: 900,
-    fontSize: '1.8rem',
-    marginBottom: '0.5rem',
-    textTransform: 'uppercase',
-    color: '#0a0a0a',
-  },
-  subtitle: {
-    fontSize: '0.85rem',
-    color: '#666',
-    marginBottom: '2.5rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-  },
-  fieldset: {
-    border: 'none',
-    padding: 0,
-    marginBottom: '1.8rem',
-  },
-  label: {
-    display: 'block',
-    fontSize: '12px',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.1em',
-    marginBottom: '0.4rem',
-    color: '#666',
-  },
-  input: {
-    width: '100%',
-    border: '1px solid #e5e5e5',
-    borderRadius: '12px',
-    padding: '0.65rem 0.85rem',
-    fontSize: '1rem',
-    background: '#ffffff',
-    outline: 'none',
-    color: '#0a0a0a',
-    boxSizing: 'border-box',
-  },
-  btn: {
-    width: '100%',
-    background: '#0a0a0a',
-    color: '#ffffff',
-    padding: '1rem',
-    fontSize: '0.9rem',
-    letterSpacing: '0.1em',
-    borderRadius: '999px',
-    marginTop: '0.5rem',
-    border: 'none',
-    cursor: 'pointer',
-  },
-  error: {
-    background: '#fdf0f0',
-    border: '1px solid #f5c6c6',
-    padding: '0.75rem 1rem',
-    fontSize: '0.82rem',
-    marginBottom: '1.5rem',
-    color: '#cc4444',
-    borderRadius: '6px',
-  },
-}
+import { HOME_IMG } from '../../assets/home/images.js'
 
 export default function FacilitatorLogin() {
   const [email, setEmail]       = useState('')
@@ -106,41 +28,57 @@ export default function FacilitatorLogin() {
   }
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <h1 style={s.title}>Sign in</h1>
-        <p style={s.subtitle}>Facilitator panel</p>
-        {error && <div style={s.error}>{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <fieldset style={s.fieldset}>
-            <label style={s.label} htmlFor="email">Email</label>
-            <input
-              id="email"
-              style={s.input}
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="facilitator@example.com"
-              required
-            />
-          </fieldset>
-          <fieldset style={s.fieldset}>
-            <label style={s.label} htmlFor="password">Password</label>
-            <input
-              id="password"
-              style={s.input}
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </fieldset>
-          <button style={s.btn} type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
+    <div className="pof pof-facil pof-login">
+      <div className="pof-login__body">
+        <div className="pof-login__card">
+          <span className="pof-pill">Facilitator</span>
+          <h1 className="pof-login__title">Sign in</h1>
+          <p className="pof-login__help">
+            For workshop facilitators. Participants join with the code on the screen.
+          </p>
+
+          {error && <div className="pof-login__error">{error}</div>}
+
+          <form onSubmit={handleSubmit}>
+            <div className="pof-field">
+              <label className="pof-label" htmlFor="email">Email</label>
+              <input
+                id="email"
+                className="pof-input"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="facilitator@example.com"
+                required
+              />
+            </div>
+            <div className="pof-field">
+              <label className="pof-label" htmlFor="password">Password</label>
+              <input
+                id="password"
+                className="pof-input"
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+            </div>
+            <button className="pof-btn pof-btn--primary pof-login__submit" type="submit" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign in →'}
+            </button>
+          </form>
+        </div>
+
+        <Link to="/" className="pof-login__back">← Back to the home page</Link>
       </div>
+
+      <div
+        className="pof-login__ship"
+        role="img"
+        aria-label="Illustration of a container ship at sea"
+        style={{ backgroundImage: `url(${HOME_IMG.heroShip}), linear-gradient(#D9EBF9 0 77.2%, #76AFF4 77.2% 100%)` }}
+      />
     </div>
   )
 }

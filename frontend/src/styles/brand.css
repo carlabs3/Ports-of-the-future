@@ -1,0 +1,407 @@
+/* ============================================================================
+   Ports of the Future — shared brand layer.
+   ----------------------------------------------------------------------------
+   Scoping (so nothing here can touch the control centre, participant flow, or
+   the home page's own component styles):
+     · Brand colour tokens live on `.pof`. Both the home root and every
+       facilitator page carry `.pof`, so they share one palette.
+     · Facilitator BASE COMPONENTS and the FOCUS RING are scoped under
+       `.pof-facil` ONLY. The home page never carries `.pof-facil`, so its
+       buttons/inputs/focus are untouched.
+     · Page chrome classes (`.pof-shell`, `.pof-login`, `.pof-table`, …) are
+       used only in facilitator markup.
+   Global token files (tokens.css / tokens.js) are NOT changed.
+   ========================================================================== */
+
+.pof {
+  --pof-ink:      #0B1B33; /* text, primary buttons, dark surfaces */
+  --pof-ink-2:    #111E33;
+  --pof-muted:    #33435E; /* secondary text on white */
+  --pof-sky:      #D9EBF9;
+  --pof-sky-pale: #EBF2FC; /* facilitator page background, pills */
+  --pof-blue-100: #CCE2FB; /* borders, separators */
+  --pof-blue-300: #85ADEA;
+  --pof-sea:      #76AFF4;
+  --pof-blue-600: #3F67A8; /* focus ring, links */
+  --pof-gold:     #DDBE56;
+  --pof-ok:       #1F9D62;
+  --pof-white:    #FFFFFF;
+}
+
+/* ============================================================================
+   Facilitator base components — scoped under .pof-facil only.
+   ========================================================================== */
+
+/* ── Buttons (48px, 12px radius) ──────────────────────────────────────────── */
+.pof-facil .pof-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  text-decoration: none;
+}
+.pof-facil .pof-btn--primary   { background: var(--pof-ink);   color: var(--pof-white); border-color: var(--pof-ink); }
+.pof-facil .pof-btn--secondary { background: var(--pof-white); color: var(--pof-ink);  border-color: var(--pof-blue-100); }
+.pof-facil .pof-btn--danger    { background: var(--pof-white); color: var(--pof-ink);  border-color: #C0392B; }
+.pof-facil .pof-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pof-facil .pof-btn--primary:hover:not(:disabled)   { opacity: 0.9; }
+.pof-facil .pof-btn--secondary:hover:not(:disabled) { background: var(--pof-sky-pale); }
+.pof-facil .pof-btn--danger:hover:not(:disabled)    { background: #FBEDEC; }
+.pof-facil .pof-btn--block { width: 100%; }
+
+/* ── Inputs / selects (48px, 12px radius) ─────────────────────────────────── */
+.pof-facil .pof-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pof-muted);
+  margin-bottom: 6px;
+}
+.pof-facil .pof-input,
+.pof-facil .pof-select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 48px;
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--pof-ink);
+  background: #F7FAFE;
+  border: 2px solid var(--pof-blue-100);
+  border-radius: 12px;
+  outline: none;
+}
+.pof-facil .pof-input:focus,
+.pof-facil .pof-select:focus { border-color: var(--pof-blue-600); }
+
+/* ── Card ─────────────────────────────────────────────────────────────────── */
+.pof-facil .pof-card {
+  background: var(--pof-white);
+  border-radius: 20px;
+  padding: 28px;
+}
+@media (max-width: 767px) { .pof-facil .pof-card { padding: 20px; } }
+
+/* ── Status pill ──────────────────────────────────────────────────────────── */
+.pof-facil .pof-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pof-ink);
+  background: var(--pof-sky-pale);
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+.pof-facil .pof-status__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.pof-facil .pof-status__dot--draft   { background: #DDBE56; }
+.pof-facil .pof-status__dot--waiting { background: #76AFF4; }
+.pof-facil .pof-status__dot--active  { background: #1F9D62; }
+.pof-facil .pof-status__dot--closed  { background: #8A97AD; }
+
+/* ── Focus ring on every interactive element (facilitator area only) ──────── */
+.pof-facil a:focus-visible,
+.pof-facil button:focus-visible,
+.pof-facil input:focus-visible,
+.pof-facil select:focus-visible,
+.pof-facil textarea:focus-visible {
+  outline: 3px solid #3F67A8;
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Facilitator shell (dashboard, session creation).
+   ========================================================================== */
+.pof-shell {
+  min-height: 100dvh;
+  background: var(--pof-sky-pale);
+  font-family: var(--font-sans);
+  color: var(--pof-ink);
+}
+.pof-shell__header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  background: var(--pof-white);
+  border-bottom: 1px solid var(--pof-blue-100);
+}
+.pof-shell__header-inner,
+.pof-shell__main {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-left: 32px;
+  padding-right: 32px;
+}
+.pof-shell__header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.pof-shell__main { padding-top: 48px; padding-bottom: 64px; }
+
+.pof-brand-wrap { display: flex; align-items: center; gap: 12px; }
+.pof-brand {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--pof-ink);
+  text-decoration: none;
+}
+.pof-facil .pof-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pof-ink);
+  background: var(--pof-sky-pale);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.pof-shell__user { display: flex; align-items: center; gap: 16px; }
+.pof-shell__email { font-size: 14px; color: var(--pof-muted); overflow-wrap: anywhere; }
+.pof-shell__logout {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--pof-muted);
+  padding: 10px 8px;
+  min-height: 44px;
+}
+.pof-shell__logout:hover { color: var(--pof-ink); }
+
+@media (max-width: 767px) {
+  .pof-shell__header-inner,
+  .pof-shell__main { padding-left: 20px; padding-right: 20px; }
+  .pof-shell__email { display: none; } /* keep the 64px header uncluttered on mobile */
+}
+
+/* ── Page header row (h1 + primary action) ────────────────────────────────── */
+.pof-pagehead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+.pof-h1 {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 48px;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  color: var(--pof-ink);
+  margin: 0;
+}
+@media (max-width: 767px) {
+  .pof-h1 { font-size: 34px; }
+  .pof-pagehead .pof-btn { width: 100%; } /* full-width action under the title */
+}
+
+/* ============================================================================
+   Dashboard — active-session banner, table, mobile blocks, states.
+   ========================================================================== */
+.pof-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--pof-white);
+  border-radius: 20px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.pof-banner__meta { font-size: 13px; color: var(--pof-muted); margin: 8px 0 0; }
+.pof-banner__code { font-family: var(--font-mono); font-size: 15px; letter-spacing: 0.06em; color: var(--pof-ink); }
+
+.pof-table { width: 100%; border-collapse: collapse; }
+.pof-table thead th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pof-muted);
+  font-weight: 500;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid var(--pof-blue-100);
+}
+.pof-table tbody td {
+  padding: 16px;
+  border-bottom: 1px solid var(--pof-blue-100);
+  vertical-align: middle;
+  font-size: 15px;
+}
+.pof-table tbody tr:last-child td { border-bottom: none; }
+.pof-table tbody tr { min-height: 56px; }
+.pof-table__code { font-family: var(--font-mono); font-size: 15px; letter-spacing: 0.06em; color: var(--pof-ink); }
+.pof-table__name { color: var(--pof-ink); }
+.pof-table__muted { color: var(--pof-muted); }
+.pof-table__actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Mobile stacked blocks (replaces the table under 768px). */
+.pof-slist { display: flex; flex-direction: column; }
+.pof-sblock { padding: 18px 0; border-bottom: 1px solid var(--pof-blue-100); }
+.pof-sblock:last-child { border-bottom: none; }
+.pof-sblock__top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.pof-sblock__meta { font-size: 14px; color: var(--pof-muted); margin: 0 0 14px; }
+.pof-sblock__actions { display: flex; flex-direction: column; gap: 8px; }
+.pof-sblock__actions .pof-btn { width: 100%; }
+
+/* Show table on desktop, blocks on mobile. */
+.pof-only-desktop { display: block; }
+.pof-only-mobile  { display: none; }
+@media (max-width: 767px) {
+  .pof-only-desktop { display: none; }
+  .pof-only-mobile  { display: block; }
+}
+
+/* Empty state. */
+.pof-empty {
+  text-align: center;
+  padding: 48px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.pof-empty img { max-width: 220px; width: 100%; height: auto; margin-bottom: 8px; }
+.pof-empty__title { font-family: var(--font-sans); font-weight: 800; font-size: 24px; letter-spacing: -0.02em; color: var(--pof-ink); margin: 0; }
+.pof-empty__text { font-size: 15px; color: var(--pof-muted); margin: 0 0 12px; }
+
+/* Loading skeleton (no spinner). */
+.pof-skel-row {
+  height: 56px;
+  border-radius: 12px;
+  background: var(--pof-sky-pale);
+  margin-bottom: 12px;
+}
+.pof-skel-row:last-child { margin-bottom: 0; }
+
+/* Error box. */
+.pof-errbox {
+  background: var(--pof-sky-pale);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pof-errbox__msg { font-size: 15px; color: var(--pof-ink); margin: 0; }
+
+/* ============================================================================
+   Session creation — field groups, team-count selector.
+   ========================================================================== */
+.pof-formcard { max-width: 720px; }
+.pof-field { margin-bottom: 24px; }
+.pof-field:last-child { margin-bottom: 0; }
+.pof-hint { font-size: 14px; color: var(--pof-muted); margin: 10px 0 0; }
+.pof-preview { font-family: var(--font-mono); font-size: 14px; color: var(--pof-ink); margin: 14px 0 0; line-height: 1.6; }
+.pof-form-error { font-size: 14px; color: #C0392B; margin: 0 0 14px; }
+.pof-form-actions { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+
+.pof-count { display: flex; flex-wrap: wrap; gap: 8px; }
+.pof-count__btn {
+  width: 48px;
+  height: 48px;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 2px solid var(--pof-blue-100);
+  background: #F7FAFE;
+  color: var(--pof-ink);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pof-count__btn--active { background: var(--pof-ink); color: var(--pof-white); border-color: var(--pof-ink); }
+
+.pof-h2 {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--pof-ink);
+  margin: 0 0 16px;
+}
+
+/* ============================================================================
+   Login — standalone (no shell header), full-height sky + ship at the bottom.
+   ========================================================================== */
+.pof-login {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--pof-sky);
+  font-family: var(--font-sans);
+  color: var(--pof-ink);
+}
+.pof-login__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 48px 20px;
+}
+.pof-login__card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--pof-white);
+  border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(11, 27, 51, .06), 0 12px 32px rgba(11, 27, 51, .10);
+  padding: 32px;
+  box-sizing: border-box;
+}
+.pof-login__title {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 32px;
+  letter-spacing: -0.035em;
+  color: var(--pof-ink);
+  margin: 16px 0 8px;
+}
+.pof-login__help { font-size: 15px; line-height: 1.5; color: var(--pof-muted); margin: 0 0 24px; }
+.pof-login__error {
+  background: var(--pof-sky-pale);
+  color: var(--pof-ink);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  margin-bottom: 18px;
+}
+.pof-login__submit { width: 100%; margin-top: 8px; }
+.pof-login__back { font-size: 14px; color: var(--pof-muted); text-decoration: none; }
+.pof-login__back:hover { color: var(--pof-ink); }
+.pof-login__ship {
+  height: 200px;
+  background-repeat: no-repeat, repeat;
+  background-position: center top, 0 0;
+  background-size: auto 100%, auto;
+  /* background-image (ship + sky/sea gradient) set inline from the hashed asset */
+}

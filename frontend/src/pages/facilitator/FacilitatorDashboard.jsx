@@ -1,89 +1,82 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../../utils/api.js'
-import { useAuth } from '../../context/AuthContext.jsx'
 import { socket } from '../../utils/socket.js'
+import FacilitatorLayout from '../../components/facilitator/FacilitatorLayout.jsx'
+import { HOME_IMG } from '../../assets/home/images.js'
 
 function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' })
+  return new Date(iso).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-const STATUS_LABEL = { draft: 'Draft', waiting: 'Waiting', active: 'Active', actions: 'Active', closed: 'Closed' }
-const STATUS_STYLE = {
-  draft:   { background: '#f5f5f5', color: '#999', border: '1px solid #e5e5e5' },
-  waiting: { background: 'rgba(74,222,128,0.1)', color: '#16a34a', border: '1px solid rgba(74,222,128,0.3)' },
-  active:  { background: 'rgba(74,222,128,0.1)', color: '#16a34a', border: '1px solid rgba(74,222,128,0.3)' },
-  actions: { background: 'rgba(74,222,128,0.1)', color: '#16a34a', border: '1px solid rgba(74,222,128,0.3)' },
-  closed:  { background: '#f5f5f5', color: '#999', border: '1px solid #e5e5e5' },
+// Status word is always shown; dot colour per status (waiting/active/actions all
+// read as "live", actions shown as Active).
+const STATUS = {
+  draft:   { label: 'Draft',   dot: 'draft' },
+  waiting: { label: 'Waiting', dot: 'waiting' },
+  active:  { label: 'Active',  dot: 'active' },
+  actions: { label: 'Active',  dot: 'active' },
+  closed:  { label: 'Closed',  dot: 'closed' },
 }
 
-const s = {
-  page:  { flex: 1, background: '#f5f5f5', padding: '3rem 2rem' },
-  inner: { maxWidth: '960px', margin: '0 auto' },
-  header: {
-    display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-    marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1rem',
-  },
-  title:    { fontWeight: 900, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', color: '#0a0a0a' },
-  subtitle: { fontSize: '0.85rem', color: '#666', marginTop: '0.3rem' },
-  btnNew: {
-    background: '#0a0a0a', color: '#fff', padding: '0.75rem 1.5rem',
-    fontSize: '0.85rem', borderRadius: '999px', fontWeight: 600, border: 'none', cursor: 'pointer',
-  },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' },
-  card: { background: '#ffffff', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e5e5e5' },
-  cardCode: { fontWeight: 900, fontSize: '1.4rem', letterSpacing: '0.05em', marginBottom: '0.4rem', color: '#0a0a0a' },
-  cardMeta: { fontSize: '0.8rem', color: '#666', marginBottom: '0.3rem' },
-  groupsRow: { display: 'flex', flexWrap: 'wrap', gap: '0.35rem', margin: '0.75rem 0' },
-  groupPill: {
-    fontSize: '11px', fontWeight: 500, padding: '3px 10px', borderRadius: 999,
-    background: '#f5f5f5', color: '#0a0a0a', border: '1px solid #e5e5e5',
-  },
-  badge: (status) => ({
-    display: 'inline-block', padding: '3px 10px',
-    fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.08em',
-    textTransform: 'uppercase', borderRadius: 999,
-    marginBottom: '1.2rem',
-    ...STATUS_STYLE[status],
-  }),
-  cardActions: { display: 'flex', gap: '0.5rem', marginTop: '0.25rem' },
-  btnOpen: {
-    flex: 1, background: '#0a0a0a', color: '#fff', padding: '0.55rem',
-    fontSize: '0.73rem', borderRadius: '999px', textAlign: 'center',
-    border: 'none', cursor: 'pointer', fontWeight: 600,
-  },
-  btnDelete: {
-    background: 'transparent', color: '#999', padding: '0.55rem 0.75rem',
-    fontSize: '0.73rem', borderRadius: '999px',
-    border: '1px solid #e5e5e5', cursor: 'pointer',
-  },
-  empty: {
-    textAlign: 'center', padding: '5rem 2rem', color: '#999',
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.25rem',
-  },
-  emptyBtn: {
-    background: '#0a0a0a', color: '#fff', padding: '0.85rem 2rem',
-    fontSize: '0.85rem', borderRadius: '999px', border: 'none', cursor: 'pointer', fontWeight: 600,
-  },
+function StatusPill({ status }) {
+  const m = STATUS[status] || { label: status, dot: 'closed' }
+  return (
+    <span className="pof-status">
+      <span className={`pof-status__dot pof-status__dot--${m.dot}`} />
+      {m.label}
+    </span>
+  )
+}
+
+function teamsLabel(session) {
+  const n = session.groups?.length
+  return n ? `${n} teams` : '—'
+}
+
+// Actions keep the original behaviour: draft → activate; otherwise open the
+// control centre (or view results when closed); plus delete.
+function SessionActions({ session, onActivate, onDelete, block }) {
+  const primary = `pof-btn pof-btn--primary${block ? ' pof-btn--block' : ''}`
+  const danger = `pof-btn pof-btn--danger${block ? ' pof-btn--block' : ''}`
+  return (
+    <>
+      {session.status === 'draft' ? (
+        <button type="button" className={primary} onClick={() => onActivate(session.code)}>
+          Activate session →
+        </button>
+      ) : (
+        <Link to={`/session/${session.code}/control`} className={primary}>
+          {session.status === 'closed' ? 'View results →' : 'Control centre (CAP) →'}
+        </Link>
+      )}
+      <button type="button" className={danger} onClick={() => onDelete(session.code)}>
+        Delete
+      </button>
+    </>
+  )
 }
 
 export default function FacilitatorDashboard() {
-  const { user } = useAuth()
   const navigate = useNavigate()
   const [sessions, setSessions]     = useState([])
   const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState('')
   const [activeBanner, setActiveBanner] = useState(null)
 
+  // One fetcher, reused by the initial load, the 5s poll, the socket refresh and
+  // the "Try again" button. Clears the error on success, sets it on failure.
+  const fetchSessions = useCallback(() => (
+    api.get('/api/sessions')
+      .then(({ data }) => { setSessions(data); setError('') })
+      .catch(() => setError('Could not load your sessions.'))
+  ), [])
+
   useEffect(() => {
-    const fetchSessions = () =>
-      api.get('/api/sessions').then(({ data }) => setSessions(data)).catch(() => {})
-
     fetchSessions().finally(() => setLoading(false))
-
-    // Poll every 5 s so new submissions and status changes appear without refreshing
     const poll = setInterval(fetchSessions, 5000)
     return () => clearInterval(poll)
-  }, [])
+  }, [fetchSessions])
 
   useEffect(() => {
     const active = sessions.find(s => s.status === 'active' || s.status === 'waiting' || s.status === 'actions')
@@ -91,22 +84,13 @@ export default function FacilitatorDashboard() {
   }, [sessions])
 
   useEffect(() => {
-    // Join all active session rooms to receive real-time events
+    // Join active session rooms and refresh the list live as PAR submissions arrive.
     sessions
       .filter(s => s.status === 'active' || s.status === 'waiting')
       .forEach(s => socket.emit('facilitator:join', { code: s.code }))
-
-    function refreshSessions() {
-      api.get('/api/sessions').then(({ data }) => setSessions(data)).catch(() => {})
-    }
-
-    // Refresh the session list live as PAR submissions arrive.
-    socket.on('par:update', refreshSessions)
-
-    return () => {
-      socket.off('par:update', refreshSessions)
-    }
-  }, [sessions.length])
+    socket.on('par:update', fetchSessions)
+    return () => { socket.off('par:update', fetchSessions) }
+  }, [sessions.length, fetchSessions])
 
   async function handleDelete(code) {
     if (!confirm('Delete this session? All data will be permanently removed. This action cannot be undone.')) return
@@ -127,101 +111,109 @@ export default function FacilitatorDashboard() {
     }
   }
 
+  function retry() {
+    setLoading(true)
+    fetchSessions().finally(() => setLoading(false))
+  }
+
   return (
-    <div style={s.page}>
-      <div style={s.inner}>
-        <div style={s.header}>
+    <FacilitatorLayout>
+      <div className="pof-pagehead">
+        <h1 className="pof-h1">Your sessions</h1>
+        <Link to="/session/create" className="pof-btn pof-btn--primary">New session +</Link>
+      </div>
+
+      {activeBanner && (
+        <div className="pof-banner">
           <div>
-            <h1 style={s.title}>My Sessions</h1>
-            <p style={s.subtitle}>{user?.email}</p>
-          </div>
-          <Link to="/session/create">
-            <button style={s.btnNew}>+ New Session</button>
-          </Link>
-        </div>
-
-        {/* Active session banner */}
-        {activeBanner && (
-          <div style={{ background: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div>
-              <p style={{ fontSize: '13px', fontWeight: 600, color: '#0a0a0a', margin: 0 }}>
-                🟢 Active session: {activeBanner.code}
-              </p>
-              <p style={{ fontSize: '11px', color: '#666', margin: '2px 0 0' }}>
-                {activeBanner.name || 'Untitled'} · Created {formatDate(activeBanner.createdAt)}
-              </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span className="pof-banner__code">{activeBanner.code}</span>
+              <StatusPill status={activeBanner.status} />
             </div>
-            <button
-              onClick={() => navigate(`/session/${activeBanner.code}/control`)}
-              style={{ background: '#0a0a0a', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '999px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', letterSpacing: '0.06em' }}
-            >
-              RESUME SESSION →
-            </button>
-          </div>
-        )}
-
-        {loading ? (
-          <div style={{ color: '#aaa', textAlign: 'center', padding: '3rem' }}>Loading...</div>
-        ) : sessions.length === 0 ? (
-          <div style={s.empty}>
-            <p style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              You haven't created any sessions yet
+            <p className="pof-banner__meta">
+              {activeBanner.name || 'Untitled'} · Created {formatDate(activeBanner.createdAt)}
             </p>
-            <Link to="/session/create">
-              <button style={s.emptyBtn}>CREATE MY FIRST SESSION</button>
-            </Link>
+          </div>
+          <button
+            type="button"
+            className="pof-btn pof-btn--primary"
+            onClick={() => navigate(`/session/${activeBanner.code}/control`)}
+          >
+            Resume session →
+          </button>
+        </div>
+      )}
+
+      <div className="pof-card">
+        {loading ? (
+          <div>
+            <div className="pof-skel-row" />
+            <div className="pof-skel-row" />
+            <div className="pof-skel-row" />
+          </div>
+        ) : error && sessions.length === 0 ? (
+          <div className="pof-errbox">
+            <p className="pof-errbox__msg">{error}</p>
+            <button type="button" className="pof-btn pof-btn--secondary" onClick={retry}>Try again</button>
+          </div>
+        ) : sessions.length === 0 ? (
+          <div className="pof-empty">
+            <img src={HOME_IMG.people} alt="" />
+            <p className="pof-empty__title">No sessions yet</p>
+            <p className="pof-empty__text">Create your first session to run a workshop.</p>
+            <Link to="/session/create" className="pof-btn pof-btn--primary">New session +</Link>
           </div>
         ) : (
-          <div style={s.grid}>
-            {sessions.map(session => (
-              <div key={session.code} style={s.card}>
-                {session.name && (
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#444', marginBottom: '0.25rem' }}>
-                    {session.name}
+          <>
+            {/* Desktop: table */}
+            <div className="pof-only-desktop">
+              <table className="pof-table">
+                <thead>
+                  <tr>
+                    <th>Code</th><th>Name</th><th>Date</th><th>Teams</th><th>Status</th><th aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessions.map(session => (
+                    <tr key={session.code}>
+                      <td className="pof-table__code">{session.code}</td>
+                      <td className="pof-table__name">{session.name || '—'}</td>
+                      <td className="pof-table__muted">{formatDate(session.createdAt)}</td>
+                      <td className="pof-table__muted">{teamsLabel(session)}</td>
+                      <td><StatusPill status={session.status} /></td>
+                      <td>
+                        <div className="pof-table__actions">
+                          <SessionActions session={session} onActivate={handleActivate} onDelete={handleDelete} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile: stacked blocks */}
+            <div className="pof-only-mobile">
+             <div className="pof-slist">
+              {sessions.map(session => (
+                <div key={session.code} className="pof-sblock">
+                  <div className="pof-sblock__top">
+                    <span className="pof-table__code">{session.code}</span>
+                    <StatusPill status={session.status} />
                   </div>
-                )}
-                <div style={s.cardCode}>{session.code}</div>
-                <div style={s.cardMeta}>{formatDate(session.createdAt)}</div>
-
-                {session.groups?.length > 0 && (
-                  <div style={s.groupsRow}>
-                    {session.groups.map(g => (
-                      <span key={g} style={s.groupPill}>{g}</span>
-                    ))}
+                  <p className="pof-sblock__meta">
+                    {(session.name || '—')} · {formatDate(session.createdAt)} · {teamsLabel(session)}
+                  </p>
+                  <div className="pof-sblock__actions">
+                    <SessionActions session={session} onActivate={handleActivate} onDelete={handleDelete} block />
                   </div>
-                )}
-
-                <div style={s.badge(session.status)}>
-                  {STATUS_LABEL[session.status] || session.status}
                 </div>
-
-                <div style={s.cardActions}>
-                  {session.status === 'draft' ? (
-                    <button
-                      style={{ ...s.btnOpen, flex: 1 }}
-                      onClick={() => handleActivate(session.code)}
-                    >
-                      Activate session →
-                    </button>
-                  ) : (
-                    <Link
-                      to={`/session/${session.code}/control`}
-                      style={{ flex: 1 }}
-                    >
-                      <button style={{ ...s.btnOpen, width: '100%' }}>
-                        {session.status === 'closed' ? 'View results' : 'Control centre (CAP)'} →
-                      </button>
-                    </Link>
-                  )}
-                  <button style={s.btnDelete} onClick={() => handleDelete(session.code)}>
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+             </div>
+            </div>
+          </>
         )}
       </div>
-    </div>
+    </FacilitatorLayout>
   )
 }

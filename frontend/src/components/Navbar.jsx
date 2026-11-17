@@ -8,7 +8,10 @@ import { COLOR, FONT, FS, FW, HAIRLINE } from '../styles/tokens.js'
 // out"/logo-link that could let a participant leave mid-questionnaire) is
 // hidden. Keep NAV_HEIGHT in sync with the calc(100vh - …) on SessionCreate.
 export const NAV_HEIGHT = 56
-const SHOW_ON = ['/login', '/dashboard', '/session/create']
+// The facilitator pages now carry their own `.pof` header via FacilitatorLayout
+// (and login is standalone), so this global bar no longer renders anywhere.
+// Kept in place to avoid touching App.jsx routing. See admin-redesign.
+const SHOW_ON = []
 
 export default function Navbar() {
   const { user, logout } = useAuth()
