@@ -236,6 +236,14 @@
   text-decoration: none;
 }
 .home-btn:hover { opacity: 0.9; }
+/* When the button is a link (e.g. the hero CTA), the broad `.home a { color:
+   inherit }` rule (specificity 0,1,1) would otherwise beat `.home-btn` (0,1,0)
+   and paint the label ink-on-ink. Anchor-qualify to 0,2,1 and pin every state. */
+.home a.home-btn,
+.home a.home-btn:link,
+.home a.home-btn:visited,
+.home a.home-btn:hover,
+.home a.home-btn:focus { color: var(--home-white); }
 
 /* ── Hero ───────────────────────────────────────────────────────────────────
    Two columns: text (flex 999 1 600px) + join card (flex 1 1 340px). Stacks on
