@@ -510,6 +510,7 @@
   margin-bottom: 12px;
 }
 .home-exp__text { font-size: 16px; line-height: 1.5; margin: 0; }
+.home-exp__emph { font-weight: 600; margin-top: 12px; }
 .home-exp__strip {
   /* bg + text come from .home-surface-ink (applied in the markup). */
   display: flex;
@@ -522,6 +523,7 @@
   margin-top: 16px;
 }
 .home-exp__strip-text { font-size: clamp(17px, 2vw, 19px); line-height: 1.5; margin: 0; max-width: 820px; }
+.home-exp__strip-lead { font-weight: 800; }
 .home-exp__strip-meta { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; color: var(--pof-blue-300); flex: none; }
 @media (max-width: 767px) {
   .home-exp__panel { height: 170px; }

@@ -233,13 +233,16 @@ export default function Home() {
                     </div>
                     <h3 className="home-card-title">{st.title}</h3>
                     <p className="home-exp__text">{st.text}</p>
+                    {st.emphasis && <p className="home-exp__text home-exp__emph">{st.emphasis}</p>}
                   </div>
                 </div>
               ))}
             </div>
 
             <div className="home-exp__strip home-surface-ink">
-              <p className="home-exp__strip-text">{c.experience.debrief.text}</p>
+              <p className="home-exp__strip-text">
+                <strong className="home-exp__strip-lead">{c.experience.debrief.lead}</strong> {c.experience.debrief.text}
+              </p>
               <span className="home-exp__strip-meta">{c.experience.debrief.n} · {c.experience.debrief.time}</span>
             </div>
           </div>
@@ -253,7 +256,7 @@ export default function Home() {
 
             <div className="home-whyws__grid">
               {c.whyWorkshop.items.map((it, i) => {
-                const color = ['var(--home-blue-100)', 'var(--home-blue-300)', 'var(--home-sea)', 'var(--home-gold)'][i]
+                const color = ['var(--pof-blue-100)', 'var(--pof-blue-300)', 'var(--pof-sea)', 'var(--pof-gold)'][i]
                 return (
                   <div key={it.n} className="home-whyws__col" style={{ borderTopColor: color }}>
                     <span className="home-whyws__num" style={{ color }}>{it.n}</span>
@@ -305,9 +308,9 @@ export default function Home() {
             <div className="home-who__grid">
               {c.whoFor.cards.map((card, i) => {
                 const panel = [
-                  { img: HOME_IMG.isometricPort, mode: 'cover',  bg: 'var(--home-blue-100)' },
-                  { img: HOME_IMG.people,        mode: 'bottom', bg: 'var(--home-blue-300)' },
-                  { img: HOME_IMG.railTerminal,  mode: 'cover',  bg: 'var(--home-sky-pale)' },
+                  { img: HOME_IMG.isometricPort, mode: 'cover',  bg: 'var(--pof-blue-100)' },
+                  { img: HOME_IMG.people,        mode: 'bottom', bg: 'var(--pof-blue-300)' },
+                  { img: HOME_IMG.railTerminal,  mode: 'cover',  bg: 'var(--pof-sky-pale)' },
                 ][i]
                 return (
                   <div key={card.title} className="home-who__card">
@@ -347,7 +350,7 @@ export default function Home() {
                 <h3 className="home-provide-card__title">{c.practical.weBring.title}</h3>
                 <ul className="home-provide-card__list">
                   {c.practical.weBring.items.map(item => (
-                    <li key={item}><CheckIcon color="var(--home-sea)" /><span>{item}</span></li>
+                    <li key={item}><CheckIcon color="var(--pof-sea)" /><span>{item}</span></li>
                   ))}
                 </ul>
               </div>
@@ -356,7 +359,7 @@ export default function Home() {
                 <h3 className="home-provide-card__title">{c.practical.youProvide.title}</h3>
                 <ul className="home-provide-card__list">
                   {c.practical.youProvide.items.map(item => (
-                    <li key={item}><CheckIcon color="var(--home-gold)" /><span>{item}</span></li>
+                    <li key={item}><CheckIcon color="var(--pof-gold)" /><span>{item}</span></li>
                   ))}
                 </ul>
                 <p className="home-provide-card__price">{c.practical.youProvide.price}</p>
